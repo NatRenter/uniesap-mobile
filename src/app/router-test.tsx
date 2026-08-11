@@ -1,33 +1,53 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text } from "react-native";
+
+import { Screen } from "@/components/ui//Screen";
+import { AppButton } from "@/components/ui/AppButton";
+import { AppCard } from "@/components/ui/AppCard";
+import { AppTextInput } from "@/components/ui/AppTextInput";
+import { colors, spacing, typography } from "@/theme";
 
 export default function RouterTestScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Expo Router funcionando</Text>
+    <Screen style={styles.container}>
+      <Text style={styles.title}>UNIESAP Mobile</Text>
 
-      <Text style={styles.text}>
-        Esta pantalla fue creada mediante una ruta basada en archivos.
-      </Text>
-    </View>
+      <AppCard style={styles.card}>
+        <Text style={styles.cardTitle}>Componentes base</Text>
+
+        <AppTextInput placeholder="Nombre del usuario" />
+
+        <AppButton
+          onPress={() => {
+            console.log("Botón funcionando");
+          }}
+        >
+          Continuar
+        </AppButton>
+      </AppCard>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    alignItems: "center",
     justifyContent: "center",
-    padding: 24,
   },
 
   title: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 12,
+    marginBottom: spacing.lg,
+    color: colors.primary,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    textAlign: "center",
   },
 
-  text: {
-    fontSize: 16,
-    textAlign: "center",
+  card: {
+    gap: spacing.md,
+  },
+
+  cardTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
   },
 });
