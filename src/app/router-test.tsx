@@ -4,6 +4,7 @@ import { Screen } from "@/components/ui//Screen";
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { AppTextInput } from "@/components/ui/AppTextInput";
+import { testKoboConnection } from "@/features/projects/api/projectsApi";
 import { colors, spacing, typography } from "@/theme";
 
 export default function RouterTestScreen() {
@@ -17,11 +18,16 @@ export default function RouterTestScreen() {
         <AppTextInput placeholder="Nombre del usuario" />
 
         <AppButton
-          onPress={() => {
-            console.log("Botón funcionando");
+          onPress={async () => {
+            try {
+              const response = await testKoboConnection();
+              console.log("Kobo conectado:", response);
+            } catch (error) {
+              console.error("Error conectando con Kobo:", error);
+            }
           }}
         >
-          Continuar
+          Probar conexión con Kobo
         </AppButton>
       </AppCard>
     </Screen>

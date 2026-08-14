@@ -1,65 +1,111 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
-import '@/global.css';
-
-import { Platform } from 'react-native';
-
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    background: "#F8FAFC",
+    surface: "#FFFFFF",
+    surfaceSecondary: "#F1F5F9",
+
+    backgroundElement: "#F1F5F9",
+    backgroundSelected: "#E2E8F0",
+
+    text: "#1F2937",
+    textSecondary: "#64748B",
+    textMuted: "#94A3B8",
+
+    primary: "#1E5EFF",
+    primaryPressed: "#194FD8",
+    primarySoft: "#DCE8FF",
+
+    border: "#E2E8F0",
+    divider: "#E5E7EB",
+
+    success: "#22C55E",
+    warning: "#F59E0B",
+    error: "#EF4444",
+    info: "#0EA5E9",
   },
+
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-  },
-} as const;
+    background: "#0F172A",
+    surface: "#1E293B",
+    surfaceSecondary: "#263449",
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+    backgroundElement: "#1E293B",
+    backgroundSelected: "#334155",
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+    text: "#F8FAFC",
+    textSecondary: "#CBD5E1",
+    textMuted: "#94A3B8",
+
+    primary: "#4D7CFF",
+    primaryPressed: "#3C68E6",
+    primarySoft: "#1E3A70",
+
+    border: "#334155",
+    divider: "#334155",
+
+    success: "#4ADE80",
+    warning: "#FBBF24",
+    error: "#F87171",
+    info: "#38BDF8",
   },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
+};
+
+export type ThemeColor = keyof typeof Colors.light;
 
 export const Spacing = {
+  // Atlas Design System
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+  xxxl: 64,
+
+  // Compatibilidad temporal con la plantilla Expo
   half: 2,
   one: 4,
   two: 8,
-  three: 16,
-  four: 24,
-  five: 32,
-  six: 64,
+  three: 12,
+  four: 16,
+  five: 20,
+  six: 24,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+export const MaxContentWidth = 1200;
+
+export const BottomTabInset = 80;
+
+export const Radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  full: 999,
+};
+
+export const FontSize = {
+  caption: 12,
+  small: 14,
+  body: 16,
+  cardTitle: 18,
+  h3: 20,
+  h2: 24,
+  h1: 30,
+  display: 36,
+};
+
+export const CompanyColors = [
+  "#F97316", // naranja
+  "#EF4444", // rojo
+  "#3B82F6", // azul
+  "#22C55E", // verde
+  "#EAB308", // amarillo
+  "#8B5CF6", // morado
+  "#EC4899", // rosa
+  "#64748B", // gris
+] as const;
+
+export const Fonts = {
+  mono: "monospace",
+} as const;

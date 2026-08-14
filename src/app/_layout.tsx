@@ -1,47 +1,21 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
-import { useColorScheme } from "react-native";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const { isDark } = useAppTheme();
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen
-          name="index"
-          options={{
-            title: "Inicio",
-          }}
-        />
+    <>
+      <StatusBar style={isDark ? "light" : "dark"} />
 
-        <Stack.Screen
-          name="router-test"
-          options={{
-            title: "Prueba de Router",
-          }}
-        />
-
-        <Stack.Screen
-          name="projects/index"
-          options={{
-            title: "Proyectos",
-          }}
-        />
-
-        <Stack.Screen
-          name="projects/[uid]"
-          options={{
-            title: "Detalle del proyecto",
-          }}
-        />
-
-        <Stack.Screen
-          name="explore"
-          options={{
-            title: "Explorar",
-          }}
-        />
-      </Stack>
-    </ThemeProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: "slide_from_right",
+        }}
+      />
+    </>
   );
 }

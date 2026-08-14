@@ -1,17 +1,39 @@
 import type { ReactNode } from "react";
+
 import { StyleSheet, View, type ViewProps } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { colors, spacing } from "@/theme";
+import { Spacing } from "@/constants/theme";
+
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 interface ScreenProps extends ViewProps {
   children: ReactNode;
+  padded?: boolean;
 }
 
-export function Screen({ children, style, ...props }: ScreenProps) {
+export function Screen({
+  children,
+  style,
+  padded = true,
+  ...props
+}: ScreenProps) {
+  const { colors } = useAppTheme();
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View {...props} style={[styles.container, style]}>
+    <SafeAreaView
+      style={[
+        styles.safeArea,
+        {
+          backgroundColor: colors.background,
+        },
+      ]}
+    >
+      <View
+        {...props}
+        style={[styles.container, padded && styles.padded, style]}
+      >
         {children}
       </View>
     </SafeAreaView>
@@ -21,11 +43,13 @@ export function Screen({ children, style, ...props }: ScreenProps) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
   },
 
   container: {
     flex: 1,
-    padding: spacing.lg,
+  },
+
+  padded: {
+    padding: Spacing.lg,
   },
 });

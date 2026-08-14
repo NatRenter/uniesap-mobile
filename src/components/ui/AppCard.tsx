@@ -1,15 +1,32 @@
 import type { ReactNode } from "react";
+
 import { StyleSheet, View, type ViewProps } from "react-native";
 
-import { colors, radius, spacing } from "@/theme";
+import { Radius, Spacing } from "@/constants/theme";
+
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 interface AppCardProps extends ViewProps {
   children: ReactNode;
 }
 
 export function AppCard({ children, style, ...props }: AppCardProps) {
+  const { colors } = useAppTheme();
+
   return (
-    <View {...props} style={[styles.card, style]}>
+    <View
+      {...props}
+      style={[
+        styles.card,
+
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        },
+
+        style,
+      ]}
+    >
       {children}
     </View>
   );
@@ -17,10 +34,9 @@ export function AppCard({ children, style, ...props }: AppCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    padding: spacing.md,
+    padding: Spacing.md,
+
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    borderRadius: Radius.lg,
   },
 });
