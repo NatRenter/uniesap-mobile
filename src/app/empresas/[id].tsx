@@ -263,13 +263,29 @@ export default function CompanyDetailsScreen() {
           <ModuleCard
             icon="◫"
             title="Evidencias"
-            description="Fotografías, archivos y documentos"
+            description="Fotografías y documentos"
+            onPress={() =>
+              router.navigate({
+                pathname: "/empresas/[id]/evidencias",
+                params: {
+                  id,
+                },
+              })
+            }
           />
 
           <ModuleCard
             icon="▤"
             title="Reportes"
             description="Resultados y exportaciones"
+            onPress={() =>
+              router.navigate({
+                pathname: "/empresas/[id]/reportes",
+                params: {
+                  id,
+                },
+              })
+            }
           />
         </View>
 
