@@ -6,80 +6,14 @@ import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 
+import { getCompanyById } from "@/data/companies";
+import { getFormsByIds } from "@/data/forms";
+import { getInspectionsByPropertyId } from "@/data/inspections";
+import { getPropertyById } from "@/data/properties";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
-
-const properties = {
-  "1": {
-    id: "1",
-    name: "Sucursal San Luis de la Paz",
-    address: "San Luis de la Paz, Guanajuato",
-    type: "Sucursal comercial",
-    workers: 18,
-    inspections: 6,
-    pending: 1,
-  },
-
-  "2": {
-    id: "2",
-    name: "Sucursal Centro",
-    address: "Dolores Hidalgo, Guanajuato",
-    type: "Sucursal comercial",
-    workers: 12,
-    inspections: 4,
-    pending: 0,
-  },
-
-  "3": {
-    id: "3",
-    name: "Centro de distribución",
-    address: "San José Iturbide, Guanajuato",
-    type: "Centro de distribución",
-    workers: 42,
-    inspections: 2,
-    pending: 1,
-  },
-} as const;
-
-const forms = [
-  {
-    id: "form-1",
-    title: "Análisis de riesgos",
-    version: "v1.0",
-    status: "Disponible",
-  },
-
-  {
-    id: "form-2",
-    title: "Inspección de extintores",
-    version: "v1.2",
-    status: "Disponible",
-  },
-
-  {
-    id: "form-3",
-    title: "Señalización",
-    version: "v1.0",
-    status: "Disponible",
-  },
-];
-
-const recentInspections = [
-  {
-    id: "inspection-1",
-    title: "Análisis de riesgos",
-    date: "10 ago 2026",
-    status: "Finalizada",
-  },
-
-  {
-    id: "inspection-2",
-    title: "Inspección de extintores",
-    date: "05 ago 2026",
-    status: "En proceso",
-  },
-];
 
 export default function PropertyDetailsScreen() {
   const { colors } = useAppTheme();
@@ -89,8 +23,59 @@ export default function PropertyDetailsScreen() {
     propertyId: string;
   }>();
 
-  const property =
-    properties[propertyId as keyof typeof properties] ?? properties["1"];
+  const company = getCompanyById(id);
+  const property = getPropertyById(propertyId);
+
+  if (!company || !property) {
+    return (
+      <Screen>
+        <Pressable onPress={() => router.back()}>
+          <Text
+            style={{
+              color: colors.primary,
+              fontWeight: "600",
+            }}
+          >
+            ‹ Volver
+          </Text>
+        </Pressable>
+
+        <View style={styles.notFound}>
+          <Text
+            style={[
+              styles.notFoundTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Inmueble no encontrado
+          </Text>
+
+          <Text
+            style={[
+              styles.notFoundDescription,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            No fue posible encontrar la información del inmueble.
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  const propertyForms = getFormsByIds(property.formIds);
+
+  const propertyInspections = getInspectionsByPropertyId(property.id);
+
+  const pendingInspections = propertyInspections.filter(
+    (inspection) => inspection.status !== "completed",
+  ).length;
+
+  const location = `${property.city}, ${property.state}`;
 
   return (
     <Screen padded={false}>
@@ -98,6 +83,8 @@ export default function PropertyDetailsScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
+        {/* NAVEGACIÓN */}
+
         <View style={styles.topNavigation}>
           <Pressable
             onPress={() =>
@@ -134,6 +121,21 @@ export default function PropertyDetailsScreen() {
             </Text>
           </Pressable>
         </View>
+
+        {/* CONTEXTO DE EMPRESA */}
+
+        <Text
+          style={[
+            styles.overline,
+            {
+              color: company.branding.primaryColor,
+            },
+          ]}
+        >
+          {company.name.toUpperCase()}
+        </Text>
+
+        {/* IDENTIDAD DEL INMUEBLE */}
 
         <View style={styles.header}>
           <View
@@ -176,7 +178,7 @@ export default function PropertyDetailsScreen() {
                 },
               ]}
             >
-              {property.address}
+              {location}
             </Text>
 
             <Text
@@ -192,6 +194,8 @@ export default function PropertyDetailsScreen() {
           </View>
         </View>
 
+        {/* RESUMEN */}
+
         <View style={styles.statsGrid}>
           <SummaryCard
             value={property.workers.toString()}
@@ -199,20 +203,22 @@ export default function PropertyDetailsScreen() {
           />
 
           <SummaryCard
-            value={property.inspections.toString()}
+            value={propertyInspections.length.toString()}
             label="Inspecciones"
           />
 
           <SummaryCard
-            value={property.pending.toString()}
+            value={pendingInspections.toString()}
             label="Pendientes"
-            warning={property.pending > 0}
+            warning={pendingInspections > 0}
           />
         </View>
 
         <View style={styles.mainAction}>
           <AppButton>+ Nueva inspección</AppButton>
         </View>
+
+        {/* FORMULARIOS */}
 
         <View style={styles.section}>
           <Text
@@ -238,12 +244,13 @@ export default function PropertyDetailsScreen() {
           </Text>
 
           <View style={styles.formList}>
-            {forms.map((form) => (
+            {propertyForms.map((form) => (
               <FormCard
                 key={form.id}
                 title={form.title}
                 version={form.version}
-                status={form.status}
+                status={form.status === "active" ? "Disponible" : "Inactivo"}
+                disabled={form.status !== "active"}
                 onPress={() =>
                   router.navigate({
                     pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
@@ -257,7 +264,35 @@ export default function PropertyDetailsScreen() {
               />
             ))}
           </View>
+
+          {propertyForms.length === 0 && (
+            <AppCard style={styles.emptyCard}>
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Sin formularios asignados
+              </Text>
+
+              <Text
+                style={[
+                  styles.emptyDescription,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                Este inmueble todavía no tiene formularios disponibles.
+              </Text>
+            </AppCard>
+          )}
         </View>
+
+        {/* INSPECCIONES */}
 
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -286,29 +321,57 @@ export default function PropertyDetailsScreen() {
             </Pressable>
           </View>
 
-          <AppCard>
-            {recentInspections.map((inspection, index) => (
-              <View key={inspection.id}>
-                <InspectionRow
-                  title={inspection.title}
-                  date={inspection.date}
-                  status={inspection.status}
-                />
-
-                {index < recentInspections.length - 1 && (
-                  <View
-                    style={[
-                      styles.divider,
-                      {
-                        backgroundColor: colors.divider,
-                      },
-                    ]}
+          {propertyInspections.length > 0 ? (
+            <AppCard>
+              {propertyInspections.slice(0, 3).map((inspection, index) => (
+                <View key={inspection.id}>
+                  <InspectionRow
+                    inspector={inspection.inspector}
+                    date={inspection.date}
+                    status={inspection.status}
                   />
-                )}
-              </View>
-            ))}
-          </AppCard>
+
+                  {index < Math.min(propertyInspections.length, 3) - 1 && (
+                    <View
+                      style={[
+                        styles.divider,
+                        {
+                          backgroundColor: colors.divider,
+                        },
+                      ]}
+                    />
+                  )}
+                </View>
+              ))}
+            </AppCard>
+          ) : (
+            <AppCard>
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Sin inspecciones
+              </Text>
+
+              <Text
+                style={[
+                  styles.emptyDescription,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                Todavía no existen inspecciones registradas para este inmueble.
+              </Text>
+            </AppCard>
+          )}
         </View>
+
+        {/* INFORMACIÓN */}
 
         <View style={styles.section}>
           <Text
@@ -331,13 +394,32 @@ export default function PropertyDetailsScreen() {
 
             <Divider />
 
-            <InformationRow label="Ubicación" value={property.address} />
+            <InformationRow label="Municipio" value={property.city} />
+
+            <Divider />
+
+            <InformationRow label="Estado" value={property.state} />
+
+            {property.address && (
+              <>
+                <Divider />
+
+                <InformationRow label="Dirección" value={property.address} />
+              </>
+            )}
 
             <Divider />
 
             <InformationRow
               label="Trabajadores registrados"
               value={property.workers.toString()}
+            />
+
+            <Divider />
+
+            <InformationRow
+              label="Formularios asignados"
+              value={propertyForms.length.toString()}
             />
           </AppCard>
         </View>
@@ -388,24 +470,29 @@ function FormCard({
   title,
   version,
   status,
+  disabled,
   onPress,
 }: {
   title: string;
   version: string;
   status: string;
+  disabled: boolean;
   onPress: () => void;
 }) {
   const { colors } = useAppTheme();
 
   return (
     <Pressable
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.formCard,
         {
           backgroundColor: colors.surface,
+
           borderColor: colors.border,
-          opacity: pressed ? 0.7 : 1,
+
+          opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
         },
       ]}
     >
@@ -450,14 +537,14 @@ function FormCard({
               },
             ]}
           >
-            {version}
+            v{version}
           </Text>
 
           <Text
             style={[
               styles.formStatus,
               {
-                color: colors.success,
+                color: disabled ? colors.textMuted : colors.success,
               },
             ]}
           >
@@ -481,17 +568,29 @@ function FormCard({
 }
 
 function InspectionRow({
-  title,
+  inspector,
   date,
   status,
 }: {
-  title: string;
+  inspector: string;
   date: string;
-  status: string;
+  status: "draft" | "in_progress" | "completed";
 }) {
   const { colors } = useAppTheme();
 
-  const isCompleted = status === "Finalizada";
+  const label =
+    status === "completed"
+      ? "Finalizada"
+      : status === "in_progress"
+        ? "En proceso"
+        : "Borrador";
+
+  const statusColor =
+    status === "completed"
+      ? colors.success
+      : status === "in_progress"
+        ? colors.warning
+        : colors.textMuted;
 
   return (
     <View style={styles.inspectionRow}>
@@ -504,7 +603,7 @@ function InspectionRow({
             },
           ]}
         >
-          {title}
+          {inspector}
         </Text>
 
         <Text
@@ -515,7 +614,7 @@ function InspectionRow({
             },
           ]}
         >
-          {date}
+          {formatDate(date)}
         </Text>
       </View>
 
@@ -523,11 +622,11 @@ function InspectionRow({
         style={[
           styles.inspectionStatus,
           {
-            color: isCompleted ? colors.success : colors.warning,
+            color: statusColor,
           },
         ]}
       >
-        {status}
+        {label}
       </Text>
     </View>
   );
@@ -578,6 +677,18 @@ function Divider() {
   );
 }
 
+function formatDate(date: string) {
+  const parts = date.split("-");
+
+  if (parts.length !== 3) {
+    return date;
+  }
+
+  const [year, month, day] = parts;
+
+  return `${day}/${month}/${year}`;
+}
+
 const styles = StyleSheet.create({
   container: {
     padding: Spacing.lg,
@@ -589,7 +700,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
 
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
 
   backText: {
@@ -600,6 +711,14 @@ const styles = StyleSheet.create({
   editText: {
     fontSize: FontSize.small,
     fontWeight: "600",
+  },
+
+  overline: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    letterSpacing: 1,
+
+    marginBottom: Spacing.md,
   },
 
   header: {
@@ -704,7 +823,6 @@ const styles = StyleSheet.create({
 
   formList: {
     gap: Spacing.sm,
-
     marginTop: Spacing.md,
   },
 
@@ -813,5 +931,38 @@ const styles = StyleSheet.create({
     height: 1,
 
     marginVertical: Spacing.sm,
+  },
+
+  emptyCard: {
+    marginTop: Spacing.md,
+  },
+
+  emptyTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+
+    marginBottom: Spacing.sm,
+  },
+
+  emptyDescription: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+  },
+
+  notFound: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  notFoundTitle: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
+
+    marginBottom: Spacing.sm,
+  },
+
+  notFoundDescription: {
+    fontSize: FontSize.body,
+    lineHeight: 24,
   },
 });

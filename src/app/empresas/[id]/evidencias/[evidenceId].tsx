@@ -6,53 +6,15 @@ import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 
+import { getCompanyById } from "@/data/companies";
+import { getEvidenceById } from "@/data/evidences";
+import { getFormById } from "@/data/forms";
+import { getInspectionById } from "@/data/inspections";
+import { getPropertyById } from "@/data/properties";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
-
-const evidenceData = {
-  "evidence-1": {
-    title: "Extintor área de ventas",
-    type: "Fotografía",
-    inspection: "Inspección de extintores",
-    property: "Sucursal San Luis de la Paz",
-    date: "10 ago 2026",
-    status: "Sincronizada",
-    description:
-      "Evidencia fotográfica registrada durante la inspección del equipo.",
-  },
-
-  "evidence-2": {
-    title: "Condición de ruta de evacuación",
-    type: "Fotografía",
-    inspection: "Análisis de riesgos",
-    property: "Sucursal San Luis de la Paz",
-    date: "10 ago 2026",
-    status: "Sincronizada",
-    description:
-      "Registro visual de las condiciones encontradas durante el recorrido.",
-  },
-
-  "evidence-3": {
-    title: "Señalización preventiva",
-    type: "Fotografía",
-    inspection: "Señalización",
-    property: "Centro de distribución",
-    date: "13 ago 2026",
-    status: "Pendiente",
-    description: "Evidencia pendiente de sincronización con el servidor.",
-  },
-
-  "evidence-4": {
-    title: "Documento complementario",
-    type: "Documento",
-    inspection: "Análisis de riesgos",
-    property: "Sucursal Centro",
-    date: "12 ago 2026",
-    status: "Sincronizada",
-    description: "Documento complementario asociado con la inspección.",
-  },
-} as const;
 
 export default function EvidenceDetailsScreen() {
   const { colors } = useAppTheme();
@@ -62,11 +24,64 @@ export default function EvidenceDetailsScreen() {
     evidenceId: string;
   }>();
 
-  const evidence =
-    evidenceData[evidenceId as keyof typeof evidenceData] ??
-    evidenceData["evidence-1"];
+  const company = getCompanyById(id);
+  const evidence = getEvidenceById(evidenceId);
 
-  const synchronized = evidence.status === "Sincronizada";
+  if (!company || !evidence) {
+    return (
+      <Screen>
+        <Pressable onPress={() => router.back()}>
+          <Text
+            style={{
+              color: colors.primary,
+              fontWeight: "600",
+            }}
+          >
+            ‹ Volver
+          </Text>
+        </Pressable>
+
+        <View style={styles.notFound}>
+          <Text
+            style={[
+              styles.notFoundTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Evidencia no encontrada
+          </Text>
+
+          <Text
+            style={[
+              styles.notFoundDescription,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            No fue posible encontrar la información de esta evidencia.
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  const inspection = getInspectionById(evidence.inspectionId);
+
+  const property = getPropertyById(evidence.propertyId);
+
+  const form = inspection ? getFormById(inspection.formId) : undefined;
+
+  const evidenceStatusLabel =
+    evidence.status === "synced" ? "Sincronizada" : "Pendiente";
+
+  const evidenceStatusColor =
+    evidence.status === "synced" ? colors.success : colors.warning;
+
+  const evidenceTypeLabel =
+    evidence.type === "photo" ? "Fotografía" : "Documento";
 
   return (
     <Screen padded={false}>
@@ -74,6 +89,8 @@ export default function EvidenceDetailsScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
+        {/* NAVEGACIÓN */}
+
         <Pressable
           onPress={() =>
             router.navigate({
@@ -95,6 +112,21 @@ export default function EvidenceDetailsScreen() {
             ‹ Evidencias
           </Text>
         </Pressable>
+
+        {/* EMPRESA */}
+
+        <Text
+          style={[
+            styles.companyOverline,
+            {
+              color: company.branding.primaryColor,
+            },
+          ]}
+        >
+          {company.name.toUpperCase()}
+        </Text>
+
+        {/* TÍTULO */}
 
         <Text
           style={[
@@ -126,30 +158,62 @@ export default function EvidenceDetailsScreen() {
             },
           ]}
         >
-          {evidence.type}
+          {evidenceTypeLabel}
         </Text>
 
-        {/* VISTA PREVIA SIMULADA */}
+        {/* ESTADO */}
+
+        <View
+          style={[
+            styles.statusBadge,
+            {
+              backgroundColor: `${evidenceStatusColor}20`,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.statusText,
+              {
+                color: evidenceStatusColor,
+              },
+            ]}
+          >
+            ● {evidenceStatusLabel}
+          </Text>
+        </View>
+
+        {/* PREVIEW */}
 
         <View
           style={[
             styles.preview,
             {
               backgroundColor: colors.surfaceSecondary,
+
               borderColor: colors.border,
             },
           ]}
         >
-          <Text
+          <View
             style={[
-              styles.previewIcon,
+              styles.previewIconContainer,
               {
-                color: colors.primary,
+                backgroundColor: colors.primarySoft,
               },
             ]}
           >
-            {evidence.type === "Fotografía" ? "▧" : "▤"}
-          </Text>
+            <Text
+              style={[
+                styles.previewIcon,
+                {
+                  color: colors.primary,
+                },
+              ]}
+            >
+              {evidence.type === "photo" ? "▧" : "▤"}
+            </Text>
+          </View>
 
           <Text
             style={[
@@ -159,7 +223,9 @@ export default function EvidenceDetailsScreen() {
               },
             ]}
           >
-            Vista previa
+            {evidence.type === "photo"
+              ? "Vista previa de fotografía"
+              : "Vista previa del documento"}
           </Text>
 
           <Text
@@ -170,9 +236,13 @@ export default function EvidenceDetailsScreen() {
               },
             ]}
           >
-            El archivo real se mostrará aquí cuando conectemos la captura.
+            {evidence.remoteUri || evidence.localUri
+              ? "El archivo asociado será mostrado aquí."
+              : "Este prototipo todavía no contiene el archivo físico asociado."}
           </Text>
         </View>
+
+        {/* INFORMACIÓN */}
 
         <View style={styles.section}>
           <Text
@@ -187,53 +257,168 @@ export default function EvidenceDetailsScreen() {
           </Text>
 
           <AppCard>
-            <InfoRow label="Inspección" value={evidence.inspection} />
+            <InfoRow label="Empresa" value={company.name} />
 
             <Divider />
 
-            <InfoRow label="Inmueble" value={evidence.property} />
+            <InfoRow
+              label="Inmueble"
+              value={property?.name ?? "No disponible"}
+            />
 
             <Divider />
 
-            <InfoRow label="Fecha" value={evidence.date} />
+            <InfoRow
+              label="Inspección"
+              value={form?.title ?? "No disponible"}
+            />
+
+            <Divider />
+
+            <InfoRow label="Tipo" value={evidenceTypeLabel} />
+
+            <Divider />
+
+            <InfoRow label="Fecha" value={formatDate(evidence.date)} />
 
             <Divider />
 
             <InfoRow
               label="Estado"
-              value={evidence.status}
-              statusColor={synchronized ? colors.success : colors.warning}
+              value={evidenceStatusLabel}
+              valueColor={evidenceStatusColor}
             />
           </AppCard>
         </View>
 
-        <View style={styles.section}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Descripción
-          </Text>
+        {/* DESCRIPCIÓN */}
 
-          <AppCard>
+        {evidence.description && (
+          <View style={styles.section}>
             <Text
               style={[
-                styles.description,
+                styles.sectionTitle,
                 {
-                  color: colors.textSecondary,
+                  color: colors.text,
                 },
               ]}
             >
-              {evidence.description}
+              Descripción
             </Text>
-          </AppCard>
-        </View>
 
-        <AppButton variant="secondary">Ver inspección relacionada</AppButton>
+            <AppCard>
+              <Text
+                style={[
+                  styles.description,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                {evidence.description}
+              </Text>
+            </AppCard>
+          </View>
+        )}
+
+        {/* RELACIÓN CON INSPECCIÓN */}
+
+        {inspection && (
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Inspección relacionada
+            </Text>
+
+            <Pressable
+              onPress={() =>
+                router.navigate({
+                  pathname: "/empresas/[id]/inspecciones/[inspectionId]",
+                  params: {
+                    id,
+                    inspectionId: inspection.id,
+                  },
+                })
+              }
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <AppCard>
+                <View style={styles.relatedInspection}>
+                  <View
+                    style={[
+                      styles.relatedIcon,
+                      {
+                        backgroundColor: colors.primarySoft,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.relatedIconText,
+                        {
+                          color: colors.primary,
+                        },
+                      ]}
+                    >
+                      ✓
+                    </Text>
+                  </View>
+
+                  <View style={styles.relatedInfo}>
+                    <Text
+                      style={[
+                        styles.relatedTitle,
+                        {
+                          color: colors.text,
+                        },
+                      ]}
+                    >
+                      {form?.title ?? "Inspección"}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.relatedDescription,
+                        {
+                          color: colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {property?.name ?? "Inmueble no disponible"}
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.arrow,
+                      {
+                        color: colors.textMuted,
+                      },
+                    ]}
+                  >
+                    ›
+                  </Text>
+                </View>
+              </AppCard>
+            </Pressable>
+          </View>
+        )}
+
+        {/* ACCIONES */}
+
+        <View style={styles.actions}>
+          <AppButton variant="secondary">Abrir archivo</AppButton>
+
+          <AppButton variant="ghost">Compartir</AppButton>
+        </View>
 
         <Text
           style={[
@@ -243,8 +428,8 @@ export default function EvidenceDetailsScreen() {
             },
           ]}
         >
-          Prototipo visual: el archivo mostrado todavía no corresponde a una
-          evidencia real.
+          El almacenamiento y apertura real del archivo se implementarán en una
+          etapa posterior.
         </Text>
       </ScrollView>
     </Screen>
@@ -254,11 +439,11 @@ export default function EvidenceDetailsScreen() {
 function InfoRow({
   label,
   value,
-  statusColor,
+  valueColor,
 }: {
   label: string;
   value: string;
-  statusColor?: string;
+  valueColor?: string;
 }) {
   const { colors } = useAppTheme();
 
@@ -279,7 +464,7 @@ function InfoRow({
         style={[
           styles.infoValue,
           {
-            color: statusColor ?? colors.text,
+            color: valueColor ?? colors.text,
           },
         ]}
       >
@@ -304,6 +489,20 @@ function Divider() {
   );
 }
 
+function formatDate(date: string) {
+  const normalizedDate = date.includes("T") ? date.split("T")[0] : date;
+
+  const parts = normalizedDate.split("-");
+
+  if (parts.length !== 3) {
+    return date;
+  }
+
+  const [year, month, day] = parts;
+
+  return `${day}/${month}/${year}`;
+}
+
 const styles = StyleSheet.create({
   container: {
     padding: Spacing.lg,
@@ -313,29 +512,57 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: FontSize.small,
     fontWeight: "600",
-    marginBottom: Spacing.xl,
+
+    marginBottom: Spacing.lg,
+  },
+
+  companyOverline: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    letterSpacing: 1,
+
+    marginBottom: Spacing.md,
   },
 
   overline: {
     fontSize: FontSize.caption,
     fontWeight: "700",
     letterSpacing: 1,
+
     marginBottom: Spacing.sm,
   },
 
   title: {
     fontSize: FontSize.h1,
     fontWeight: "700",
+
     marginBottom: Spacing.sm,
   },
 
   type: {
     fontSize: FontSize.small,
+
+    marginBottom: Spacing.md,
+  },
+
+  statusBadge: {
+    alignSelf: "flex-start",
+
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+
+    borderRadius: Radius.full,
+
     marginBottom: Spacing.xl,
   },
 
+  statusText: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+  },
+
   preview: {
-    minHeight: 260,
+    minHeight: 250,
 
     borderWidth: 1,
     borderRadius: Radius.lg,
@@ -344,24 +571,41 @@ const styles = StyleSheet.create({
     justifyContent: "center",
 
     padding: Spacing.xl,
+
     marginBottom: Spacing.xl,
   },
 
-  previewIcon: {
-    fontSize: 56,
+  previewIconContainer: {
+    width: 72,
+    height: 72,
+
+    borderRadius: Radius.lg,
+
+    alignItems: "center",
+    justifyContent: "center",
+
     marginBottom: Spacing.md,
+  },
+
+  previewIcon: {
+    fontSize: 38,
+    fontWeight: "600",
   },
 
   previewTitle: {
     fontSize: FontSize.cardTitle,
     fontWeight: "700",
+
+    textAlign: "center",
+
     marginBottom: Spacing.sm,
   },
 
   previewDescription: {
     fontSize: FontSize.small,
-    textAlign: "center",
     lineHeight: 20,
+
+    textAlign: "center",
   },
 
   section: {
@@ -371,11 +615,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: FontSize.cardTitle,
     fontWeight: "700",
+
     marginBottom: Spacing.md,
   },
 
   infoLabel: {
     fontSize: FontSize.caption,
+
     marginBottom: Spacing.xs,
   },
 
@@ -386,6 +632,7 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
+
     marginVertical: Spacing.md,
   },
 
@@ -394,9 +641,76 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
 
+  relatedInspection: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  relatedIcon: {
+    width: 48,
+    height: 48,
+
+    borderRadius: Radius.md,
+
+    alignItems: "center",
+    justifyContent: "center",
+
+    marginRight: Spacing.md,
+  },
+
+  relatedIconText: {
+    fontSize: FontSize.h3,
+    fontWeight: "700",
+  },
+
+  relatedInfo: {
+    flex: 1,
+  },
+
+  relatedTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+
+    marginBottom: Spacing.xs,
+  },
+
+  relatedDescription: {
+    fontSize: FontSize.caption,
+  },
+
+  arrow: {
+    fontSize: 28,
+
+    marginLeft: Spacing.sm,
+  },
+
+  actions: {
+    gap: Spacing.sm,
+  },
+
   prototypeNotice: {
     fontSize: FontSize.caption,
+    lineHeight: 18,
+
     textAlign: "center",
+
     marginTop: Spacing.lg,
+  },
+
+  notFound: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  notFoundTitle: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
+
+    marginBottom: Spacing.sm,
+  },
+
+  notFoundDescription: {
+    fontSize: FontSize.body,
+    lineHeight: 24,
   },
 });

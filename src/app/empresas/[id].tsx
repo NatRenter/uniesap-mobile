@@ -6,53 +6,15 @@ import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 
+import { getCompanyById } from "@/data/companies";
+import { getEvidencesByCompanyId } from "@/data/evidences";
+import { getInspectionsByCompanyId } from "@/data/inspections";
+import { getPropertiesByCompanyId } from "@/data/properties";
+import { getReportsByCompanyId } from "@/data/reports";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
-
-const companies = {
-  "1": {
-    id: "1",
-    name: "AutoZone",
-    legalName: "AutoZone de México S. de R.L. de C.V.",
-    location: "San Luis de la Paz, Guanajuato",
-    state: "Guanajuato",
-    city: "San Luis de la Paz",
-    color: "#F97316",
-    initials: "AZ",
-    properties: 3,
-    inspections: 12,
-    pending: 2,
-  },
-
-  "2": {
-    id: "2",
-    name: "LALA",
-    legalName: "Empresa LALA",
-    location: "La Piedad, Michoacán",
-    state: "Michoacán",
-    city: "La Piedad",
-    color: "#EF4444",
-    initials: "LA",
-    properties: 1,
-    inspections: 8,
-    pending: 1,
-  },
-
-  "3": {
-    id: "3",
-    name: "Empresa Demo",
-    legalName: "Empresa Demo S.A. de C.V.",
-    location: "León, Guanajuato",
-    state: "Guanajuato",
-    city: "León",
-    color: "#3B82F6",
-    initials: "ED",
-    properties: 2,
-    inspections: 5,
-    pending: 0,
-  },
-} as const;
 
 export default function CompanyDetailsScreen() {
   const { colors } = useAppTheme();
@@ -61,7 +23,73 @@ export default function CompanyDetailsScreen() {
     id: string;
   }>();
 
-  const company = companies[id as keyof typeof companies] ?? companies["1"];
+  const company = getCompanyById(id);
+
+  if (!company) {
+    return (
+      <Screen>
+        <Pressable onPress={() => router.navigate("/empresas")}>
+          <Text
+            style={{
+              color: colors.primary,
+              fontWeight: "600",
+            }}
+          >
+            ‹ Empresas
+          </Text>
+        </Pressable>
+
+        <View style={styles.notFound}>
+          <Text
+            style={[
+              styles.notFoundTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Empresa no encontrada
+          </Text>
+
+          <Text
+            style={[
+              styles.notFoundDescription,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            No fue posible encontrar la información de esta empresa.
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  /*
+   * A partir de aquí ya no usamos números
+   * escritos manualmente.
+   *
+   * Los datos se calculan desde src/data.
+   */
+
+  const companyProperties = getPropertiesByCompanyId(company.id);
+
+  const companyInspections = getInspectionsByCompanyId(company.id);
+
+  const companyEvidences = getEvidencesByCompanyId(company.id);
+
+  const companyReports = getReportsByCompanyId(company.id);
+
+  const pendingInspections = companyInspections.filter(
+    (inspection) => inspection.status !== "completed",
+  ).length;
+
+  const initials = getInitials(company.name);
+
+  const companyLocation = `${company.city}, ${company.state}`;
+
+  const companyColor = company.branding.primaryColor;
 
   return (
     <Screen padded={false}>
@@ -89,6 +117,15 @@ export default function CompanyDetailsScreen() {
             onPress={() =>
               router.navigate({
                 pathname: "/empresas/[id]/editar",
+
+                /*
+                 * Por ahora conservamos el id
+                 * recibido en la ruta.
+                 *
+                 * Esto mantiene compatibilidad
+                 * con las pantallas todavía no
+                 * migradas.
+                 */
                 params: {
                   id,
                 },
@@ -115,7 +152,7 @@ export default function CompanyDetailsScreen() {
             style={[
               styles.logo,
               {
-                backgroundColor: `${company.color}20`,
+                backgroundColor: `${companyColor}20`,
               },
             ]}
           >
@@ -123,11 +160,11 @@ export default function CompanyDetailsScreen() {
               style={[
                 styles.logoText,
                 {
-                  color: company.color,
+                  color: companyColor,
                 },
               ]}
             >
-              {company.initials}
+              {initials}
             </Text>
           </View>
 
@@ -151,16 +188,18 @@ export default function CompanyDetailsScreen() {
                 },
               ]}
             >
-              {company.location}
+              {companyLocation}
             </Text>
           </View>
         </View>
+
+        {/* COLOR EMPRESA */}
 
         <View
           style={[
             styles.companyColorLine,
             {
-              backgroundColor: company.color,
+              backgroundColor: companyColor,
             },
           ]}
         />
@@ -180,19 +219,19 @@ export default function CompanyDetailsScreen() {
 
         <View style={styles.statsGrid}>
           <SummaryCard
-            value={company.properties.toString()}
+            value={companyProperties.length.toString()}
             label="Inmuebles"
           />
 
           <SummaryCard
-            value={company.inspections.toString()}
+            value={companyInspections.length.toString()}
             label="Inspecciones"
           />
 
           <SummaryCard
-            value={company.pending.toString()}
+            value={pendingInspections.toString()}
             label="Pendientes"
-            warning={company.pending > 0}
+            warning={pendingInspections > 0}
           />
         </View>
 
@@ -220,10 +259,11 @@ export default function CompanyDetailsScreen() {
             icon="⌂"
             title="Inmuebles"
             description="Sucursales y centros de trabajo"
-            count={company.properties}
+            count={companyProperties.length}
             onPress={() =>
               router.navigate({
                 pathname: "/empresas/[id]/inmuebles",
+
                 params: {
                   id,
                 },
@@ -235,10 +275,11 @@ export default function CompanyDetailsScreen() {
             icon="✓"
             title="Inspecciones"
             description="Historial y capturas realizadas"
-            count={company.inspections}
+            count={companyInspections.length}
             onPress={() =>
               router.navigate({
                 pathname: "/empresas/[id]/inspecciones",
+
                 params: {
                   id,
                 },
@@ -253,6 +294,7 @@ export default function CompanyDetailsScreen() {
             onPress={() =>
               router.navigate({
                 pathname: "/empresas/[id]/formularios",
+
                 params: {
                   id,
                 },
@@ -264,9 +306,11 @@ export default function CompanyDetailsScreen() {
             icon="◫"
             title="Evidencias"
             description="Fotografías y documentos"
+            count={companyEvidences.length}
             onPress={() =>
               router.navigate({
                 pathname: "/empresas/[id]/evidencias",
+
                 params: {
                   id,
                 },
@@ -277,10 +321,12 @@ export default function CompanyDetailsScreen() {
           <ModuleCard
             icon="▤"
             title="Reportes"
-            description="Resultados y exportaciones"
+            description="Consulta y genera reportes"
+            count={companyReports.length}
             onPress={() =>
               router.navigate({
                 pathname: "/empresas/[id]/reportes",
+
                 params: {
                   id,
                 },
@@ -310,6 +356,14 @@ export default function CompanyDetailsScreen() {
 
           <InformationRow label="Razón social" value={company.legalName} />
 
+          {company.rfc && (
+            <>
+              <Divider />
+
+              <InformationRow label="RFC" value={company.rfc} />
+            </>
+          )}
+
           <Divider />
 
           <InformationRow label="Estado" value={company.state} />
@@ -317,6 +371,22 @@ export default function CompanyDetailsScreen() {
           <Divider />
 
           <InformationRow label="Municipio" value={company.city} />
+
+          {company.phone && (
+            <>
+              <Divider />
+
+              <InformationRow label="Teléfono" value={company.phone} />
+            </>
+          )}
+
+          {company.email && (
+            <>
+              <Divider />
+
+              <InformationRow label="Correo" value={company.email} />
+            </>
+          )}
 
           <Divider />
 
@@ -341,7 +411,7 @@ export default function CompanyDetailsScreen() {
                   },
                 ]}
               >
-                {company.color}
+                {companyColor}
               </Text>
             </View>
 
@@ -349,7 +419,7 @@ export default function CompanyDetailsScreen() {
               style={[
                 styles.colorSample,
                 {
-                  backgroundColor: company.color,
+                  backgroundColor: companyColor,
                 },
               ]}
             />
@@ -359,6 +429,10 @@ export default function CompanyDetailsScreen() {
     </Screen>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/*                              SUBCOMPONENTES                                */
+/* -------------------------------------------------------------------------- */
 
 function SummaryCard({
   value,
@@ -504,6 +578,7 @@ function ModuleCard({
     </Pressable>
   );
 }
+
 function InformationRow({ label, value }: { label: string; value: string }) {
   const { colors } = useAppTheme();
 
@@ -549,6 +624,24 @@ function Divider() {
   );
 }
 
+function getInitials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+
+  return words
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                   STYLES                                   */
+/* -------------------------------------------------------------------------- */
+
 const styles = StyleSheet.create({
   container: {
     padding: Spacing.lg,
@@ -559,7 +652,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-
     marginBottom: Spacing.xl,
   },
 
@@ -576,7 +668,6 @@ const styles = StyleSheet.create({
   companyHeader: {
     flexDirection: "row",
     alignItems: "center",
-
     marginBottom: Spacing.lg,
   },
 
@@ -614,21 +705,18 @@ const styles = StyleSheet.create({
   companyColorLine: {
     height: 6,
     borderRadius: Radius.full,
-
     marginBottom: Spacing.xl,
   },
 
   sectionTitle: {
     fontSize: FontSize.cardTitle,
     fontWeight: "700",
-
     marginBottom: Spacing.md,
   },
 
   statsGrid: {
     flexDirection: "row",
     gap: Spacing.sm,
-
     marginBottom: Spacing.lg,
   },
 
@@ -639,7 +727,6 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: FontSize.h2,
     fontWeight: "700",
-
     marginBottom: Spacing.xs,
   },
 
@@ -691,7 +778,6 @@ const styles = StyleSheet.create({
   moduleTitle: {
     fontSize: FontSize.body,
     fontWeight: "600",
-
     marginBottom: Spacing.xs,
   },
 
@@ -733,7 +819,6 @@ const styles = StyleSheet.create({
 
   infoLabel: {
     fontSize: FontSize.caption,
-
     marginBottom: Spacing.xs,
   },
 
@@ -760,5 +845,21 @@ const styles = StyleSheet.create({
     height: 36,
 
     borderRadius: Radius.full,
+  },
+
+  notFound: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  notFoundTitle: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+  },
+
+  notFoundDescription: {
+    fontSize: FontSize.body,
+    lineHeight: 24,
   },
 });

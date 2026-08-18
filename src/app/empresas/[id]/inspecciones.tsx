@@ -5,36 +5,14 @@ import { router, useLocalSearchParams } from "expo-router";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 
+import { getCompanyById } from "@/data/companies";
+import { getFormById } from "@/data/forms";
+import { getInspectionsByCompanyId } from "@/data/inspections";
+import { getPropertyById } from "@/data/properties";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
-
-const inspections = [
-  {
-    id: "inspection-1",
-    form: "Análisis de riesgos",
-    property: "Sucursal San Luis de la Paz",
-    date: "10 ago 2026",
-    inspector: "Alexis",
-    status: "Finalizada",
-  },
-  {
-    id: "inspection-2",
-    form: "Inspección de extintores",
-    property: "Sucursal Centro",
-    date: "12 ago 2026",
-    inspector: "Alexis",
-    status: "En proceso",
-  },
-  {
-    id: "inspection-3",
-    form: "Señalización",
-    property: "Centro de distribución",
-    date: "13 ago 2026",
-    inspector: "Alexis",
-    status: "Borrador",
-  },
-];
 
 export default function CompanyInspectionsScreen() {
   const { colors } = useAppTheme();
@@ -42,6 +20,52 @@ export default function CompanyInspectionsScreen() {
   const { id } = useLocalSearchParams<{
     id: string;
   }>();
+
+  const company = getCompanyById(id);
+
+  if (!company) {
+    return (
+      <Screen>
+        <Pressable onPress={() => router.navigate("/empresas")}>
+          <Text
+            style={{
+              color: colors.primary,
+              fontWeight: "600",
+            }}
+          >
+            ‹ Empresas
+          </Text>
+        </Pressable>
+
+        <View style={styles.notFound}>
+          <Text
+            style={[
+              styles.notFoundTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Empresa no encontrada
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  const companyInspections = getInspectionsByCompanyId(company.id);
+
+  const completed = companyInspections.filter(
+    (inspection) => inspection.status === "completed",
+  ).length;
+
+  const inProgress = companyInspections.filter(
+    (inspection) => inspection.status === "in_progress",
+  ).length;
+
+  const drafts = companyInspections.filter(
+    (inspection) => inspection.status === "draft",
+  ).length;
 
   return (
     <Screen padded={false}>
@@ -53,7 +77,9 @@ export default function CompanyInspectionsScreen() {
           onPress={() =>
             router.navigate({
               pathname: "/empresas/[id]",
-              params: { id },
+              params: {
+                id,
+              },
             })
           }
         >
@@ -68,6 +94,17 @@ export default function CompanyInspectionsScreen() {
             ‹ Empresa
           </Text>
         </Pressable>
+
+        <Text
+          style={[
+            styles.overline,
+            {
+              color: company.branding.primaryColor,
+            },
+          ]}
+        >
+          {company.name.toUpperCase()}
+        </Text>
 
         <Text
           style={[
@@ -91,43 +128,148 @@ export default function CompanyInspectionsScreen() {
           Consulta el historial de capturas realizadas para esta empresa.
         </Text>
 
-        <View style={styles.list}>
-          {inspections.map((inspection) => (
-            <InspectionCard
-              key={inspection.id}
-              {...inspection}
-              companyId={id}
-            />
-          ))}
+        <View style={styles.summary}>
+          <SummaryCard value={completed.toString()} label="Finalizadas" />
+
+          <SummaryCard
+            value={inProgress.toString()}
+            label="En proceso"
+            warning={inProgress > 0}
+          />
+
+          <SummaryCard value={drafts.toString()} label="Borradores" />
         </View>
+
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          Historial
+        </Text>
+
+        <View style={styles.list}>
+          {companyInspections.map((inspection) => {
+            const property = getPropertyById(inspection.propertyId);
+
+            const form = getFormById(inspection.formId);
+
+            return (
+              <InspectionCard
+                key={inspection.id}
+                inspectionId={inspection.id}
+                companyRouteId={id}
+                form={form?.title ?? "Formulario no disponible"}
+                property={property?.name ?? "Inmueble no disponible"}
+                date={inspection.date}
+                inspector={inspection.inspector}
+                status={inspection.status}
+              />
+            );
+          })}
+        </View>
+
+        {companyInspections.length === 0 && (
+          <AppCard style={styles.emptyCard}>
+            <Text
+              style={[
+                styles.emptyTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Sin inspecciones
+            </Text>
+
+            <Text
+              style={[
+                styles.emptyDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Todavía no existen inspecciones registradas para esta empresa.
+            </Text>
+          </AppCard>
+        )}
       </ScrollView>
     </Screen>
   );
 }
 
+function SummaryCard({
+  value,
+  label,
+  warning = false,
+}: {
+  value: string;
+  label: string;
+  warning?: boolean;
+}) {
+  const { colors } = useAppTheme();
+
+  return (
+    <AppCard style={styles.summaryCard}>
+      <Text
+        style={[
+          styles.summaryValue,
+          {
+            color: warning ? colors.warning : colors.text,
+          },
+        ]}
+      >
+        {value}
+      </Text>
+
+      <Text
+        style={[
+          styles.summaryLabel,
+          {
+            color: colors.textSecondary,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+    </AppCard>
+  );
+}
+
 function InspectionCard({
-  id,
+  inspectionId,
+  companyRouteId,
   form,
   property,
   date,
   inspector,
   status,
-  companyId,
 }: {
-  id: string;
+  inspectionId: string;
+  companyRouteId: string;
   form: string;
   property: string;
   date: string;
   inspector: string;
-  status: string;
-  companyId: string;
+  status: "draft" | "in_progress" | "completed";
 }) {
   const { colors } = useAppTheme();
 
+  const statusLabel =
+    status === "completed"
+      ? "Finalizada"
+      : status === "in_progress"
+        ? "En proceso"
+        : "Borrador";
+
   const statusColor =
-    status === "Finalizada"
+    status === "completed"
       ? colors.success
-      : status === "En proceso"
+      : status === "in_progress"
         ? colors.warning
         : colors.textMuted;
 
@@ -137,8 +279,8 @@ function InspectionCard({
         router.navigate({
           pathname: "/empresas/[id]/inspecciones/[inspectionId]",
           params: {
-            id: companyId,
-            inspectionId: id,
+            id: companyRouteId,
+            inspectionId,
           },
         })
       }
@@ -191,13 +333,13 @@ function InspectionCard({
 
           <Text
             style={[
-              styles.status,
+              styles.arrow,
               {
-                color: statusColor,
+                color: colors.textMuted,
               },
             ]}
           >
-            {status}
+            ›
           </Text>
         </View>
 
@@ -211,31 +353,56 @@ function InspectionCard({
         />
 
         <View style={styles.meta}>
-          <Text
-            style={[
-              styles.metaText,
-              {
-                color: colors.textMuted,
-              },
-            ]}
-          >
-            {date}
-          </Text>
+          <View>
+            <Text
+              style={[
+                styles.metaText,
+                {
+                  color: colors.textMuted,
+                },
+              ]}
+            >
+              {formatDate(date)}
+            </Text>
+
+            <Text
+              style={[
+                styles.inspector,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Inspector: {inspector}
+            </Text>
+          </View>
 
           <Text
             style={[
-              styles.metaText,
+              styles.status,
               {
-                color: colors.textMuted,
+                color: statusColor,
               },
             ]}
           >
-            Inspector: {inspector}
+            ● {statusLabel}
           </Text>
         </View>
       </AppCard>
     </Pressable>
   );
+}
+
+function formatDate(date: string) {
+  const parts = date.split("-");
+
+  if (parts.length !== 3) {
+    return date;
+  }
+
+  const [year, month, day] = parts;
+
+  return `${day}/${month}/${year}`;
 }
 
 const styles = StyleSheet.create({
@@ -250,6 +417,13 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
 
+  overline: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: Spacing.sm,
+  },
+
   title: {
     fontSize: FontSize.h1,
     fontWeight: "700",
@@ -260,6 +434,32 @@ const styles = StyleSheet.create({
     fontSize: FontSize.body,
     lineHeight: 24,
     marginBottom: Spacing.xl,
+  },
+
+  summary: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+
+  summaryCard: {
+    flex: 1,
+  },
+
+  summaryValue: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
+    marginBottom: Spacing.xs,
+  },
+
+  summaryLabel: {
+    fontSize: FontSize.caption,
+  },
+
+  sectionTitle: {
+    fontSize: FontSize.cardTitle,
+    fontWeight: "700",
+    marginBottom: Spacing.md,
   },
 
   list: {
@@ -274,9 +474,12 @@ const styles = StyleSheet.create({
   icon: {
     width: 48,
     height: 48,
+
     borderRadius: Radius.md,
+
     alignItems: "center",
     justifyContent: "center",
+
     marginRight: Spacing.md,
   },
 
@@ -299,9 +502,9 @@ const styles = StyleSheet.create({
     fontSize: FontSize.small,
   },
 
-  status: {
-    fontSize: FontSize.caption,
-    fontWeight: "700",
+  arrow: {
+    fontSize: 28,
+    marginLeft: Spacing.sm,
   },
 
   divider: {
@@ -312,9 +515,45 @@ const styles = StyleSheet.create({
   meta: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
   },
 
   metaText: {
     fontSize: FontSize.caption,
+    marginBottom: Spacing.xs,
+  },
+
+  inspector: {
+    fontSize: FontSize.caption,
+  },
+
+  status: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+  },
+
+  emptyCard: {
+    marginTop: Spacing.md,
+  },
+
+  emptyTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+  },
+
+  emptyDescription: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+  },
+
+  notFound: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  notFoundTitle: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
   },
 });

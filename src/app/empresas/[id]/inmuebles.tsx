@@ -6,38 +6,13 @@ import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 
+import { getCompanyById } from "@/data/companies";
+import { getInspectionsByPropertyId } from "@/data/inspections";
+import { getPropertiesByCompanyId } from "@/data/properties";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
-
-const properties = [
-  {
-    id: "1",
-    name: "Sucursal San Luis de la Paz",
-    address: "San Luis de la Paz, Guanajuato",
-    type: "Sucursal comercial",
-    inspections: 6,
-    pending: 1,
-  },
-
-  {
-    id: "2",
-    name: "Sucursal Centro",
-    address: "Dolores Hidalgo, Guanajuato",
-    type: "Sucursal comercial",
-    inspections: 4,
-    pending: 0,
-  },
-
-  {
-    id: "3",
-    name: "Centro de distribución",
-    address: "San José Iturbide, Guanajuato",
-    type: "Centro de distribución",
-    inspections: 2,
-    pending: 1,
-  },
-];
 
 export default function CompanyPropertiesScreen() {
   const { colors } = useAppTheme();
@@ -45,6 +20,40 @@ export default function CompanyPropertiesScreen() {
   const { id } = useLocalSearchParams<{
     id: string;
   }>();
+
+  const company = getCompanyById(id);
+
+  if (!company) {
+    return (
+      <Screen>
+        <Pressable onPress={() => router.navigate("/empresas")}>
+          <Text
+            style={{
+              color: colors.primary,
+              fontWeight: "600",
+            }}
+          >
+            ‹ Empresas
+          </Text>
+        </Pressable>
+
+        <View style={styles.notFound}>
+          <Text
+            style={[
+              styles.notFoundTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Empresa no encontrada
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  const companyProperties = getPropertiesByCompanyId(company.id);
 
   return (
     <Screen padded={false}>
@@ -74,6 +83,17 @@ export default function CompanyPropertiesScreen() {
               ‹ Empresa
             </Text>
           </Pressable>
+
+          <Text
+            style={[
+              styles.overline,
+              {
+                color: company.branding.primaryColor,
+              },
+            ]}
+          >
+            {company.name.toUpperCase()}
+          </Text>
 
           <Text
             style={[
@@ -113,10 +133,53 @@ export default function CompanyPropertiesScreen() {
         </AppButton>
 
         <View style={styles.list}>
-          {properties.map((property) => (
-            <PropertyCard key={property.id} {...property} companyId={id} />
-          ))}
+          {companyProperties.map((property) => {
+            const propertyInspections = getInspectionsByPropertyId(property.id);
+
+            const pending = propertyInspections.filter(
+              (inspection) => inspection.status !== "completed",
+            ).length;
+
+            return (
+              <PropertyCard
+                key={property.id}
+                id={property.id}
+                name={property.name}
+                address={`${property.city}, ${property.state}`}
+                type={property.type}
+                inspections={propertyInspections.length}
+                pending={pending}
+                companyId={id}
+              />
+            );
+          })}
         </View>
+
+        {companyProperties.length === 0 && (
+          <AppCard style={styles.emptyCard}>
+            <Text
+              style={[
+                styles.emptyTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              No hay inmuebles registrados
+            </Text>
+
+            <Text
+              style={[
+                styles.emptyDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Registra el primer inmueble asociado a esta empresa.
+            </Text>
+          </AppCard>
+        )}
       </ScrollView>
     </Screen>
   );
@@ -251,7 +314,9 @@ function PropertyCard({
               },
             ]}
           >
-            {pending > 0 ? `${pending} pendiente` : "Sin pendientes"}
+            {pending > 0
+              ? `${pending} pendiente${pending > 1 ? "s" : ""}`
+              : "Sin pendientes"}
           </Text>
         </View>
       </AppCard>
@@ -273,6 +338,13 @@ const styles = StyleSheet.create({
     fontSize: FontSize.small,
     fontWeight: "600",
     marginBottom: Spacing.lg,
+  },
+
+  overline: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: Spacing.sm,
   },
 
   title: {
@@ -299,12 +371,9 @@ const styles = StyleSheet.create({
   propertyIcon: {
     width: 48,
     height: 48,
-
     borderRadius: Radius.md,
-
     alignItems: "center",
     justifyContent: "center",
-
     marginRight: Spacing.md,
   },
 
@@ -350,5 +419,30 @@ const styles = StyleSheet.create({
   stat: {
     fontSize: FontSize.caption,
     fontWeight: "500",
+  },
+
+  emptyCard: {
+    marginTop: Spacing.lg,
+  },
+
+  emptyTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+  },
+
+  emptyDescription: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+  },
+
+  notFound: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  notFoundTitle: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
   },
 });

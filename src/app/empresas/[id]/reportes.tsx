@@ -6,39 +6,15 @@ import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 
-import { FontSize, Spacing } from "@/constants/theme";
+import { getCompanyById } from "@/data/companies";
+import { getFormById } from "@/data/forms";
+import { getInspectionById } from "@/data/inspections";
+import { getPropertyById } from "@/data/properties";
+import { getReportsByCompanyId } from "@/data/reports";
+
+import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
-
-const reports = [
-  {
-    id: "report-1",
-    title: "Análisis de riesgos",
-    property: "Sucursal San Luis de la Paz",
-    inspection: "Análisis de riesgos",
-    date: "10 ago 2026",
-    format: "Excel",
-    status: "Generado",
-  },
-  {
-    id: "report-2",
-    title: "Inspección de extintores",
-    property: "Sucursal San Luis de la Paz",
-    inspection: "Inspección de extintores",
-    date: "10 ago 2026",
-    format: "Excel",
-    status: "Generado",
-  },
-  {
-    id: "report-3",
-    title: "Reporte de señalización",
-    property: "Centro de distribución",
-    inspection: "Señalización",
-    date: "13 ago 2026",
-    format: "Excel",
-    status: "Pendiente",
-  },
-];
 
 export default function ReportsScreen() {
   const { colors } = useAppTheme();
@@ -47,12 +23,46 @@ export default function ReportsScreen() {
     id: string;
   }>();
 
-  const generated = reports.filter(
-    (report) => report.status === "Generado",
+  const company = getCompanyById(id);
+
+  if (!company) {
+    return (
+      <Screen>
+        <Pressable onPress={() => router.navigate("/empresas")}>
+          <Text
+            style={{
+              color: colors.primary,
+              fontWeight: "600",
+            }}
+          >
+            ‹ Empresas
+          </Text>
+        </Pressable>
+
+        <View style={styles.notFound}>
+          <Text
+            style={[
+              styles.notFoundTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Empresa no encontrada
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  const companyReports = getReportsByCompanyId(company.id);
+
+  const generated = companyReports.filter(
+    (report) => report.status === "generated",
   ).length;
 
-  const pending = reports.filter(
-    (report) => report.status === "Pendiente",
+  const pending = companyReports.filter(
+    (report) => report.status === "pending",
   ).length;
 
   return (
@@ -69,23 +79,53 @@ export default function ReportsScreen() {
             })
           }
         >
-          <Text style={[styles.backText, { color: colors.primary }]}>
+          <Text
+            style={[
+              styles.backText,
+              {
+                color: colors.primary,
+              },
+            ]}
+          >
             ‹ Empresa
           </Text>
         </Pressable>
 
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={[styles.title, { color: colors.text }]}>Reportes</Text>
+        <Text
+          style={[
+            styles.overline,
+            {
+              color: company.branding.primaryColor,
+            },
+          ]}
+        >
+          {company.name.toUpperCase()}
+        </Text>
 
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Consulta y genera reportes a partir de las inspecciones.
-            </Text>
-          </View>
-        </View>
+        <Text
+          style={[
+            styles.title,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          Reportes
+        </Text>
+
+        <Text
+          style={[
+            styles.subtitle,
+            {
+              color: colors.textSecondary,
+            },
+          ]}
+        >
+          Consulta y genera reportes a partir de las inspecciones realizadas.
+        </Text>
 
         <View style={styles.summary}>
-          <SummaryCard value={reports.length.toString()} label="Total" />
+          <SummaryCard value={companyReports.length.toString()} label="Total" />
 
           <SummaryCard value={generated.toString()} label="Generados" />
 
@@ -108,15 +148,68 @@ export default function ReportsScreen() {
         </AppButton>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
             Reportes recientes
           </Text>
 
           <View style={styles.list}>
-            {reports.map((report) => (
-              <ReportCard key={report.id} {...report} companyId={id} />
-            ))}
+            {companyReports.map((report) => {
+              const inspection = getInspectionById(report.inspectionId);
+
+              const property = getPropertyById(report.propertyId);
+
+              const form = inspection
+                ? getFormById(inspection.formId)
+                : undefined;
+
+              return (
+                <ReportCard
+                  key={report.id}
+                  reportId={report.id}
+                  companyRouteId={id}
+                  title={report.title}
+                  property={property?.name ?? "Inmueble no disponible"}
+                  inspection={form?.title ?? "Inspección no disponible"}
+                  date={report.createdAt}
+                  format={report.format}
+                  status={report.status}
+                />
+              );
+            })}
           </View>
+
+          {companyReports.length === 0 && (
+            <AppCard style={styles.emptyCard}>
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Sin reportes
+              </Text>
+
+              <Text
+                style={[
+                  styles.emptyDescription,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                Todavía no se han generado reportes para esta empresa.
+              </Text>
+            </AppCard>
+          )}
         </View>
       </ScrollView>
     </Screen>
@@ -147,7 +240,14 @@ function SummaryCard({
         {value}
       </Text>
 
-      <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+      <Text
+        style={[
+          styles.summaryLabel,
+          {
+            color: colors.textSecondary,
+          },
+        ]}
+      >
         {label}
       </Text>
     </AppCard>
@@ -155,27 +255,31 @@ function SummaryCard({
 }
 
 function ReportCard({
-  id,
+  reportId,
+  companyRouteId,
   title,
   property,
   inspection,
   date,
   format,
   status,
-  companyId,
 }: {
-  id: string;
+  reportId: string;
+  companyRouteId: string;
   title: string;
   property: string;
   inspection: string;
   date: string;
-  format: string;
-  status: string;
-  companyId: string;
+  format: "excel" | "pdf";
+  status: "pending" | "generated";
 }) {
   const { colors } = useAppTheme();
 
-  const generated = status === "Generado";
+  const statusLabel = status === "generated" ? "Generado" : "Pendiente";
+
+  const statusColor = status === "generated" ? colors.success : colors.warning;
+
+  const formatLabel = format === "excel" ? "Excel" : "PDF";
 
   return (
     <Pressable
@@ -183,11 +287,14 @@ function ReportCard({
         router.navigate({
           pathname: "/empresas/[id]/reportes/[reportId]",
           params: {
-            id: companyId,
-            reportId: id,
+            id: companyRouteId,
+            reportId,
           },
         })
       }
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.7 : 1,
+      })}
     >
       <AppCard>
         <View style={styles.reportHeader}>
@@ -199,51 +306,114 @@ function ReportCard({
               },
             ]}
           >
-            <Text style={[styles.fileIconText, { color: colors.primary }]}>
+            <Text
+              style={[
+                styles.fileIconText,
+                {
+                  color: colors.primary,
+                },
+              ]}
+            >
               ▤
             </Text>
           </View>
 
           <View style={styles.reportInfo}>
-            <Text style={[styles.reportTitle, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.reportTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
               {title}
             </Text>
 
             <Text
-              style={[styles.reportProperty, { color: colors.textSecondary }]}
+              style={[
+                styles.reportProperty,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
             >
               {property}
             </Text>
           </View>
 
-          <Text style={[styles.arrow, { color: colors.textMuted }]}>›</Text>
+          <Text
+            style={[
+              styles.arrow,
+              {
+                color: colors.textMuted,
+              },
+            ]}
+          >
+            ›
+          </Text>
         </View>
 
-        <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+        <View
+          style={[
+            styles.divider,
+            {
+              backgroundColor: colors.divider,
+            },
+          ]}
+        />
 
-        <Text style={[styles.inspection, { color: colors.textSecondary }]}>
+        <Text
+          style={[
+            styles.inspection,
+            {
+              color: colors.textSecondary,
+            },
+          ]}
+        >
           {inspection}
         </Text>
 
         <View style={styles.meta}>
-          <Text style={[styles.metaText, { color: colors.textMuted }]}>
-            {date} · {format}
+          <Text
+            style={[
+              styles.metaText,
+              {
+                color: colors.textMuted,
+              },
+            ]}
+          >
+            {formatDate(date)} · {formatLabel}
           </Text>
 
           <Text
             style={[
               styles.status,
               {
-                color: generated ? colors.success : colors.warning,
+                color: statusColor,
               },
             ]}
           >
-            ● {status}
+            ● {statusLabel}
           </Text>
         </View>
       </AppCard>
     </Pressable>
   );
+}
+
+function formatDate(date: string) {
+  const normalized = date.includes("T") ? date.split("T")[0] : date;
+
+  const parts = normalized.split("-");
+
+  if (parts.length !== 3) {
+    return date;
+  }
+
+  const [year, month, day] = parts;
+
+  return `${day}/${month}/${year}`;
 }
 
 const styles = StyleSheet.create({
@@ -255,15 +425,14 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: FontSize.small,
     fontWeight: "600",
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
 
-  header: {
-    marginBottom: Spacing.xl,
-  },
-
-  headerText: {
-    flex: 1,
+  overline: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: Spacing.sm,
   },
 
   title: {
@@ -275,6 +444,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: FontSize.body,
     lineHeight: 24,
+    marginBottom: Spacing.xl,
   },
 
   summary: {
@@ -319,14 +489,14 @@ const styles = StyleSheet.create({
   fileIcon: {
     width: 52,
     height: 52,
+    borderRadius: Radius.md,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 12,
     marginRight: Spacing.md,
   },
 
   fileIconText: {
-    fontSize: 24,
+    fontSize: FontSize.h3,
     fontWeight: "700",
   },
 
@@ -372,5 +542,30 @@ const styles = StyleSheet.create({
   status: {
     fontSize: FontSize.caption,
     fontWeight: "600",
+  },
+
+  emptyCard: {
+    marginTop: Spacing.md,
+  },
+
+  emptyTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+  },
+
+  emptyDescription: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+  },
+
+  notFound: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  notFoundTitle: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
   },
 });

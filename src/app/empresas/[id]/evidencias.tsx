@@ -5,64 +5,63 @@ import { router, useLocalSearchParams } from "expo-router";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 
+import { getCompanyById } from "@/data/companies";
+import { getEvidencesByCompanyId } from "@/data/evidences";
+import { getFormById } from "@/data/forms";
+import { getInspectionById } from "@/data/inspections";
+import { getPropertyById } from "@/data/properties";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 
-const evidences = [
-  {
-    id: "evidence-1",
-    title: "Extintor área de ventas",
-    type: "Fotografía",
-    inspection: "Inspección de extintores",
-    property: "Sucursal San Luis de la Paz",
-    date: "10 ago 2026",
-    status: "Sincronizada",
-  },
-  {
-    id: "evidence-2",
-    title: "Condición de ruta de evacuación",
-    type: "Fotografía",
-    inspection: "Análisis de riesgos",
-    property: "Sucursal San Luis de la Paz",
-    date: "10 ago 2026",
-    status: "Sincronizada",
-  },
-  {
-    id: "evidence-3",
-    title: "Señalización preventiva",
-    type: "Fotografía",
-    inspection: "Señalización",
-    property: "Centro de distribución",
-    date: "13 ago 2026",
-    status: "Pendiente",
-  },
-  {
-    id: "evidence-4",
-    title: "Documento complementario",
-    type: "Documento",
-    inspection: "Análisis de riesgos",
-    property: "Sucursal Centro",
-    date: "12 ago 2026",
-    status: "Sincronizada",
-  },
-];
-
-export default function CompanyEvidenceScreen() {
+export default function CompanyEvidencesScreen() {
   const { colors } = useAppTheme();
 
   const { id } = useLocalSearchParams<{
     id: string;
   }>();
 
-  const total = evidences.length;
+  const company = getCompanyById(id);
 
-  const photos = evidences.filter(
-    (evidence) => evidence.type === "Fotografía",
+  if (!company) {
+    return (
+      <Screen>
+        <Pressable onPress={() => router.navigate("/empresas")}>
+          <Text
+            style={{
+              color: colors.primary,
+              fontWeight: "600",
+            }}
+          >
+            ‹ Empresas
+          </Text>
+        </Pressable>
+
+        <View style={styles.notFound}>
+          <Text
+            style={[
+              styles.notFoundTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Empresa no encontrada
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  const companyEvidences = getEvidencesByCompanyId(company.id);
+
+  const photoCount = companyEvidences.filter(
+    (evidence) => evidence.type === "photo",
   ).length;
 
-  const pending = evidences.filter(
-    (evidence) => evidence.status === "Pendiente",
+  const documentCount = companyEvidences.filter(
+    (evidence) => evidence.type === "document",
   ).length;
 
   return (
@@ -77,7 +76,9 @@ export default function CompanyEvidenceScreen() {
           onPress={() =>
             router.navigate({
               pathname: "/empresas/[id]",
-              params: { id },
+              params: {
+                id,
+              },
             })
           }
         >
@@ -93,7 +94,18 @@ export default function CompanyEvidenceScreen() {
           </Text>
         </Pressable>
 
-        {/* ENCABEZADO */}
+        {/* EMPRESA */}
+
+        <Text
+          style={[
+            styles.overline,
+            {
+              color: company.branding.primaryColor,
+            },
+          ]}
+        >
+          {company.name.toUpperCase()}
+        </Text>
 
         <Text
           style={[
@@ -120,15 +132,13 @@ export default function CompanyEvidenceScreen() {
         {/* RESUMEN */}
 
         <View style={styles.summary}>
-          <SummaryCard value={total.toString()} label="Archivos" />
-
-          <SummaryCard value={photos.toString()} label="Fotografías" />
-
           <SummaryCard
-            value={pending.toString()}
-            label="Pendientes"
-            warning={pending > 0}
+            value={companyEvidences.length.toString()}
+            label="Total"
           />
+
+          <SummaryCard value={photoCount.toString()} label="Fotografías" />
+          <SummaryCard value={documentCount.toString()} label="Documentos" />
         </View>
 
         {/* LISTADO */}
@@ -141,28 +151,70 @@ export default function CompanyEvidenceScreen() {
             },
           ]}
         >
-          Archivos recientes
+          Archivos
         </Text>
 
         <View style={styles.list}>
-          {evidences.map((evidence) => (
-            <EvidenceCard key={evidence.id} {...evidence} companyId={id} />
-          ))}
+          {companyEvidences.map((evidence) => {
+            const inspection = getInspectionById(evidence.inspectionId);
+
+            const property = inspection
+              ? getPropertyById(inspection.propertyId)
+              : undefined;
+
+            const form = inspection
+              ? getFormById(inspection.formId)
+              : undefined;
+
+            return (
+              <EvidenceCard
+                key={evidence.id}
+                companyRouteId={id}
+                evidenceId={evidence.id}
+                title={evidence.title}
+                type={evidence.type}
+                date={evidence.date}
+                property={property?.name ?? "Inmueble no disponible"}
+                form={form?.title ?? "Formulario no disponible"}
+              />
+            );
+          })}
         </View>
+
+        {/* ESTADO VACÍO */}
+
+        {companyEvidences.length === 0 && (
+          <AppCard style={styles.emptyCard}>
+            <Text
+              style={[
+                styles.emptyTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Sin evidencias
+            </Text>
+
+            <Text
+              style={[
+                styles.emptyDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Todavía no existen fotografías o documentos asociados a las
+              inspecciones de esta empresa.
+            </Text>
+          </AppCard>
+        )}
       </ScrollView>
     </Screen>
   );
 }
 
-function SummaryCard({
-  value,
-  label,
-  warning = false,
-}: {
-  value: string;
-  label: string;
-  warning?: boolean;
-}) {
+function SummaryCard({ value, label }: { value: string; label: string }) {
   const { colors } = useAppTheme();
 
   return (
@@ -171,7 +223,7 @@ function SummaryCard({
         style={[
           styles.summaryValue,
           {
-            color: warning ? colors.warning : colors.text,
+            color: colors.text,
           },
         ]}
       >
@@ -193,27 +245,23 @@ function SummaryCard({
 }
 
 function EvidenceCard({
-  id,
+  companyRouteId,
+  evidenceId,
   title,
   type,
-  inspection,
-  property,
   date,
-  status,
-  companyId,
+  property,
+  form,
 }: {
-  id: string;
+  companyRouteId: string;
+  evidenceId: string;
   title: string;
-  type: string;
-  inspection: string;
-  property: string;
+  type: "photo" | "document";
   date: string;
-  status: string;
-  companyId: string;
+  property: string;
+  form: string;
 }) {
   const { colors } = useAppTheme();
-
-  const synchronized = status === "Sincronizada";
 
   return (
     <Pressable
@@ -221,19 +269,20 @@ function EvidenceCard({
         router.navigate({
           pathname: "/empresas/[id]/evidencias/[evidenceId]",
           params: {
-            id: companyId,
-            evidenceId: id,
+            id: companyRouteId,
+            evidenceId,
           },
         })
       }
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.7 : 1,
+      })}
     >
       <AppCard>
         <View style={styles.cardHeader}>
-          {/* MINIATURA SIMULADA */}
-
           <View
             style={[
-              styles.thumbnail,
+              styles.fileIcon,
               {
                 backgroundColor: colors.primarySoft,
               },
@@ -241,20 +290,20 @@ function EvidenceCard({
           >
             <Text
               style={[
-                styles.thumbnailIcon,
+                styles.fileIconText,
                 {
                   color: colors.primary,
                 },
               ]}
             >
-              {type === "Fotografía" ? "▧" : "▤"}
+              {type === "photo" ? "▧" : "▤"}
             </Text>
           </View>
 
-          <View style={styles.evidenceInfo}>
+          <View style={styles.fileInfo}>
             <Text
               style={[
-                styles.evidenceTitle,
+                styles.fileName,
                 {
                   color: colors.text,
                 },
@@ -265,13 +314,13 @@ function EvidenceCard({
 
             <Text
               style={[
-                styles.evidenceType,
+                styles.fileType,
                 {
-                  color: colors.textMuted,
+                  color: colors.textSecondary,
                 },
               ]}
             >
-              {type}
+              {type === "photo" ? "Imagen" : "Documento"}
             </Text>
           </View>
 
@@ -296,54 +345,61 @@ function EvidenceCard({
           ]}
         />
 
-        <Text
-          style={[
-            styles.inspection,
-            {
-              color: colors.textSecondary,
-            },
-          ]}
-        >
-          {inspection}
-        </Text>
+        <View style={styles.metadata}>
+          <MetadataRow label="Inmueble" value={property} />
 
-        <Text
-          style={[
-            styles.property,
-            {
-              color: colors.textMuted,
-            },
-          ]}
-        >
-          {property}
-        </Text>
+          <MetadataRow label="Formulario" value={form} />
 
-        <View style={styles.meta}>
-          <Text
-            style={[
-              styles.date,
-              {
-                color: colors.textMuted,
-              },
-            ]}
-          >
-            {date}
-          </Text>
-
-          <Text
-            style={[
-              styles.status,
-              {
-                color: synchronized ? colors.success : colors.warning,
-              },
-            ]}
-          >
-            ● {status}
-          </Text>
+          <MetadataRow label="Fecha" value={formatDate(date)} />
         </View>
       </AppCard>
     </Pressable>
   );
+}
+
+function MetadataRow({ label, value }: { label: string; value: string }) {
+  const { colors } = useAppTheme();
+
+  return (
+    <View style={styles.metadataRow}>
+      <Text
+        style={[
+          styles.metadataLabel,
+          {
+            color: colors.textMuted,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={[
+          styles.metadataValue,
+          {
+            color: colors.textSecondary,
+          },
+        ]}
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function formatDate(date: string) {
+  const normalizedDate = date.includes("T") ? date.split("T")[0] : date;
+
+  const parts = normalizedDate.split("-");
+
+  if (parts.length !== 3) {
+    return date;
+  }
+
+  const [year, month, day] = parts;
+
+  return `${day}/${month}/${year}`;
 }
 
 const styles = StyleSheet.create({
@@ -355,7 +411,14 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: FontSize.small,
     fontWeight: "600",
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
+  },
+
+  overline: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: Spacing.sm,
   },
 
   title: {
@@ -405,34 +468,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  thumbnail: {
-    width: 56,
-    height: 56,
-
+  fileIcon: {
+    width: 48,
+    height: 48,
     borderRadius: Radius.md,
-
     alignItems: "center",
     justifyContent: "center",
-
     marginRight: Spacing.md,
   },
 
-  thumbnailIcon: {
-    fontSize: FontSize.h2,
-    fontWeight: "600",
+  fileIconText: {
+    fontSize: FontSize.h3,
+    fontWeight: "700",
   },
 
-  evidenceInfo: {
+  fileInfo: {
     flex: 1,
   },
 
-  evidenceTitle: {
+  fileName: {
     fontSize: FontSize.body,
     fontWeight: "700",
     marginBottom: Spacing.xs,
   },
 
-  evidenceType: {
+  fileType: {
     fontSize: FontSize.caption,
   },
 
@@ -446,29 +506,49 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.md,
   },
 
-  inspection: {
-    fontSize: FontSize.small,
-    fontWeight: "600",
-    marginBottom: Spacing.xs,
+  metadata: {
+    gap: Spacing.sm,
   },
 
-  property: {
-    fontSize: FontSize.caption,
-    marginBottom: Spacing.md,
-  },
-
-  meta: {
+  metadataRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    gap: Spacing.md,
   },
 
-  date: {
+  metadataLabel: {
     fontSize: FontSize.caption,
   },
 
-  status: {
+  metadataValue: {
+    flex: 1,
+    textAlign: "right",
     fontSize: FontSize.caption,
-    fontWeight: "600",
+    fontWeight: "500",
+  },
+
+  emptyCard: {
+    marginTop: Spacing.md,
+  },
+
+  emptyTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+  },
+
+  emptyDescription: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+  },
+
+  notFound: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  notFoundTitle: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
   },
 });

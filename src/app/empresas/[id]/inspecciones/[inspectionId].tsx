@@ -6,68 +6,15 @@ import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { Screen } from "@/components/ui/Screen";
 
+import { getCompanyById } from "@/data/companies";
+import { getEvidencesByInspectionId } from "@/data/evidences";
+import { getFormById } from "@/data/forms";
+import { getInspectionById } from "@/data/inspections";
+import { getPropertyById } from "@/data/properties";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
-
-const inspections = {
-  "inspection-1": {
-    title: "Análisis de riesgos",
-    property: "Sucursal San Luis de la Paz",
-    date: "10 ago 2026",
-    inspector: "Alexis",
-    status: "Finalizada",
-    responses: [
-      {
-        label: "Responsable de la inspección",
-        value: "Alexis",
-      },
-      {
-        label: "¿Se identificaron condiciones de riesgo?",
-        value: "Sí",
-      },
-      {
-        label: "Observaciones",
-        value: "Se identificaron condiciones que requieren seguimiento.",
-      },
-    ],
-    evidences: 3,
-  },
-
-  "inspection-2": {
-    title: "Inspección de extintores",
-    property: "Sucursal Centro",
-    date: "12 ago 2026",
-    inspector: "Alexis",
-    status: "En proceso",
-    responses: [
-      {
-        label: "Responsable de la inspección",
-        value: "Alexis",
-      },
-      {
-        label: "Equipos revisados",
-        value: "8",
-      },
-    ],
-    evidences: 2,
-  },
-
-  "inspection-3": {
-    title: "Señalización",
-    property: "Centro de distribución",
-    date: "13 ago 2026",
-    inspector: "Alexis",
-    status: "Borrador",
-    responses: [
-      {
-        label: "Responsable de la inspección",
-        value: "Alexis",
-      },
-    ],
-    evidences: 0,
-  },
-} as const;
 
 export default function InspectionDetailsScreen() {
   const { colors } = useAppTheme();
@@ -77,14 +24,67 @@ export default function InspectionDetailsScreen() {
     inspectionId: string;
   }>();
 
-  const inspection =
-    inspections[inspectionId as keyof typeof inspections] ??
-    inspections["inspection-1"];
+  const company = getCompanyById(id);
+  const inspection = getInspectionById(inspectionId);
+
+  if (!company || !inspection) {
+    return (
+      <Screen>
+        <Pressable onPress={() => router.back()}>
+          <Text
+            style={{
+              color: colors.primary,
+              fontWeight: "600",
+            }}
+          >
+            ‹ Volver
+          </Text>
+        </Pressable>
+
+        <View style={styles.notFound}>
+          <Text
+            style={[
+              styles.notFoundTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Inspección no encontrada
+          </Text>
+
+          <Text
+            style={[
+              styles.notFoundDescription,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            No fue posible encontrar la información de esta inspección.
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  const property = getPropertyById(inspection.propertyId);
+
+  const form = getFormById(inspection.formId);
+
+  const inspectionEvidences = getEvidencesByInspectionId(inspection.id);
+
+  const statusLabel =
+    inspection.status === "completed"
+      ? "Finalizada"
+      : inspection.status === "in_progress"
+        ? "En proceso"
+        : "Borrador";
 
   const statusColor =
-    inspection.status === "Finalizada"
+    inspection.status === "completed"
       ? colors.success
-      : inspection.status === "En proceso"
+      : inspection.status === "in_progress"
         ? colors.warning
         : colors.textMuted;
 
@@ -94,6 +94,8 @@ export default function InspectionDetailsScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
+        {/* NAVEGACIÓN */}
+
         <Pressable
           onPress={() =>
             router.navigate({
@@ -116,6 +118,21 @@ export default function InspectionDetailsScreen() {
           </Text>
         </Pressable>
 
+        {/* EMPRESA */}
+
+        <Text
+          style={[
+            styles.companyOverline,
+            {
+              color: company.branding.primaryColor,
+            },
+          ]}
+        >
+          {company.name.toUpperCase()}
+        </Text>
+
+        {/* FORMULARIO */}
+
         <Text
           style={[
             styles.overline,
@@ -135,7 +152,7 @@ export default function InspectionDetailsScreen() {
             },
           ]}
         >
-          {inspection.title}
+          {form?.title ?? "Formulario no disponible"}
         </Text>
 
         <Text
@@ -146,7 +163,7 @@ export default function InspectionDetailsScreen() {
             },
           ]}
         >
-          {inspection.property}
+          {property?.name ?? "Inmueble no disponible"}
         </Text>
 
         <View
@@ -165,9 +182,11 @@ export default function InspectionDetailsScreen() {
               },
             ]}
           >
-            ● {inspection.status}
+            ● {statusLabel}
           </Text>
         </View>
+
+        {/* INFORMACIÓN GENERAL */}
 
         <View style={styles.section}>
           <Text
@@ -182,7 +201,32 @@ export default function InspectionDetailsScreen() {
           </Text>
 
           <AppCard>
-            <InfoRow label="Fecha" value={inspection.date} />
+            <InfoRow label="Empresa" value={company.name} />
+
+            <Divider />
+
+            <InfoRow
+              label="Inmueble"
+              value={property?.name ?? "No disponible"}
+            />
+
+            <Divider />
+
+            <InfoRow
+              label="Formulario"
+              value={form?.title ?? "No disponible"}
+            />
+
+            <Divider />
+
+            <InfoRow
+              label="Versión"
+              value={form ? `v${form.version}` : "No disponible"}
+            />
+
+            <Divider />
+
+            <InfoRow label="Fecha" value={formatDate(inspection.date)} />
 
             <Divider />
 
@@ -190,9 +234,15 @@ export default function InspectionDetailsScreen() {
 
             <Divider />
 
-            <InfoRow label="Estado" value={inspection.status} />
+            <InfoRow
+              label="Estado"
+              value={statusLabel}
+              valueColor={statusColor}
+            />
           </AppCard>
         </View>
+
+        {/* RESPUESTAS */}
 
         <View style={styles.section}>
           <Text
@@ -206,34 +256,103 @@ export default function InspectionDetailsScreen() {
             Respuestas
           </Text>
 
-          <View style={styles.responseList}>
-            {inspection.responses.map((response, index) => (
-              <AppCard key={`${response.label}-${index}`}>
-                <Text
-                  style={[
-                    styles.responseLabel,
-                    {
-                      color: colors.textMuted,
-                    },
-                  ]}
-                >
-                  {response.label}
-                </Text>
+          {inspection.responses.length > 0 ? (
+            <View style={styles.responseList}>
+              {inspection.responses.map((response) => {
+                const question = form?.questions.find(
+                  (item) => item.id === response.questionId,
+                );
 
-                <Text
-                  style={[
-                    styles.responseValue,
-                    {
-                      color: colors.text,
-                    },
-                  ]}
-                >
-                  {response.value}
-                </Text>
-              </AppCard>
-            ))}
-          </View>
+                return (
+                  <AppCard key={response.questionId}>
+                    <View style={styles.responseHeader}>
+                      <View
+                        style={[
+                          styles.questionBadge,
+                          {
+                            backgroundColor: colors.primarySoft,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.questionBadgeText,
+                            {
+                              color: colors.primary,
+                            },
+                          ]}
+                        >
+                          ?
+                        </Text>
+                      </View>
+
+                      <Text
+                        style={[
+                          styles.responseLabel,
+                          {
+                            color: colors.textSecondary,
+                          },
+                        ]}
+                      >
+                        {question?.label ?? response.questionId}
+                      </Text>
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.responseValue,
+                        {
+                          color: colors.text,
+                        },
+                      ]}
+                    >
+                      {formatResponseValue(response.value)}
+                    </Text>
+
+                    {question && (
+                      <Text
+                        style={[
+                          styles.responseType,
+                          {
+                            color: colors.textMuted,
+                          },
+                        ]}
+                      >
+                        Tipo: {getQuestionTypeLabel(question.type)}
+                      </Text>
+                    )}
+                  </AppCard>
+                );
+              })}
+            </View>
+          ) : (
+            <AppCard>
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Sin respuestas
+              </Text>
+
+              <Text
+                style={[
+                  styles.emptyDescription,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                Esta inspección todavía no contiene respuestas registradas.
+              </Text>
+            </AppCard>
+          )}
         </View>
+
+        {/* EVIDENCIAS */}
 
         <View style={styles.section}>
           <Text
@@ -247,72 +366,99 @@ export default function InspectionDetailsScreen() {
             Evidencias
           </Text>
 
-          <AppCard>
-            <View style={styles.evidenceRow}>
-              <View
-                style={[
-                  styles.evidenceIcon,
-                  {
-                    backgroundColor: colors.primarySoft,
-                  },
-                ]}
-              >
-                <Text
+          <Pressable
+            onPress={() =>
+              router.navigate({
+                pathname: "/empresas/[id]/evidencias",
+                params: {
+                  id,
+                },
+              })
+            }
+          >
+            <AppCard>
+              <View style={styles.evidenceRow}>
+                <View
                   style={[
-                    styles.evidenceIconText,
+                    styles.evidenceIcon,
                     {
-                      color: colors.primary,
+                      backgroundColor: colors.primarySoft,
                     },
                   ]}
                 >
-                  ◫
+                  <Text
+                    style={[
+                      styles.evidenceIconText,
+                      {
+                        color: colors.primary,
+                      },
+                    ]}
+                  >
+                    ◫
+                  </Text>
+                </View>
+
+                <View style={styles.evidenceInfo}>
+                  <Text
+                    style={[
+                      styles.evidenceTitle,
+                      {
+                        color: colors.text,
+                      },
+                    ]}
+                  >
+                    Evidencias asociadas
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.evidenceDescription,
+                      {
+                        color: colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {inspectionEvidences.length} archivo
+                    {inspectionEvidences.length !== 1 ? "s" : ""}
+                  </Text>
+                </View>
+
+                <Text
+                  style={[
+                    styles.arrow,
+                    {
+                      color: colors.textMuted,
+                    },
+                  ]}
+                >
+                  ›
                 </Text>
               </View>
-
-              <View style={styles.evidenceInfo}>
-                <Text
-                  style={[
-                    styles.evidenceTitle,
-                    {
-                      color: colors.text,
-                    },
-                  ]}
-                >
-                  Evidencias fotográficas
-                </Text>
-
-                <Text
-                  style={[
-                    styles.evidenceDescription,
-                    {
-                      color: colors.textSecondary,
-                    },
-                  ]}
-                >
-                  {inspection.evidences} archivos adjuntos
-                </Text>
-              </View>
-
-              <Text
-                style={[
-                  styles.arrow,
-                  {
-                    color: colors.textMuted,
-                  },
-                ]}
-              >
-                ›
-              </Text>
-            </View>
-          </AppCard>
+            </AppCard>
+          </Pressable>
         </View>
 
+        {/* ACCIONES */}
+
         <View style={styles.actions}>
-          {inspection.status !== "Finalizada" && (
+          {inspection.status !== "completed" && (
             <AppButton>Continuar captura</AppButton>
           )}
 
-          <AppButton variant="secondary">Generar reporte</AppButton>
+          <AppButton
+            variant="secondary"
+            onPress={() =>
+              router.navigate({
+                pathname: "/empresas/[id]/reportes/nuevo",
+                params: {
+                  id,
+                  inspectionId: inspection.id,
+                },
+              })
+            }
+          >
+            Generar reporte
+          </AppButton>
         </View>
 
         <Text
@@ -323,14 +469,23 @@ export default function InspectionDetailsScreen() {
             },
           ]}
         >
-          Prototipo visual: la generación de reportes todavía no está conectada.
+          Los datos mostrados ya provienen del modelo centralizado del
+          prototipo.
         </Text>
       </ScrollView>
     </Screen>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+}) {
   const { colors } = useAppTheme();
 
   return (
@@ -350,7 +505,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
         style={[
           styles.infoValue,
           {
-            color: colors.text,
+            color: valueColor ?? colors.text,
           },
         ]}
       >
@@ -375,6 +530,57 @@ function Divider() {
   );
 }
 
+function formatResponseValue(value: string | number | boolean | null) {
+  if (value === null) {
+    return "Sin respuesta";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Sí" : "No";
+  }
+
+  return String(value);
+}
+
+function getQuestionTypeLabel(
+  type: "text" | "textarea" | "number" | "boolean" | "select" | "photo",
+) {
+  switch (type) {
+    case "text":
+      return "Texto";
+
+    case "textarea":
+      return "Texto largo";
+
+    case "number":
+      return "Número";
+
+    case "boolean":
+      return "Sí / No";
+
+    case "select":
+      return "Selección";
+
+    case "photo":
+      return "Fotografía";
+
+    default:
+      return type;
+  }
+}
+
+function formatDate(date: string) {
+  const parts = date.split("-");
+
+  if (parts.length !== 3) {
+    return date;
+  }
+
+  const [year, month, day] = parts;
+
+  return `${day}/${month}/${year}`;
+}
+
 const styles = StyleSheet.create({
   container: {
     padding: Spacing.lg,
@@ -384,7 +590,14 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: FontSize.small,
     fontWeight: "600",
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
+  },
+
+  companyOverline: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: Spacing.md,
   },
 
   overline: {
@@ -428,11 +641,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: FontSize.cardTitle,
     fontWeight: "700",
+
     marginBottom: Spacing.md,
   },
 
   infoLabel: {
     fontSize: FontSize.caption,
+
     marginBottom: Spacing.xs,
   },
 
@@ -443,6 +658,7 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
+
     marginVertical: Spacing.md,
   },
 
@@ -450,14 +666,46 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
 
+  responseHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+
+    marginBottom: Spacing.md,
+  },
+
+  questionBadge: {
+    width: 32,
+    height: 32,
+
+    borderRadius: Radius.full,
+
+    alignItems: "center",
+    justifyContent: "center",
+
+    marginRight: Spacing.sm,
+  },
+
+  questionBadgeText: {
+    fontSize: FontSize.small,
+    fontWeight: "700",
+  },
+
   responseLabel: {
-    fontSize: FontSize.caption,
-    marginBottom: Spacing.sm,
+    flex: 1,
+
+    fontSize: FontSize.small,
+    fontWeight: "600",
   },
 
   responseValue: {
     fontSize: FontSize.body,
-    fontWeight: "600",
+    fontWeight: "700",
+
+    marginBottom: Spacing.sm,
+  },
+
+  responseType: {
+    fontSize: FontSize.caption,
   },
 
   evidenceRow: {
@@ -489,6 +737,7 @@ const styles = StyleSheet.create({
   evidenceTitle: {
     fontSize: FontSize.body,
     fontWeight: "600",
+
     marginBottom: Spacing.xs,
   },
 
@@ -498,6 +747,7 @@ const styles = StyleSheet.create({
 
   arrow: {
     fontSize: 28,
+
     marginLeft: Spacing.sm,
   },
 
@@ -507,7 +757,39 @@ const styles = StyleSheet.create({
 
   prototypeNotice: {
     fontSize: FontSize.caption,
+    lineHeight: 18,
+
     textAlign: "center",
+
     marginTop: Spacing.lg,
+  },
+
+  emptyTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+
+    marginBottom: Spacing.sm,
+  },
+
+  emptyDescription: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+  },
+
+  notFound: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  notFoundTitle: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
+
+    marginBottom: Spacing.sm,
+  },
+
+  notFoundDescription: {
+    fontSize: FontSize.body,
+    lineHeight: 24,
   },
 });
