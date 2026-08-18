@@ -1,15 +1,41 @@
-export type InspectionStatus = "draft" | "in_progress" | "completed";
+export type InspectionResponseValue = string | number | boolean | null;
 
 export type InspectionResponse = {
   questionId: string;
-  value: string | number | boolean | null;
+  value: InspectionResponseValue;
+};
+
+export type InspectionStatus = "draft" | "in_progress" | "completed";
+
+export type InspectionSyncStatus = "local" | "pending" | "synced" | "error";
+
+export type InspectionKoboReference = {
+  provider: "kobo";
+
+  assetUid: string;
+
+  submissionId: string | number;
+
+  uuid?: string;
+
+  syncedAt?: string;
+};
+
+export type InspectionIntegration = {
+  syncStatus: InspectionSyncStatus;
+
+  kobo?: InspectionKoboReference;
+
+  lastSyncError?: string;
 };
 
 export type Inspection = {
   id: string;
 
   companyId: string;
+
   propertyId: string;
+
   formId: string;
 
   inspector: string;
@@ -21,4 +47,6 @@ export type Inspection = {
   responses: InspectionResponse[];
 
   evidenceIds: string[];
+
+  integration?: InspectionIntegration;
 };

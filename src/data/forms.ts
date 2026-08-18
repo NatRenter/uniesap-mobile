@@ -12,31 +12,63 @@ export const forms: FormDefinition[] = [
 
     status: "active",
 
+    integration: {
+      provider: "kobo",
+      assetUid: "mock-asset-risk",
+      versionUid: "mock-version-risk-001",
+    },
+
     questions: [
       {
         id: "question-001",
+
         label: "Responsable de la inspección",
+
         type: "text",
+
         required: true,
+
+        integration: {
+          koboFieldName: "datos_generales/responsable",
+        },
       },
 
       {
         id: "question-002",
+
         label: "¿Se identificaron condiciones de riesgo?",
+
         type: "boolean",
+
         required: true,
+
+        integration: {
+          koboFieldName: "riesgos/condiciones_riesgo",
+        },
       },
 
       {
         id: "question-003",
+
         label: "Observaciones",
+
         type: "textarea",
+
+        integration: {
+          koboFieldName: "riesgos/observaciones",
+        },
       },
 
       {
         id: "question-004",
+
         label: "Evidencia fotográfica",
+
         type: "photo",
+
+        integration: {
+          koboFieldName: "riesgos/evidencia",
+        },
       },
     ],
   },
@@ -52,23 +84,47 @@ export const forms: FormDefinition[] = [
 
     status: "active",
 
+    integration: {
+      provider: "kobo",
+      assetUid: "mock-asset-extinguishers",
+      versionUid: "mock-version-extinguishers-001",
+    },
+
     questions: [
       {
         id: "question-005",
+
         label: "Número de extintor",
+
         type: "text",
+
+        integration: {
+          koboFieldName: "extintor/numero",
+        },
       },
 
       {
         id: "question-006",
+
         label: "Estado general",
+
         type: "select",
+
+        integration: {
+          koboFieldName: "extintor/estado",
+        },
       },
 
       {
         id: "question-007",
+
         label: "Fotografía del equipo",
+
         type: "photo",
+
+        integration: {
+          koboFieldName: "extintor/fotografia",
+        },
       },
     ],
   },
