@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
@@ -14,28 +16,27 @@ import { getFormById } from "@/data/forms";
 import { getInspectionById } from "@/data/inspections";
 import { getPropertyById } from "@/data/properties";
 
+import { updateInspection } from "@/repositories/inspectionRepository";
+
+import { exportKoboSubmission } from "@/services/koboInspectionService";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useResponsive } from "@/hooks/useResponsive";
 
 export default function InspectionDetailsScreen() {
-  /*
-   * Tema global de la aplicación.
-   * Mantiene compatibilidad con modo claro y oscuro.
-   */
   const { colors } = useAppTheme();
 
   /*
-   * En esta pantalla necesitamos conocer cuándo estamos
-   * en escritorio para aprovechar mejor el ancho disponible.
+   * En escritorio aprovechamos el espacio horizontal.
    */
   const { isPhone, isTablet } = useResponsive();
 
   const isDesktop = !isPhone && !isTablet;
 
   /*
-   * Parámetros dinámicos:
+   * Ruta:
    *
    * /empresas/[id]/inspecciones/[inspectionId]
    */
@@ -45,15 +46,36 @@ export default function InspectionDetailsScreen() {
   }>();
 
   /*
-   * Recuperamos la empresa y la inspección
-   * desde la capa centralizada de datos.
+   * Estado del reintento de sincronización.
    */
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const [retryError, setRetryError] = useState<string | null>(null);
+
+  /*
+   * Utilizamos este contador solamente para
+   * forzar una nueva lectura visual después
+   * de modificar el repositorio en memoria.
+   *
+   * Cuando migremos a una base reactiva/SQLite
+   * esta técnica dejará de ser necesaria.
+   */
+  const [refreshVersion, setRefreshVersion] = useState(0);
+
+  /*
+   * refreshVersion se lee deliberadamente
+   * para que React vuelva a ejecutar estas consultas.
+   */
+  void refreshVersion;
+
   const company = getCompanyById(id);
 
   const inspection = getInspectionById(inspectionId);
 
   /*
-   * Estado controlado para rutas inválidas.
+   * Todos los Hooks ya se ejecutaron,
+   * por lo que ahora podemos realizar
+   * el return condicional.
    */
   if (!company || !inspection) {
     return (
@@ -62,6 +84,7 @@ export default function InspectionDetailsScreen() {
           <Text
             style={{
               color: colors.primary,
+
               fontWeight: "600",
             }}
           >
@@ -96,26 +119,16 @@ export default function InspectionDetailsScreen() {
     );
   }
 
-  /*
-   * Resolvemos las relaciones de la inspección.
-   *
-   * inspection.propertyId → inmueble
-   * inspection.formId     → formulario
-   */
   const property = getPropertyById(inspection.propertyId);
 
   const form = getFormById(inspection.formId);
 
-  /*
-   * Recuperamos solamente las evidencias
-   * asociadas a esta inspección.
-   */
   const inspectionEvidences = getEvidencesByInspectionId(inspection.id);
 
-  /*
-   * Transformamos el estado interno en
-   * una etiqueta amigable.
-   */
+  /* ---------------------------------------------------------------------- */
+  /*                        ESTADO DE INSPECCIÓN                             */
+  /* ---------------------------------------------------------------------- */
+
   const statusLabel =
     inspection.status === "completed"
       ? "Finalizada"
@@ -123,9 +136,6 @@ export default function InspectionDetailsScreen() {
         ? "En proceso"
         : "Borrador";
 
-  /*
-   * El estado también controla su color.
-   */
   const statusColor =
     inspection.status === "completed"
       ? colors.success
@@ -133,24 +143,126 @@ export default function InspectionDetailsScreen() {
         ? colors.warning
         : colors.textMuted;
 
+  /* ---------------------------------------------------------------------- */
+  /*                       ESTADO DE SINCRONIZACIÓN                          */
+  /* ---------------------------------------------------------------------- */
+
+  const syncStatus = inspection.integration?.syncStatus ?? "local";
+
+  const syncInfo = getSyncStatusInfo(syncStatus, colors);
+
+  /*
+   * Solamente permitimos reintento cuando:
+   *
+   * - ocurrió un error
+   * - existe formulario
+   * - el formulario está integrado con Kobo
+   */
+  const canRetrySync =
+    syncStatus === "error" && form?.integration?.provider === "kobo";
+
+  /* ---------------------------------------------------------------------- */
+  /*                         REINTENTAR KOBO                                 */
+  /* ---------------------------------------------------------------------- */
+
+  const handleRetrySync = async () => {
+    if (isRetrying || !form || !canRetrySync) {
+      return;
+    }
+
+    setIsRetrying(true);
+    setRetryError(null);
+
+    /*
+     * Antes de reintentar dejamos registrado
+     * que la inspección está pendiente.
+     */
+    updateInspection(inspection.id, {
+      integration: {
+        ...inspection.integration,
+
+        syncStatus: "pending",
+
+        lastSyncError: undefined,
+      },
+    });
+
+    setRefreshVersion((value) => value + 1);
+
+    try {
+      /*
+       * Reutilizamos exactamente las respuestas
+       * almacenadas en la inspección.
+       *
+       * No creamos una segunda Inspection.
+       */
+      const exported = await exportKoboSubmission(
+        form.id,
+        inspection.responses,
+      );
+
+      updateInspection(inspection.id, {
+        integration: {
+          syncStatus: "synced",
+
+          kobo: {
+            provider: "kobo",
+
+            assetUid: exported.assetUid,
+
+            submissionId: exported.submission.submissionId,
+
+            ...(exported.submission.uuid
+              ? {
+                  uuid: exported.submission.uuid,
+                }
+              : {}),
+
+            syncedAt: exported.submission.syncedAt ?? new Date().toISOString(),
+          },
+
+          lastSyncError: undefined,
+        },
+      });
+
+      console.log("Sincronización reintentada correctamente:", {
+        inspectionId: inspection.id,
+
+        submission: exported.submission,
+      });
+
+      setRefreshVersion((value) => value + 1);
+    } catch (error) {
+      const message = getErrorMessage(error);
+
+      updateInspection(inspection.id, {
+        integration: {
+          ...inspection.integration,
+
+          syncStatus: "error",
+
+          lastSyncError: message,
+        },
+      });
+
+      setRetryError(message);
+
+      setRefreshVersion((value) => value + 1);
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
   return (
     <Screen padded={false}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/*
-         * ResponsiveContainer centraliza:
-         *
-         * - padding horizontal
-         * - espacio superior
-         * - ancho máximo
-         * - centrado en tablet y web
-         */}
         <ResponsiveContainer>
-          {/* ====================================================== */}
-          {/* NAVEGACIÓN */}
-          {/* ====================================================== */}
+          {/* ============================================================ */}
+          {/* NAVEGACIÓN                                                   */}
+          {/* ============================================================ */}
 
           <Pressable
             onPress={() =>
@@ -175,18 +287,14 @@ export default function InspectionDetailsScreen() {
             </Text>
           </Pressable>
 
-          {/* ====================================================== */}
-          {/* ENCABEZADO */}
-          {/* ====================================================== */}
+          {/* ============================================================ */}
+          {/* ENCABEZADO                                                   */}
+          {/* ============================================================ */}
 
           <Text
             style={[
               styles.companyOverline,
               {
-                /*
-                 * Conservamos el color
-                 * representativo de la empresa.
-                 */
                 color: company.branding.primaryColor,
               },
             ]}
@@ -227,49 +335,60 @@ export default function InspectionDetailsScreen() {
             {property?.name ?? "Inmueble no disponible"}
           </Text>
 
-          {/* ESTADO */}
+          <View style={styles.badges}>
+            {/* ESTADO DE LA INSPECCIÓN */}
 
-          <View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor: `${statusColor}20`,
-              },
-            ]}
-          >
-            <Text
+            <View
               style={[
-                styles.statusText,
+                styles.statusBadge,
                 {
-                  color: statusColor,
+                  backgroundColor: `${statusColor}20`,
                 },
               ]}
             >
-              ● {statusLabel}
-            </Text>
+              <Text
+                style={[
+                  styles.statusText,
+                  {
+                    color: statusColor,
+                  },
+                ]}
+              >
+                ● {statusLabel}
+              </Text>
+            </View>
+
+            {/* ESTADO KOBO */}
+
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor: `${syncInfo.color}20`,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  {
+                    color: syncInfo.color,
+                  },
+                ]}
+              >
+                ● {syncInfo.label}
+              </Text>
+            </View>
           </View>
 
-          {/* ====================================================== */}
-          {/* BLOQUE SUPERIOR RESPONSIVE */}
-          {/* ====================================================== */}
+          {/* ============================================================ */}
+          {/* INFORMACIÓN / EVIDENCIAS                                     */}
+          {/* ============================================================ */}
 
-          {/*
-           * Móvil y tablet:
-           *
-           * Información
-           * Evidencias
-           *
-           * Desktop:
-           *
-           * Información | Evidencias
-           *
-           * Esto permite aprovechar el espacio horizontal
-           * sin hacer que la versión móvil se sienta saturada.
-           */}
           <View
             style={[styles.topContent, isDesktop && styles.topContentDesktop]}
           >
-            {/* INFORMACIÓN GENERAL */}
+            {/* INFORMACIÓN */}
 
             <View
               style={[
@@ -428,9 +547,165 @@ export default function InspectionDetailsScreen() {
             </View>
           </View>
 
-          {/* ====================================================== */}
-          {/* RESPUESTAS */}
-          {/* ====================================================== */}
+          {/* ============================================================ */}
+          {/* SINCRONIZACIÓN KOBO                                          */}
+          {/* ============================================================ */}
+
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Sincronización
+            </Text>
+
+            <AppCard>
+              <View style={styles.syncHeader}>
+                <View
+                  style={[
+                    styles.syncIcon,
+                    {
+                      backgroundColor: `${syncInfo.color}20`,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.syncDot,
+                      {
+                        backgroundColor: syncInfo.color,
+                      },
+                    ]}
+                  />
+                </View>
+
+                <View style={styles.syncHeaderInfo}>
+                  <Text
+                    style={[
+                      styles.syncTitle,
+                      {
+                        color: syncInfo.color,
+                      },
+                    ]}
+                  >
+                    {isRetrying ? "Sincronizando..." : syncInfo.label}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.syncDescription,
+                      {
+                        color: colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {syncInfo.description}
+                  </Text>
+                </View>
+              </View>
+
+              {inspection.integration?.kobo && (
+                <>
+                  <Divider />
+
+                  <InfoRow
+                    label="Asset Kobo"
+                    value={inspection.integration.kobo.assetUid}
+                  />
+
+                  <Divider />
+
+                  <InfoRow
+                    label="Submission ID"
+                    value={String(inspection.integration.kobo.submissionId)}
+                  />
+
+                  {inspection.integration.kobo.uuid && (
+                    <>
+                      <Divider />
+
+                      <InfoRow
+                        label="UUID"
+                        value={inspection.integration.kobo.uuid}
+                      />
+                    </>
+                  )}
+
+                  {inspection.integration.kobo.syncedAt && (
+                    <>
+                      <Divider />
+
+                      <InfoRow
+                        label="Última sincronización"
+                        value={formatDateTime(
+                          inspection.integration.kobo.syncedAt,
+                        )}
+                      />
+                    </>
+                  )}
+                </>
+              )}
+
+              {inspection.integration?.lastSyncError && (
+                <>
+                  <Divider />
+
+                  <Text
+                    style={[
+                      styles.errorLabel,
+                      {
+                        color: colors.error,
+                      },
+                    ]}
+                  >
+                    Último error
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.errorText,
+                      {
+                        color: colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {inspection.integration.lastSyncError}
+                  </Text>
+                </>
+              )}
+
+              {retryError && (
+                <Text
+                  style={[
+                    styles.retryError,
+                    {
+                      color: colors.error,
+                    },
+                  ]}
+                >
+                  {retryError}
+                </Text>
+              )}
+
+              {canRetrySync && (
+                <View style={styles.retryAction}>
+                  <AppButton onPress={handleRetrySync}>
+                    {isRetrying
+                      ? "Sincronizando..."
+                      : "Reintentar sincronización"}
+                  </AppButton>
+                </View>
+              )}
+            </AppCard>
+          </View>
+
+          {/* ============================================================ */}
+          {/* RESPUESTAS                                                    */}
+          {/* ============================================================ */}
 
           <View style={styles.section}>
             <Text
@@ -445,14 +720,6 @@ export default function InspectionDetailsScreen() {
             </Text>
 
             {inspection.responses.length > 0 ? (
-              /*
-               * Cada respuesta pasa a utilizar
-               * el sistema responsive:
-               *
-               * Móvil   → 1 columna
-               * Tablet  → 2 columnas
-               * Desktop → 3 columnas
-               */
               <ResponsiveGrid
                 phoneColumns={1}
                 tabletColumns={2}
@@ -460,10 +727,6 @@ export default function InspectionDetailsScreen() {
                 gap={Spacing.md}
               >
                 {inspection.responses.map((response) => {
-                  /*
-                   * Buscamos la pregunta original para
-                   * recuperar su etiqueta y tipo.
-                   */
                   const question = form?.questions.find(
                     (item) => item.id === response.questionId,
                   );
@@ -561,19 +824,20 @@ export default function InspectionDetailsScreen() {
             )}
           </View>
 
-          {/* ====================================================== */}
-          {/* ACCIONES */}
-          {/* ====================================================== */}
+          {/* ============================================================ */}
+          {/* ACCIONES                                                     */}
+          {/* ============================================================ */}
 
           <View style={styles.actions}>
             {inspection.status !== "completed" && (
               <View style={styles.actionButton}>
                 {/*
-                 * Conservamos el botón preparado.
+                 * Todavía NO conectamos este botón.
                  *
-                 * Todavía no modificamos su navegación
-                 * porque el archivo original tampoco
-                 * tenía un onPress definido.
+                 * Para continuar correctamente un borrador
+                 * CaptureScreen deberá aceptar inspectionId,
+                 * cargar sus respuestas existentes y actualizar
+                 * esa inspección en vez de crear otra.
                  */}
                 <AppButton>Continuar captura</AppButton>
               </View>
@@ -588,6 +852,7 @@ export default function InspectionDetailsScreen() {
 
                     params: {
                       id,
+
                       inspectionId: inspection.id,
                     },
                   })
@@ -598,10 +863,6 @@ export default function InspectionDetailsScreen() {
             </View>
           </View>
 
-          {/* ====================================================== */}
-          {/* AVISO DEL PROTOTIPO */}
-          {/* ====================================================== */}
-
           <Text
             style={[
               styles.prototypeNotice,
@@ -610,8 +871,8 @@ export default function InspectionDetailsScreen() {
               },
             ]}
           >
-            Los datos mostrados ya provienen del modelo centralizado del
-            prototipo.
+            La inspección utiliza el modelo centralizado de UNIESAP y conserva
+            su estado de sincronización con Kobo.
           </Text>
         </ResponsiveContainer>
       </ScrollView>
@@ -623,14 +884,6 @@ export default function InspectionDetailsScreen() {
 /*                                  INFO ROW                                  */
 /* -------------------------------------------------------------------------- */
 
-/*
- * Representa una pareja:
- *
- * Etiqueta
- * Valor
- *
- * dentro de la información general.
- */
 function InfoRow({
   label,
   value,
@@ -670,7 +923,7 @@ function InfoRow({
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                  DIVIDER                                   */
+/*                                   DIVIDER                                  */
 /* -------------------------------------------------------------------------- */
 
 function Divider() {
@@ -689,13 +942,63 @@ function Divider() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                  HELPERS                                   */
+/*                                   HELPERS                                  */
 /* -------------------------------------------------------------------------- */
 
-/*
- * Convierte los diferentes tipos de respuesta
- * a texto legible.
- */
+function getSyncStatusInfo(
+  status: "local" | "pending" | "synced" | "error",
+  colors: {
+    success: string;
+    warning: string;
+    error: string;
+    textMuted: string;
+    primary: string;
+  },
+) {
+  switch (status) {
+    case "synced":
+      return {
+        label: "Sincronizada con Kobo",
+
+        description:
+          "La inspección fue enviada correctamente y tiene una referencia Kobo asociada.",
+
+        color: colors.success,
+      };
+
+    case "pending":
+      return {
+        label: "Pendiente de sincronización",
+
+        description:
+          "La inspección está guardada en UNIESAP y espera completar su sincronización.",
+
+        color: colors.warning,
+      };
+
+    case "error":
+      return {
+        label: "Error de sincronización",
+
+        description:
+          "La inspección permanece guardada en UNIESAP y puede volver a intentarse.",
+
+        color: colors.error,
+      };
+
+    case "local":
+    default:
+      return {
+        label: "Guardada localmente",
+
+        description:
+          "La inspección está almacenada en UNIESAP y todavía no tiene una submission Kobo.",
+
+        color: colors.textMuted,
+      };
+  }
+}
+
 function formatResponseValue(value: string | number | boolean | null) {
   if (value === null) {
     return "Sin respuesta";
@@ -708,10 +1011,6 @@ function formatResponseValue(value: string | number | boolean | null) {
   return String(value);
 }
 
-/*
- * Convierte el tipo técnico de pregunta
- * en una etiqueta para interfaz.
- */
 function getQuestionTypeLabel(
   type: "text" | "textarea" | "number" | "boolean" | "select" | "photo",
 ) {
@@ -740,24 +1039,56 @@ function getQuestionTypeLabel(
 }
 
 /*
- * Convierte:
+ * Funciona tanto con:
  *
  * 2026-08-20
  *
- * a:
+ * como con:
  *
- * 20/08/2026
+ * 2026-08-20T20:15:42.000Z
  */
-function formatDate(date: string) {
-  const parts = date.split("-");
+function formatDate(value: string) {
+  const date = new Date(value);
 
-  if (parts.length !== 3) {
-    return date;
+  if (Number.isNaN(date.getTime())) {
+    return value;
   }
 
-  const [year, month, day] = parts;
+  return date.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
 
-  return `${day}/${month}/${year}`;
+function formatDateTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+
+    hour: "2-digit",
+
+    minute: "2-digit",
+  });
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Ocurrió un error desconocido.";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -765,10 +1096,6 @@ function formatDate(date: string) {
 /* -------------------------------------------------------------------------- */
 
 const styles = StyleSheet.create({
-  /*
-   * ResponsiveContainer controla el padding
-   * horizontal y superior.
-   */
   scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
@@ -815,6 +1142,18 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
 
+  /* BADGES */
+
+  badges: {
+    flexDirection: "row",
+
+    flexWrap: "wrap",
+
+    gap: Spacing.sm,
+
+    marginBottom: Spacing.xl,
+  },
+
   statusBadge: {
     alignSelf: "flex-start",
 
@@ -823,8 +1162,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
 
     borderRadius: Radius.full,
-
-    marginBottom: Spacing.xl,
   },
 
   statusText: {
@@ -833,10 +1170,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  /*
-   * Móvil y tablet utilizan distribución
-   * vertical.
-   */
+  /* TOP */
+
   topContent: {
     width: "100%",
 
@@ -845,10 +1180,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
 
-  /*
-   * En escritorio Información y Evidencias
-   * pasan a colocarse lado a lado.
-   */
   topContentDesktop: {
     flexDirection: "row",
 
@@ -859,19 +1190,19 @@ const styles = StyleSheet.create({
     width: "100%",
   },
 
-  /*
-   * Damos más espacio a Información porque
-   * contiene una mayor cantidad de datos.
-   */
   informationColumnDesktop: {
     flex: 2,
+
     width: "auto",
+
     minWidth: 0,
   },
 
   evidenceColumnDesktop: {
     flex: 1,
+
     width: "auto",
+
     minWidth: 0,
   },
 
@@ -905,11 +1236,86 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.md,
   },
 
-  /*
-   * ResponsiveGrid controla el ancho externo.
-   * Cada respuesta ocupa todo el espacio
-   * que recibe dentro de su columna.
-   */
+  /* SYNC */
+
+  syncHeader: {
+    flexDirection: "row",
+
+    alignItems: "flex-start",
+  },
+
+  syncIcon: {
+    width: 44,
+
+    height: 44,
+
+    flexShrink: 0,
+
+    borderRadius: Radius.full,
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    marginRight: Spacing.md,
+  },
+
+  syncDot: {
+    width: 12,
+
+    height: 12,
+
+    borderRadius: Radius.full,
+  },
+
+  syncHeaderInfo: {
+    flex: 1,
+
+    minWidth: 0,
+  },
+
+  syncTitle: {
+    fontSize: FontSize.body,
+
+    fontWeight: "700",
+
+    marginBottom: Spacing.xs,
+  },
+
+  syncDescription: {
+    fontSize: FontSize.small,
+
+    lineHeight: 20,
+  },
+
+  errorLabel: {
+    fontSize: FontSize.caption,
+
+    fontWeight: "700",
+
+    marginBottom: Spacing.xs,
+  },
+
+  errorText: {
+    fontSize: FontSize.small,
+
+    lineHeight: 20,
+  },
+
+  retryError: {
+    fontSize: FontSize.small,
+
+    lineHeight: 20,
+
+    marginTop: Spacing.md,
+  },
+
+  retryAction: {
+    marginTop: Spacing.lg,
+  },
+
+  /* RESPONSES */
+
   responseCard: {
     width: "100%",
 
@@ -926,6 +1332,7 @@ const styles = StyleSheet.create({
 
   questionBadge: {
     width: 32,
+
     height: 32,
 
     borderRadius: Radius.full,
@@ -945,6 +1352,7 @@ const styles = StyleSheet.create({
 
   responseLabel: {
     flex: 1,
+
     minWidth: 0,
 
     fontSize: FontSize.small,
@@ -964,6 +1372,8 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
   },
 
+  /* EVIDENCE */
+
   evidenceRow: {
     flexDirection: "row",
 
@@ -972,6 +1382,7 @@ const styles = StyleSheet.create({
 
   evidenceIcon: {
     width: 48,
+
     height: 48,
 
     borderRadius: Radius.md,
@@ -991,6 +1402,7 @@ const styles = StyleSheet.create({
 
   evidenceInfo: {
     flex: 1,
+
     minWidth: 0,
   },
 
@@ -1012,13 +1424,8 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.sm,
   },
 
-  /*
-   * En móvil los botones pueden envolverse
-   * naturalmente.
-   *
-   * En pantallas grandes pueden aprovechar
-   * el espacio horizontal.
-   */
+  /* ACTIONS */
+
   actions: {
     flexDirection: "row",
 
@@ -1030,9 +1437,6 @@ const styles = StyleSheet.create({
   actionButton: {
     flexGrow: 1,
 
-    /*
-     * Evita botones excesivamente estrechos.
-     */
     minWidth: 220,
   },
 
