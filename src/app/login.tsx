@@ -1,188 +1,421 @@
 import { useState } from "react";
 
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { router } from "expo-router";
 
+import { AppButton } from "@/components/ui/AppButton";
+import { AppCard } from "@/components/ui/AppCard";
+import { AppTextInput } from "@/components/ui/AppTextInput";
+import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
+import { Screen } from "@/components/ui/Screen";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
-import { AppButton } from "@/components/ui/AppButton";
-import { AppTextInput } from "@/components/ui/AppTextInput";
-import { Screen } from "@/components/ui/Screen";
 import { useAppTheme } from "@/hooks/useAppTheme";
+import { useResponsive } from "@/hooks/useResponsive";
 
 export default function LoginScreen() {
   const { colors } = useAppTheme();
 
+  /*
+   * Detectamos si estamos en teléfono.
+   *
+   * Móvil:
+   * una sola columna.
+   *
+   * Tablet / Web:
+   * branding + formulario en dos columnas.
+   */
+  const { isPhone } = useResponsive();
+
+  /* ---------------------------------------------------------------------- */
+  /*                              FORMULARIO                                */
+  /* ---------------------------------------------------------------------- */
+
   const [email, setEmail] = useState("");
+
   const [password, setPassword] = useState("");
+
   const [showPassword, setShowPassword] = useState(false);
 
+  /* ---------------------------------------------------------------------- */
+  /*                                 LOGIN                                  */
+  /* ---------------------------------------------------------------------- */
+
   const handleLogin = () => {
+    /*
+     * PROTOTIPO
+     *
+     * Todavía no existe autenticación real.
+     *
+     * Más adelante este será el punto donde
+     * conectaremos:
+     *
+     * credentials
+     *     ↓
+     * AuthService
+     *     ↓
+     * sesión / token
+     *     ↓
+     * Dashboard
+     */
     router.replace("/dashboard");
   };
 
   return (
-    <Screen>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View
-            style={[
-              styles.logo,
-              {
-                backgroundColor: colors.primary,
-              },
-            ]}
-          >
-            <Text style={styles.logoText}>U</Text>
-          </View>
-
-          <Text
-            style={[
-              styles.brand,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            UNIESAP
-          </Text>
-
-          <Text
-            style={[
-              styles.subtitle,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-          >
-            Sistema de gestión e inspección empresarial
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          <View>
-            <Text
-              style={[
-                styles.label,
-                {
-                  color: colors.text,
-                },
-              ]}
+    <Screen padded={false}>
+      {/*
+       * Evita que el teclado cubra campos y botones,
+       * especialmente en teléfonos.
+       */}
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <ResponsiveContainer>
+            {/*
+             * MÓVIL
+             *
+             * Branding
+             * Formulario
+             *
+             * TABLET / WEB
+             *
+             * Branding | Formulario
+             */}
+            <View
+              style={[styles.mainLayout, !isPhone && styles.mainLayoutWide]}
             >
-              Correo electrónico
-            </Text>
+              {/* ======================================================== */}
+              {/* BRANDING                                                  */}
+              {/* ======================================================== */}
 
-            <AppTextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="usuario@empresa.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View>
-            <Text
-              style={[
-                styles.label,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Contraseña
-            </Text>
-
-            <View style={styles.passwordWrapper}>
-              <AppTextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Ingresa tu contraseña"
-                secureTextEntry={!showPassword}
-                style={styles.passwordInput}
-              />
-
-              <Pressable
-                onPress={() => setShowPassword((value) => !value)}
-                style={styles.showPasswordButton}
+              <View
+                style={[styles.brandColumn, !isPhone && styles.brandColumnWide]}
               >
-                <Text
+                <View
                   style={[
-                    styles.showPasswordText,
+                    styles.logo,
                     {
-                      color: colors.primary,
+                      backgroundColor: colors.primary,
                     },
                   ]}
                 >
-                  {showPassword ? "Ocultar" : "Mostrar"}
+                  <Text style={styles.logoText}>U</Text>
+                </View>
+
+                <Text
+                  style={[
+                    styles.brand,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  UNIESAP
                 </Text>
-              </Pressable>
+
+                <Text
+                  style={[
+                    styles.subtitle,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Sistema de gestión e inspección empresarial
+                </Text>
+
+                {/*
+                 * Esta explicación adicional solamente aprovecha
+                 * el espacio de tablet/web.
+                 */}
+                {!isPhone && (
+                  <Text
+                    style={[
+                      styles.brandDescription,
+                      {
+                        color: colors.textMuted,
+                      },
+                    ]}
+                  >
+                    Gestiona empresas, inmuebles, inspecciones, evidencias y
+                    reportes desde una sola plataforma.
+                  </Text>
+                )}
+              </View>
+
+              {/* ======================================================== */}
+              {/* FORMULARIO                                                */}
+              {/* ======================================================== */}
+
+              <View
+                style={[styles.formColumn, !isPhone && styles.formColumnWide]}
+              >
+                <AppCard style={styles.loginCard}>
+                  <View style={styles.formHeader}>
+                    <Text
+                      style={[
+                        styles.formTitle,
+                        {
+                          color: colors.text,
+                        },
+                      ]}
+                    >
+                      Iniciar sesión
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.formDescription,
+                        {
+                          color: colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      Ingresa tus credenciales para acceder a UNIESAP.
+                    </Text>
+                  </View>
+
+                  <View style={styles.form}>
+                    {/* CORREO */}
+
+                    <View>
+                      <Text
+                        style={[
+                          styles.label,
+                          {
+                            color: colors.text,
+                          },
+                        ]}
+                      >
+                        Correo electrónico
+                      </Text>
+
+                      <AppTextInput
+                        value={email}
+                        onChangeText={setEmail}
+                        placeholder="usuario@empresa.com"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                    </View>
+
+                    {/* CONTRASEÑA */}
+
+                    <View>
+                      <Text
+                        style={[
+                          styles.label,
+                          {
+                            color: colors.text,
+                          },
+                        ]}
+                      >
+                        Contraseña
+                      </Text>
+
+                      <View style={styles.passwordWrapper}>
+                        <AppTextInput
+                          value={password}
+                          onChangeText={setPassword}
+                          placeholder="Ingresa tu contraseña"
+                          secureTextEntry={!showPassword}
+                          style={styles.passwordInput}
+                        />
+
+                        <Pressable
+                          onPress={() => setShowPassword((value) => !value)}
+                          style={({ pressed }) => [
+                            styles.showPasswordButton,
+
+                            {
+                              opacity: pressed ? 0.7 : 1,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.showPasswordText,
+                              {
+                                color: colors.primary,
+                              },
+                            ]}
+                          >
+                            {showPassword ? "Ocultar" : "Mostrar"}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {/* RECUPERAR CONTRASEÑA */}
+
+                    {/*
+                     * Este control sigue siendo visual.
+                     *
+                     * Todavía no existe una ruta de recuperación
+                     * de contraseña, así que no inventamos navegación.
+                     */}
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.forgotPassword,
+
+                        {
+                          opacity: pressed ? 0.7 : 1,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.forgotPasswordText,
+                          {
+                            color: colors.primary,
+                          },
+                        ]}
+                      >
+                        ¿Olvidaste tu contraseña?
+                      </Text>
+                    </Pressable>
+
+                    {/* LOGIN */}
+
+                    <AppButton onPress={handleLogin}>Iniciar sesión</AppButton>
+                  </View>
+                </AppCard>
+              </View>
             </View>
-          </View>
 
-          <Pressable style={styles.forgotPassword}>
-            <Text
-              style={[
-                styles.forgotPasswordText,
-                {
-                  color: colors.primary,
-                },
-              ]}
-            >
-              ¿Olvidaste tu contraseña?
-            </Text>
-          </Pressable>
+            {/* ========================================================== */}
+            {/* FOOTER                                                     */}
+            {/* ========================================================== */}
 
-          <AppButton onPress={handleLogin}>Iniciar sesión</AppButton>
-        </View>
+            <View style={styles.footer}>
+              <Text
+                style={[
+                  styles.footerText,
+                  {
+                    color: colors.textMuted,
+                  },
+                ]}
+              >
+                UNIESAP Mobile
+              </Text>
 
-        <View style={styles.footer}>
-          <Text
-            style={[
-              styles.footerText,
-              {
-                color: colors.textMuted,
-              },
-            ]}
-          >
-            UNIESAP Mobile
-          </Text>
-
-          <Text
-            style={[
-              styles.version,
-              {
-                color: colors.textMuted,
-              },
-            ]}
-          >
-            Prototipo visual · v1.0
-          </Text>
-        </View>
-      </View>
+              <Text
+                style={[
+                  styles.version,
+                  {
+                    color: colors.textMuted,
+                  },
+                ]}
+              >
+                Prototipo visual · v1.0
+              </Text>
+            </View>
+          </ResponsiveContainer>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                   STYLES                                   */
+/* -------------------------------------------------------------------------- */
+
 const styles = StyleSheet.create({
-  container: {
+  keyboardView: {
     flex: 1,
-    justifyContent: "space-between",
   },
 
-  header: {
-    marginTop: Spacing.xxl,
+  /*
+   * minHeight ayuda a mantener el login visualmente
+   * equilibrado incluso en pantallas grandes.
+   */
+  scrollContent: {
+    flexGrow: 1,
+
+    paddingBottom: Spacing.xl,
+  },
+
+  /* -------------------------------------------------------------------- */
+  /*                            LAYOUT PRINCIPAL                           */
+  /* -------------------------------------------------------------------- */
+
+  /*
+   * Móvil:
+   *
+   * Branding
+   * ↓
+   * Formulario
+   */
+  mainLayout: {
+    flex: 1,
+
+    width: "100%",
+
+    justifyContent: "center",
+
+    gap: Spacing.xxl,
+
+    paddingVertical: Spacing.xl,
+  },
+
+  /*
+   * Tablet/Web:
+   *
+   * Branding | Formulario
+   */
+  mainLayoutWide: {
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    gap: Spacing.xxxl,
+
+    minHeight: 620,
+  },
+
+  /* -------------------------------------------------------------------- */
+  /*                               BRANDING                                */
+  /* -------------------------------------------------------------------- */
+
+  brandColumn: {
+    width: "100%",
+  },
+
+  brandColumnWide: {
+    flex: 1,
+
+    width: "auto",
+
+    minWidth: 0,
   },
 
   logo: {
     width: 64,
+
     height: 64,
 
     borderRadius: Radius.lg,
 
     alignItems: "center",
+
     justifyContent: "center",
 
     marginBottom: Spacing.lg,
@@ -190,22 +423,76 @@ const styles = StyleSheet.create({
 
   logoText: {
     color: "#FFFFFF",
+
     fontSize: 30,
+
     fontWeight: "700",
   },
 
   brand: {
     fontSize: FontSize.h1,
+
     fontWeight: "700",
 
     marginBottom: Spacing.sm,
   },
 
   subtitle: {
-    fontSize: FontSize.body,
-    lineHeight: 24,
+    maxWidth: 420,
 
-    maxWidth: 320,
+    fontSize: FontSize.body,
+
+    lineHeight: 24,
+  },
+
+  brandDescription: {
+    maxWidth: 460,
+
+    fontSize: FontSize.small,
+
+    lineHeight: 21,
+
+    marginTop: Spacing.lg,
+  },
+
+  /* -------------------------------------------------------------------- */
+  /*                               FORMULARIO                              */
+  /* -------------------------------------------------------------------- */
+
+  formColumn: {
+    width: "100%",
+  },
+
+  formColumnWide: {
+    flex: 1,
+
+    width: "auto",
+
+    minWidth: 0,
+
+    maxWidth: 480,
+  },
+
+  loginCard: {
+    width: "100%",
+  },
+
+  formHeader: {
+    marginBottom: Spacing.xl,
+  },
+
+  formTitle: {
+    fontSize: FontSize.h2,
+
+    fontWeight: "700",
+
+    marginBottom: Spacing.sm,
+  },
+
+  formDescription: {
+    fontSize: FontSize.small,
+
+    lineHeight: 20,
   },
 
   form: {
@@ -214,10 +501,15 @@ const styles = StyleSheet.create({
 
   label: {
     fontSize: FontSize.small,
+
     fontWeight: "600",
 
     marginBottom: Spacing.sm,
   },
+
+  /* -------------------------------------------------------------------- */
+  /*                              CONTRASEÑA                               */
+  /* -------------------------------------------------------------------- */
 
   passwordWrapper: {
     position: "relative",
@@ -229,8 +521,11 @@ const styles = StyleSheet.create({
 
   showPasswordButton: {
     position: "absolute",
+
     right: Spacing.md,
+
     top: 0,
+
     bottom: 0,
 
     justifyContent: "center",
@@ -238,27 +533,35 @@ const styles = StyleSheet.create({
 
   showPasswordText: {
     fontSize: FontSize.small,
+
     fontWeight: "600",
   },
 
   forgotPassword: {
     alignSelf: "flex-end",
+
     marginTop: -Spacing.sm,
   },
 
   forgotPasswordText: {
     fontSize: FontSize.small,
+
     fontWeight: "500",
   },
+
+  /* -------------------------------------------------------------------- */
+  /*                                FOOTER                                 */
+  /* -------------------------------------------------------------------- */
 
   footer: {
     alignItems: "center",
 
-    paddingBottom: Spacing.md,
+    paddingVertical: Spacing.md,
   },
 
   footerText: {
     fontSize: FontSize.small,
+
     fontWeight: "600",
 
     marginBottom: Spacing.xs,

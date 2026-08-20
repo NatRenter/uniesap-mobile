@@ -98,6 +98,8 @@ export const forms: FormDefinition[] = [
 
         type: "text",
 
+        required: true,
+
         integration: {
           koboFieldName: "extintor/numero",
         },
@@ -109,6 +111,28 @@ export const forms: FormDefinition[] = [
         label: "Estado general",
 
         type: "select",
+
+        required: true,
+
+        /*
+         * Estas opciones son necesarias para
+         * que CaptureScreen pueda renderizar
+         * correctamente una pregunta select.
+         */
+        options: [
+          {
+            label: "Buen estado",
+            value: "good",
+          },
+          {
+            label: "Requiere atención",
+            value: "attention",
+          },
+          {
+            label: "Fuera de servicio",
+            value: "out_of_service",
+          },
+        ],
 
         integration: {
           koboFieldName: "extintor/estado",
@@ -143,20 +167,55 @@ export const forms: FormDefinition[] = [
     questions: [
       {
         id: "question-008",
+
         label: "Tipo de señal",
+
         type: "select",
+
+        required: true,
+
+        options: [
+          {
+            label: "Prohibición",
+            value: "prohibition",
+          },
+          {
+            label: "Obligación",
+            value: "mandatory",
+          },
+          {
+            label: "Advertencia",
+            value: "warning",
+          },
+          {
+            label: "Condición segura",
+            value: "safe_condition",
+          },
+          {
+            label: "Equipo contra incendio",
+            value: "fire_equipment",
+          },
+        ],
       },
 
       {
         id: "question-009",
+
         label: "Ubicación",
+
         type: "text",
+
+        required: true,
       },
 
       {
         id: "question-010",
+
         label: "¿La señal es visible?",
+
         type: "boolean",
+
+        required: true,
       },
     ],
   },

@@ -4,6 +4,8 @@ import { router, useLocalSearchParams } from "expo-router";
 
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
+import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
+import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/data/companies";
@@ -17,14 +19,32 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 import { useAppTheme } from "@/hooks/useAppTheme";
 
 export default function ReportsScreen() {
+  /*
+   * Recupera los colores del tema actual.
+   *
+   * De esta forma toda la pantalla mantiene
+   * compatibilidad con modo claro y oscuro.
+   */
   const { colors } = useAppTheme();
 
+  /*
+   * Recuperamos el ID dinámico de:
+   *
+   * /empresas/[id]/reportes
+   */
   const { id } = useLocalSearchParams<{
     id: string;
   }>();
 
+  /*
+   * Obtenemos la empresa desde nuestra
+   * capa centralizada de datos.
+   */
   const company = getCompanyById(id);
 
+  /*
+   * Estado controlado para una empresa inexistente.
+   */
   if (!company) {
     return (
       <Screen>
@@ -55,8 +75,18 @@ export default function ReportsScreen() {
     );
   }
 
+  /*
+   * Recuperamos solamente los reportes
+   * pertenecientes a la empresa actual.
+   */
   const companyReports = getReportsByCompanyId(company.id);
 
+  /*
+   * Calculamos automáticamente los indicadores.
+   *
+   * De esta forma los números del resumen
+   * siempre dependen de los datos reales.
+   */
   const generated = companyReports.filter(
     (report) => report.status === "generated",
   ).length;
@@ -68,154 +98,254 @@ export default function ReportsScreen() {
   return (
     <Screen padded={false}>
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
-          onPress={() =>
-            router.navigate({
-              pathname: "/empresas/[id]",
-              params: { id },
-            })
-          }
-        >
+        {/*
+         * ResponsiveContainer controla:
+         *
+         * - padding horizontal
+         * - espacio superior
+         * - ancho máximo
+         * - centrado en tablet y web
+         */}
+        <ResponsiveContainer>
+          {/* ====================================================== */}
+          {/* NAVEGACIÓN */}
+          {/* ====================================================== */}
+
+          <Pressable
+            onPress={() =>
+              router.navigate({
+                pathname: "/empresas/[id]",
+
+                params: {
+                  id,
+                },
+              })
+            }
+          >
+            <Text
+              style={[
+                styles.backText,
+                {
+                  color: colors.primary,
+                },
+              ]}
+            >
+              ‹ Empresa
+            </Text>
+          </Pressable>
+
+          {/* ====================================================== */}
+          {/* EMPRESA */}
+          {/* ====================================================== */}
+
           <Text
             style={[
-              styles.backText,
+              styles.overline,
               {
-                color: colors.primary,
+                /*
+                 * Conservamos el color representativo
+                 * configurado para cada empresa.
+                 */
+                color: company.branding.primaryColor,
               },
             ]}
           >
-            ‹ Empresa
+            {company.name.toUpperCase()}
           </Text>
-        </Pressable>
 
-        <Text
-          style={[
-            styles.overline,
-            {
-              color: company.branding.primaryColor,
-            },
-          ]}
-        >
-          {company.name.toUpperCase()}
-        </Text>
+          {/* ====================================================== */}
+          {/* ENCABEZADO */}
+          {/* ====================================================== */}
 
-        <Text
-          style={[
-            styles.title,
-            {
-              color: colors.text,
-            },
-          ]}
-        >
-          Reportes
-        </Text>
-
-        <Text
-          style={[
-            styles.subtitle,
-            {
-              color: colors.textSecondary,
-            },
-          ]}
-        >
-          Consulta y genera reportes a partir de las inspecciones realizadas.
-        </Text>
-
-        <View style={styles.summary}>
-          <SummaryCard value={companyReports.length.toString()} label="Total" />
-
-          <SummaryCard value={generated.toString()} label="Generados" />
-
-          <SummaryCard
-            value={pending.toString()}
-            label="Pendientes"
-            warning={pending > 0}
-          />
-        </View>
-
-        <AppButton
-          onPress={() =>
-            router.navigate({
-              pathname: "/empresas/[id]/reportes/nuevo",
-              params: { id },
-            })
-          }
-        >
-          + Generar reporte
-        </AppButton>
-
-        <View style={styles.section}>
           <Text
             style={[
-              styles.sectionTitle,
+              styles.title,
               {
                 color: colors.text,
               },
             ]}
           >
-            Reportes recientes
+            Reportes
           </Text>
 
-          <View style={styles.list}>
-            {companyReports.map((report) => {
-              const inspection = getInspectionById(report.inspectionId);
+          <Text
+            style={[
+              styles.subtitle,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Consulta y genera reportes a partir de las inspecciones realizadas.
+          </Text>
 
-              const property = getPropertyById(report.propertyId);
+          {/* ====================================================== */}
+          {/* RESUMEN */}
+          {/* ====================================================== */}
 
-              const form = inspection
-                ? getFormById(inspection.formId)
-                : undefined;
+          {/*
+           * Tenemos exactamente tres indicadores:
+           *
+           * Total
+           * Generados
+           * Pendientes
+           *
+           * Por ello conservamos tres columnas en
+           * móvil, tablet y escritorio.
+           */}
+          <ResponsiveGrid
+            phoneColumns={3}
+            tabletColumns={3}
+            desktopColumns={3}
+            gap={Spacing.sm}
+          >
+            <SummaryCard
+              value={companyReports.length.toString()}
+              label="Total"
+            />
 
-              return (
-                <ReportCard
-                  key={report.id}
-                  reportId={report.id}
-                  companyRouteId={id}
-                  title={report.title}
-                  property={property?.name ?? "Inmueble no disponible"}
-                  inspection={form?.title ?? "Inspección no disponible"}
-                  date={report.createdAt}
-                  format={report.format}
-                  status={report.status}
-                />
-              );
-            })}
+            <SummaryCard value={generated.toString()} label="Generados" />
+
+            <SummaryCard
+              value={pending.toString()}
+              label="Pendientes"
+              warning={pending > 0}
+            />
+          </ResponsiveGrid>
+
+          {/* ====================================================== */}
+          {/* ACCIÓN PRINCIPAL */}
+          {/* ====================================================== */}
+
+          <View style={styles.generateButton}>
+            <AppButton
+              onPress={() =>
+                router.navigate({
+                  pathname: "/empresas/[id]/reportes/nuevo",
+
+                  params: {
+                    id,
+                  },
+                })
+              }
+            >
+              + Generar reporte
+            </AppButton>
           </View>
 
-          {companyReports.length === 0 && (
-            <AppCard style={styles.emptyCard}>
-              <Text
-                style={[
-                  styles.emptyTitle,
-                  {
-                    color: colors.text,
-                  },
-                ]}
-              >
-                Sin reportes
-              </Text>
+          {/* ====================================================== */}
+          {/* REPORTES RECIENTES */}
+          {/* ====================================================== */}
 
-              <Text
-                style={[
-                  styles.emptyDescription,
-                  {
-                    color: colors.textSecondary,
-                  },
-                ]}
-              >
-                Todavía no se han generado reportes para esta empresa.
-              </Text>
-            </AppCard>
-          )}
-        </View>
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Reportes recientes
+            </Text>
+
+            {/*
+             * Sustituimos la lista vertical fija
+             * por nuestro grid responsive.
+             *
+             * Móvil   → 1 reporte por fila
+             * Tablet  → 2 reportes por fila
+             * Desktop → 3 reportes por fila
+             */}
+            <ResponsiveGrid
+              phoneColumns={1}
+              tabletColumns={2}
+              desktopColumns={3}
+              gap={Spacing.md}
+            >
+              {companyReports.map((report) => {
+                /*
+                 * Resolvemos las relaciones del reporte.
+                 *
+                 * Report
+                 *   ├── Inspection
+                 *   │      └── Form
+                 *   └── Property
+                 */
+                const inspection = getInspectionById(report.inspectionId);
+
+                const property = getPropertyById(report.propertyId);
+
+                const form = inspection
+                  ? getFormById(inspection.formId)
+                  : undefined;
+
+                return (
+                  <ReportCard
+                    key={report.id}
+                    reportId={report.id}
+                    companyRouteId={id}
+                    title={report.title}
+                    property={property?.name ?? "Inmueble no disponible"}
+                    inspection={form?.title ?? "Inspección no disponible"}
+                    date={report.createdAt}
+                    format={report.format}
+                    status={report.status}
+                  />
+                );
+              })}
+            </ResponsiveGrid>
+
+            {/* ================================================== */}
+            {/* ESTADO VACÍO */}
+            {/* ================================================== */}
+
+            {companyReports.length === 0 && (
+              <AppCard style={styles.emptyCard}>
+                <Text
+                  style={[
+                    styles.emptyTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Sin reportes
+                </Text>
+
+                <Text
+                  style={[
+                    styles.emptyDescription,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Todavía no se han generado reportes para esta empresa.
+                </Text>
+              </AppCard>
+            )}
+          </View>
+        </ResponsiveContainer>
       </ScrollView>
     </Screen>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                               SUMMARY CARD                                 */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Tarjeta reutilizable utilizada para mostrar
+ * los indicadores superiores.
+ *
+ * warning permite destacar visualmente
+ * valores que requieren atención.
+ */
 function SummaryCard({
   value,
   label,
@@ -247,6 +377,7 @@ function SummaryCard({
             color: colors.textSecondary,
           },
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
@@ -254,6 +385,16 @@ function SummaryCard({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                REPORT CARD                                 */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Representa un reporte dentro del historial.
+ *
+ * Recibe la información ya resuelta para mantener
+ * el componente independiente de la capa de datos.
+ */
 function ReportCard({
   reportId,
   companyRouteId,
@@ -275,10 +416,23 @@ function ReportCard({
 }) {
   const { colors } = useAppTheme();
 
+  /*
+   * Traducimos el estado interno a una
+   * etiqueta amigable para el usuario.
+   */
   const statusLabel = status === "generated" ? "Generado" : "Pendiente";
 
+  /*
+   * Reporte generado → verde
+   * Reporte pendiente → advertencia
+   */
   const statusColor = status === "generated" ? colors.success : colors.warning;
 
+  /*
+   * Traducimos también el formato.
+   *
+   * Actualmente el modelo admite Excel y PDF.
+   */
   const formatLabel = format === "excel" ? "Excel" : "PDF";
 
   return (
@@ -286,6 +440,7 @@ function ReportCard({
       onPress={() =>
         router.navigate({
           pathname: "/empresas/[id]/reportes/[reportId]",
+
           params: {
             id: companyRouteId,
             reportId,
@@ -293,10 +448,16 @@ function ReportCard({
         })
       }
       style={({ pressed }) => ({
+        /*
+         * Feedback visual tanto para móvil
+         * como para web.
+         */
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      <AppCard>
+      <AppCard style={styles.reportCard}>
+        {/* CABECERA */}
+
         <View style={styles.reportHeader}>
           <View
             style={[
@@ -326,6 +487,7 @@ function ReportCard({
                   color: colors.text,
                 },
               ]}
+              numberOfLines={2}
             >
               {title}
             </Text>
@@ -337,6 +499,7 @@ function ReportCard({
                   color: colors.textSecondary,
                 },
               ]}
+              numberOfLines={2}
             >
               {property}
             </Text>
@@ -354,6 +517,8 @@ function ReportCard({
           </Text>
         </View>
 
+        {/* DIVISOR */}
+
         <View
           style={[
             styles.divider,
@@ -363,6 +528,8 @@ function ReportCard({
           ]}
         />
 
+        {/* INSPECCIÓN */}
+
         <Text
           style={[
             styles.inspection,
@@ -370,9 +537,12 @@ function ReportCard({
               color: colors.textSecondary,
             },
           ]}
+          numberOfLines={2}
         >
           {inspection}
         </Text>
+
+        {/* METADATOS */}
 
         <View style={styles.meta}>
           <Text
@@ -402,6 +572,23 @@ function ReportCard({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                  HELPERS                                   */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Soporta:
+ *
+ * 2026-08-20
+ *
+ * y:
+ *
+ * 2026-08-20T12:30:00
+ *
+ * devolviendo:
+ *
+ * 20/08/2026
+ */
 function formatDate(date: string) {
   const normalized = date.includes("T") ? date.split("T")[0] : date;
 
@@ -416,55 +603,82 @@ function formatDate(date: string) {
   return `${day}/${month}/${year}`;
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                   STYLES                                   */
+/* -------------------------------------------------------------------------- */
+
 const styles = StyleSheet.create({
-  container: {
-    padding: Spacing.lg,
+  /*
+   * ResponsiveContainer controla el padding
+   * horizontal y superior.
+   *
+   * Aquí únicamente necesitamos espacio inferior.
+   */
+  scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
 
   backText: {
     fontSize: FontSize.small,
+
     fontWeight: "600",
+
     marginBottom: Spacing.lg,
   },
 
   overline: {
     fontSize: FontSize.caption,
+
     fontWeight: "700",
+
     letterSpacing: 1,
+
     marginBottom: Spacing.sm,
   },
 
   title: {
     fontSize: FontSize.h1,
+
     fontWeight: "700",
+
     marginBottom: Spacing.sm,
   },
 
   subtitle: {
     fontSize: FontSize.body,
+
     lineHeight: 24,
+
     marginBottom: Spacing.xl,
   },
 
-  summary: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
-  },
-
+  /*
+   * El ancho de cada tarjeta lo determina
+   * ResponsiveGrid.
+   */
   summaryCard: {
-    flex: 1,
+    width: "100%",
+
+    minHeight: 100,
   },
 
   summaryValue: {
     fontSize: FontSize.h2,
+
     fontWeight: "700",
+
     marginBottom: Spacing.xs,
   },
 
   summaryLabel: {
     fontSize: FontSize.caption,
+  },
+
+  /*
+   * Separamos visualmente el botón del resumen.
+   */
+  generateButton: {
+    marginTop: Spacing.xl,
   },
 
   section: {
@@ -473,66 +687,113 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: FontSize.cardTitle,
+
     fontWeight: "700",
+
     marginBottom: Spacing.md,
   },
 
-  list: {
-    gap: Spacing.md,
+  /*
+   * Cada tarjeta ocupa completamente
+   * la columna que ResponsiveGrid le asigna.
+   */
+  reportCard: {
+    width: "100%",
+
+    /*
+     * La altura mínima ayuda a mantener
+     * uniformidad cuando aparecen varias
+     * tarjetas en la misma fila.
+     */
+    minHeight: 220,
   },
 
   reportHeader: {
     flexDirection: "row",
+
     alignItems: "center",
   },
 
   fileIcon: {
     width: 52,
     height: 52,
+
     borderRadius: Radius.md,
+
     alignItems: "center",
+
     justifyContent: "center",
+
     marginRight: Spacing.md,
   },
 
   fileIconText: {
     fontSize: FontSize.h3,
+
     fontWeight: "700",
   },
 
   reportInfo: {
     flex: 1,
+
+    /*
+     * Importante dentro de layouts flex.
+     * Permite que textos largos reduzcan
+     * correctamente su ancho.
+     */
+    minWidth: 0,
   },
 
   reportTitle: {
     fontSize: FontSize.body,
+
     fontWeight: "700",
+
     marginBottom: Spacing.xs,
   },
 
   reportProperty: {
     fontSize: FontSize.caption,
+
+    lineHeight: 18,
   },
 
   arrow: {
     fontSize: 28,
+
+    marginLeft: Spacing.sm,
   },
 
   divider: {
     height: 1,
+
     marginVertical: Spacing.md,
   },
 
   inspection: {
     fontSize: FontSize.small,
+
     fontWeight: "600",
+
+    lineHeight: 20,
+
     marginBottom: Spacing.md,
   },
 
+  /*
+   * Los metadatos pueden envolverse si el
+   * espacio horizontal es muy pequeño.
+   */
   meta: {
     flexDirection: "row",
+
+    flexWrap: "wrap",
+
     justifyContent: "space-between",
+
     alignItems: "center",
+
+    gap: Spacing.sm,
   },
 
   metaText: {
@@ -540,7 +801,10 @@ const styles = StyleSheet.create({
   },
 
   status: {
+    flexShrink: 0,
+
     fontSize: FontSize.caption,
+
     fontWeight: "600",
   },
 
@@ -550,22 +814,27 @@ const styles = StyleSheet.create({
 
   emptyTitle: {
     fontSize: FontSize.body,
+
     fontWeight: "700",
+
     marginBottom: Spacing.sm,
   },
 
   emptyDescription: {
     fontSize: FontSize.small,
+
     lineHeight: 20,
   },
 
   notFound: {
     flex: 1,
+
     justifyContent: "center",
   },
 
   notFoundTitle: {
     fontSize: FontSize.h2,
+
     fontWeight: "700",
   },
 });

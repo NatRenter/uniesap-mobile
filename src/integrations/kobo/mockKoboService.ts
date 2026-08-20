@@ -18,34 +18,56 @@ import type {
 const mockAssets: Record<string, KoboAssetReference> = {
   "mock-asset-risk": {
     assetUid: "mock-asset-risk",
+
     deploymentStatus: "deployed",
+
     versionUid: "mock-version-risk-001",
+
     syncedAt: "2026-08-18T09:00:00",
   },
 
   "mock-asset-extinguishers": {
     assetUid: "mock-asset-extinguishers",
+
     deploymentStatus: "deployed",
+
     versionUid: "mock-version-extinguishers-001",
+
     syncedAt: "2026-08-18T09:00:00",
   },
 };
 
+/* -------------------------------------------------------------------------- */
+/*                            SUBMISSIONS MOCK                                */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Ya no utilizamos const porque durante
+ * la sesión podremos agregar nuevas capturas.
+ */
 const mockSubmissions: Record<string, KoboSubmissionReference[]> = {
   "mock-asset-risk": [
     {
       assetUid: "mock-asset-risk",
+
       submissionId: 1001,
+
       uuid: "mock-risk-1001",
+
       submittedAt: "2026-08-10T10:30:00",
+
       syncedAt: "2026-08-18T09:00:00",
     },
 
     {
       assetUid: "mock-asset-risk",
+
       submissionId: 1002,
+
       uuid: "mock-risk-1002",
+
       submittedAt: "2026-08-14T11:00:00",
+
       syncedAt: "2026-08-18T09:00:00",
     },
   ],
@@ -53,9 +75,13 @@ const mockSubmissions: Record<string, KoboSubmissionReference[]> = {
   "mock-asset-extinguishers": [
     {
       assetUid: "mock-asset-extinguishers",
+
       submissionId: 2001,
+
       uuid: "mock-extinguisher-2001",
+
       submittedAt: "2026-08-12T12:00:00",
+
       syncedAt: "2026-08-18T09:00:00",
     },
   ],
@@ -92,6 +118,10 @@ const mockSubmissionData: Record<string, KoboSubmissionData> = {
   },
 };
 
+/* -------------------------------------------------------------------------- */
+/*                              MOCK SERVICE                                  */
+/* -------------------------------------------------------------------------- */
+
 export class MockKoboService implements KoboService {
   async getAsset(assetUid: string): Promise<KoboAssetReference> {
     const asset = mockAssets[assetUid];
@@ -100,9 +130,6 @@ export class MockKoboService implements KoboService {
       throw new Error(`Kobo asset not found: ${assetUid}`);
     }
 
-    /*
-     * Simulación de latencia de red.
-     */
     await delay(250);
 
     return asset;
@@ -130,7 +157,78 @@ export class MockKoboService implements KoboService {
 
     return submission;
   }
+
+  /* -------------------------------------------------------------------- */
+  /*                        CREATE SUBMISSION                              */
+  /* -------------------------------------------------------------------- */
+
+  async createSubmission(
+    assetUid: string,
+    data: KoboSubmissionData,
+  ): Promise<KoboSubmissionReference> {
+    /*
+     * No permitimos crear capturas
+     * para assets inexistentes.
+     */
+    const asset = mockAssets[assetUid];
+
+    if (!asset) {
+      throw new Error(`Kobo asset not found: ${assetUid}`);
+    }
+
+    await delay(350);
+
+    /*
+     * Generamos un ID ficticio suficientemente
+     * estable para las pruebas actuales.
+     */
+    const submissionId = Date.now();
+
+    const now = new Date().toISOString();
+
+    const reference: KoboSubmissionReference = {
+      assetUid,
+
+      submissionId,
+
+      uuid: `mock-${assetUid}-${submissionId}`,
+
+      submittedAt: now,
+
+      syncedAt: now,
+    };
+
+    /*
+     * Guardamos los datos en memoria.
+     *
+     * Mientras la app siga abierta,
+     * podremos recuperarlos mediante
+     * getSubmission().
+     */
+    mockSubmissionData[`${assetUid}:${submissionId}`] = {
+      ...data,
+    };
+
+    /*
+     * Añadimos también la referencia
+     * al listado de submissions.
+     */
+    const submissions = mockSubmissions[assetUid] ?? [];
+
+    mockSubmissions[assetUid] = [...submissions, reference];
+
+    console.log("Mock Kobo submission created:", {
+      reference,
+      data,
+    });
+
+    return reference;
+  }
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                  DELAY                                     */
+/* -------------------------------------------------------------------------- */
 
 function delay(milliseconds: number) {
   return new Promise<void>((resolve) => {

@@ -1,27 +1,47 @@
-import type { ReactNode } from "react";
+import { type PropsWithChildren } from "react";
 
-import { StyleSheet, View, type ViewProps } from "react-native";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { Radius, Spacing } from "@/constants/theme";
 
+import { useResponsive } from "@/hooks/useResponsive";
+
 import { useAppTheme } from "@/hooks/useAppTheme";
 
-interface AppCardProps extends ViewProps {
-  children: ReactNode;
-}
+type AppCardProps = PropsWithChildren<{
+  style?: StyleProp<ViewStyle>;
 
-export function AppCard({ children, style, ...props }: AppCardProps) {
+  /*
+   * Permite eliminar el padding interno
+   * en tarjetas que necesiten un layout
+   * completamente personalizado.
+   */
+  padded?: boolean;
+}>;
+
+export function AppCard({ children, style, padded = true }: AppCardProps) {
   const { colors } = useAppTheme();
+
+  const { isPhone, isTablet } = useResponsive();
+
+  /*
+   * Las tarjetas tienen un poco más
+   * de espacio disponible conforme
+   * aumenta el tamaño de pantalla.
+   */
+  const cardPadding = isPhone ? Spacing.md : isTablet ? Spacing.lg : Spacing.xl;
 
   return (
     <View
-      {...props}
       style={[
         styles.card,
 
         {
           backgroundColor: colors.surface,
+
           borderColor: colors.border,
+
+          padding: padded ? cardPadding : 0,
         },
 
         style,
@@ -34,9 +54,29 @@ export function AppCard({ children, style, ...props }: AppCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    padding: Spacing.md,
+    width: "100%",
 
     borderWidth: 1,
+
     borderRadius: Radius.lg,
+
+    /*
+     * La sombra se mantiene discreta.
+     * Android utiliza elevation,
+     * mientras Web/iOS utilizan las
+     * propiedades de sombra disponibles.
+     */
+    shadowColor: "#000",
+
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+
+    shadowOpacity: 0.04,
+
+    shadowRadius: 3,
+
+    elevation: 1,
   },
 });

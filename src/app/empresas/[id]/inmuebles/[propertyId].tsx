@@ -4,7 +4,11 @@ import { router, useLocalSearchParams } from "expo-router";
 
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
+import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
+import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
+
+import { useResponsive } from "@/hooks/useResponsive";
 
 import { getCompanyById } from "@/data/companies";
 import { getFormsByIds } from "@/data/forms";
@@ -17,6 +21,18 @@ import { useAppTheme } from "@/hooks/useAppTheme";
 
 export default function PropertyDetailsScreen() {
   const { colors } = useAppTheme();
+
+  /*
+   * Detecta el tipo general de pantalla.
+   *
+   * La mayor parte de la responsividad la controla
+   * ResponsiveGrid, pero aquí necesitamos saber si
+   * estamos en escritorio para crear el layout
+   * inferior de dos columnas.
+   */
+  const { isPhone, isTablet } = useResponsive();
+
+  const isDesktop = !isPhone && !isTablet;
 
   const { id, propertyId } = useLocalSearchParams<{
     id: string;
@@ -80,234 +96,35 @@ export default function PropertyDetailsScreen() {
   return (
     <Screen padded={false}>
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* NAVEGACIÓN */}
+        {/*
+         * ResponsiveContainer centraliza el comportamiento
+         * general de la pantalla:
+         *
+         * - padding horizontal
+         * - margen superior
+         * - ancho máximo
+         * - centrado en pantallas grandes
+         */}
+        <ResponsiveContainer>
+          {/* ====================================================== */}
+          {/* NAVEGACIÓN */}
+          {/* ====================================================== */}
 
-        <View style={styles.topNavigation}>
-          <Pressable
-            onPress={() =>
-              router.navigate({
-                pathname: "/empresas/[id]/inmuebles",
-                params: {
-                  id,
-                },
-              })
-            }
-          >
-            <Text
-              style={[
-                styles.backText,
-                {
-                  color: colors.primary,
-                },
-              ]}
-            >
-              ‹ Inmuebles
-            </Text>
-          </Pressable>
+          <View style={styles.topNavigation}>
+            <Pressable
+              onPress={() =>
+                router.navigate({
+                  pathname: "/empresas/[id]/inspecciones",
 
-          <Pressable>
-            <Text
-              style={[
-                styles.editText,
-                {
-                  color: colors.primary,
-                },
-              ]}
-            >
-              Editar
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* CONTEXTO DE EMPRESA */}
-
-        <Text
-          style={[
-            styles.overline,
-            {
-              color: company.branding.primaryColor,
-            },
-          ]}
-        >
-          {company.name.toUpperCase()}
-        </Text>
-
-        {/* IDENTIDAD DEL INMUEBLE */}
-
-        <View style={styles.header}>
-          <View
-            style={[
-              styles.propertyIcon,
-              {
-                backgroundColor: colors.primarySoft,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.propertyIconText,
-                {
-                  color: colors.primary,
-                },
-              ]}
-            >
-              ⌂
-            </Text>
-          </View>
-
-          <View style={styles.headerInfo}>
-            <Text
-              style={[
-                styles.title,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              {property.name}
-            </Text>
-
-            <Text
-              style={[
-                styles.subtitle,
-                {
-                  color: colors.textSecondary,
-                },
-              ]}
-            >
-              {location}
-            </Text>
-
-            <Text
-              style={[
-                styles.propertyType,
-                {
-                  color: colors.textMuted,
-                },
-              ]}
-            >
-              {property.type}
-            </Text>
-          </View>
-        </View>
-
-        {/* RESUMEN */}
-
-        <View style={styles.statsGrid}>
-          <SummaryCard
-            value={property.workers.toString()}
-            label="Trabajadores"
-          />
-
-          <SummaryCard
-            value={propertyInspections.length.toString()}
-            label="Inspecciones"
-          />
-
-          <SummaryCard
-            value={pendingInspections.toString()}
-            label="Pendientes"
-            warning={pendingInspections > 0}
-          />
-        </View>
-
-        <View style={styles.mainAction}>
-          <AppButton>+ Nueva inspección</AppButton>
-        </View>
-
-        {/* FORMULARIOS */}
-
-        <View style={styles.section}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Formularios asignados
-          </Text>
-
-          <Text
-            style={[
-              styles.sectionDescription,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-          >
-            Selecciona un formulario para iniciar una nueva captura.
-          </Text>
-
-          <View style={styles.formList}>
-            {propertyForms.map((form) => (
-              <FormCard
-                key={form.id}
-                title={form.title}
-                version={form.version}
-                status={form.status === "active" ? "Disponible" : "Inactivo"}
-                disabled={form.status !== "active"}
-                onPress={() =>
-                  router.navigate({
-                    pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
-                    params: {
-                      id,
-                      propertyId,
-                      formId: form.id,
-                    },
-                  })
-                }
-              />
-            ))}
-          </View>
-
-          {propertyForms.length === 0 && (
-            <AppCard style={styles.emptyCard}>
-              <Text
-                style={[
-                  styles.emptyTitle,
-                  {
-                    color: colors.text,
+                  params: {
+                    id,
                   },
-                ]}
-              >
-                Sin formularios asignados
-              </Text>
-
-              <Text
-                style={[
-                  styles.emptyDescription,
-                  {
-                    color: colors.textSecondary,
-                  },
-                ]}
-              >
-                Este inmueble todavía no tiene formularios disponibles.
-              </Text>
-            </AppCard>
-          )}
-        </View>
-
-        {/* INSPECCIONES */}
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text
-              style={[
-                styles.sectionTitle,
-                {
-                  color: colors.text,
-                },
-              ]}
+                })
+              }
             >
-              Inspecciones recientes
-            </Text>
-
-            <Pressable>
               <Text
                 style={[
                   styles.link,
@@ -319,110 +136,434 @@ export default function PropertyDetailsScreen() {
                 Ver todas
               </Text>
             </Pressable>
-          </View>
 
-          {propertyInspections.length > 0 ? (
-            <AppCard>
-              {propertyInspections.slice(0, 3).map((inspection, index) => (
-                <View key={inspection.id}>
-                  <InspectionRow
-                    inspector={inspection.inspector}
-                    date={inspection.date}
-                    status={inspection.status}
-                  />
-
-                  {index < Math.min(propertyInspections.length, 3) - 1 && (
-                    <View
-                      style={[
-                        styles.divider,
-                        {
-                          backgroundColor: colors.divider,
-                        },
-                      ]}
-                    />
-                  )}
-                </View>
-              ))}
-            </AppCard>
-          ) : (
-            <AppCard>
+            {/*
+             * Conservamos Editar preparado visualmente.
+             *
+             * Todavía no agregamos navegación porque el
+             * archivo actual no define una ruta de edición
+             * del inmueble.
+             */}
+            <Pressable>
               <Text
                 style={[
-                  styles.emptyTitle,
+                  styles.editText,
+                  {
+                    color: colors.primary,
+                  },
+                ]}
+              >
+                Editar
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* ====================================================== */}
+          {/* CONTEXTO DE EMPRESA */}
+          {/* ====================================================== */}
+
+          <Text
+            style={[
+              styles.overline,
+              {
+                /*
+                 * Cada inmueble conserva visualmente
+                 * la identidad de su empresa.
+                 */
+                color: company.branding.primaryColor,
+              },
+            ]}
+          >
+            {company.name.toUpperCase()}
+          </Text>
+
+          {/* ====================================================== */}
+          {/* IDENTIDAD DEL INMUEBLE */}
+          {/* ====================================================== */}
+
+          <View style={styles.header}>
+            <View
+              style={[
+                styles.propertyIcon,
+                {
+                  backgroundColor: colors.primarySoft,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.propertyIconText,
+                  {
+                    color: colors.primary,
+                  },
+                ]}
+              >
+                ⌂
+              </Text>
+            </View>
+
+            <View style={styles.headerInfo}>
+              <Text
+                style={[
+                  styles.title,
                   {
                     color: colors.text,
                   },
                 ]}
+                numberOfLines={2}
               >
-                Sin inspecciones
+                {property.name}
               </Text>
 
               <Text
                 style={[
-                  styles.emptyDescription,
+                  styles.subtitle,
                   {
                     color: colors.textSecondary,
                   },
                 ]}
               >
-                Todavía no existen inspecciones registradas para este inmueble.
+                {location}
               </Text>
-            </AppCard>
-          )}
-        </View>
 
-        {/* INFORMACIÓN */}
+              <Text
+                style={[
+                  styles.propertyType,
+                  {
+                    color: colors.textMuted,
+                  },
+                ]}
+              >
+                {property.type}
+              </Text>
+            </View>
+          </View>
 
-        <View style={styles.section}>
-          <Text
+          {/* ====================================================== */}
+          {/* RESUMEN */}
+          {/* ====================================================== */}
+
+          {/*
+           * Tenemos exactamente tres indicadores.
+           * Por eso conservamos tres columnas en los
+           * tres tamaños de pantalla.
+           */}
+          <ResponsiveGrid
+            phoneColumns={3}
+            tabletColumns={3}
+            desktopColumns={3}
+            gap={Spacing.sm}
+          >
+            <SummaryCard
+              value={property.workers.toString()}
+              label="Trabajadores"
+            />
+
+            <SummaryCard
+              value={propertyInspections.length.toString()}
+              label="Inspecciones"
+            />
+
+            <SummaryCard
+              value={pendingInspections.toString()}
+              label="Pendientes"
+              warning={pendingInspections > 0}
+            />
+          </ResponsiveGrid>
+
+          {/* ====================================================== */}
+          {/* ACCIÓN PRINCIPAL */}
+          {/* ====================================================== */}
+
+          <View style={styles.mainAction}>
+            <AppButton
+              onPress={() =>
+                router.navigate({
+                  pathname:
+                    "/empresas/[id]/inmuebles/[propertyId]/nueva-inspeccion",
+
+                  params: {
+                    id,
+                    propertyId,
+                  },
+                })
+              }
+            >
+              + Nueva inspección
+            </AppButton>
+          </View>
+
+          {/* ====================================================== */}
+          {/* FORMULARIOS ASIGNADOS */}
+          {/* ====================================================== */}
+
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Formularios asignados
+            </Text>
+
+            <Text
+              style={[
+                styles.sectionDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Selecciona un formulario para iniciar una nueva captura.
+            </Text>
+
+            {/*
+             * Esta es una de las mejoras responsive
+             * principales de esta pantalla.
+             *
+             * Móvil   → 1 formulario por fila
+             * Tablet  → 2 formularios por fila
+             * Desktop → 3 formularios por fila
+             */}
+            <ResponsiveGrid
+              phoneColumns={1}
+              tabletColumns={2}
+              desktopColumns={3}
+              gap={Spacing.md}
+            >
+              {propertyForms.map((form) => (
+                <FormCard
+                  key={form.id}
+                  title={form.title}
+                  version={form.version}
+                  status={form.status === "active" ? "Disponible" : "Inactivo"}
+                  disabled={form.status !== "active"}
+                  onPress={() =>
+                    router.navigate({
+                      pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
+
+                      /*
+                       * Captura necesita conocer:
+                       *
+                       * - empresa
+                       * - inmueble
+                       * - formulario
+                       */
+                      params: {
+                        id,
+                        propertyId,
+                        formId: form.id,
+                      },
+                    })
+                  }
+                />
+              ))}
+            </ResponsiveGrid>
+
+            {propertyForms.length === 0 && (
+              <AppCard style={styles.emptyCard}>
+                <Text
+                  style={[
+                    styles.emptyTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Sin formularios asignados
+                </Text>
+
+                <Text
+                  style={[
+                    styles.emptyDescription,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Este inmueble todavía no tiene formularios disponibles.
+                </Text>
+              </AppCard>
+            )}
+          </View>
+
+          {/* ====================================================== */}
+          {/* ÁREA INFERIOR RESPONSIVE */}
+          {/* ====================================================== */}
+
+          {/*
+           * En teléfono y tablet mantenemos las secciones
+           * verticales para conservar una lectura cómoda.
+           *
+           * En desktop aprovechamos el ancho disponible
+           * mostrando:
+           *
+           * Inspecciones | Información
+           */}
+          <View
             style={[
-              styles.sectionTitle,
-              {
-                color: colors.text,
-              },
+              styles.bottomLayout,
+
+              isDesktop && styles.bottomLayoutDesktop,
             ]}
           >
-            Información del inmueble
-          </Text>
+            {/* INSPECCIONES RECIENTES */}
 
-          <AppCard>
-            <InformationRow label="Nombre" value={property.name} />
+            <View
+              style={[
+                styles.bottomColumn,
 
-            <Divider />
+                isDesktop && styles.bottomColumnDesktop,
+              ]}
+            >
+              <View style={styles.sectionHeaderRow}>
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Inspecciones recientes
+                </Text>
 
-            <InformationRow label="Tipo" value={property.type} />
+                {/*
+                 * Conservamos el control preparado.
+                 * La navegación se puede conectar cuando
+                 * definamos el destino correspondiente.
+                 */}
+                <Pressable>
+                  <Text
+                    style={[
+                      styles.link,
+                      {
+                        color: colors.primary,
+                      },
+                    ]}
+                  >
+                    Ver todas
+                  </Text>
+                </Pressable>
+              </View>
 
-            <Divider />
+              {propertyInspections.length > 0 ? (
+                <AppCard>
+                  {propertyInspections.slice(0, 3).map((inspection, index) => (
+                    <View key={inspection.id}>
+                      <InspectionRow
+                        inspector={inspection.inspector}
+                        date={inspection.date}
+                        status={inspection.status}
+                      />
 
-            <InformationRow label="Municipio" value={property.city} />
+                      {index < Math.min(propertyInspections.length, 3) - 1 && (
+                        <View
+                          style={[
+                            styles.divider,
+                            {
+                              backgroundColor: colors.divider,
+                            },
+                          ]}
+                        />
+                      )}
+                    </View>
+                  ))}
+                </AppCard>
+              ) : (
+                <AppCard>
+                  <Text
+                    style={[
+                      styles.emptyTitle,
+                      {
+                        color: colors.text,
+                      },
+                    ]}
+                  >
+                    Sin inspecciones
+                  </Text>
 
-            <Divider />
+                  <Text
+                    style={[
+                      styles.emptyDescription,
+                      {
+                        color: colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    Todavía no existen inspecciones registradas para este
+                    inmueble.
+                  </Text>
+                </AppCard>
+              )}
+            </View>
 
-            <InformationRow label="Estado" value={property.state} />
+            {/* INFORMACIÓN DEL INMUEBLE */}
 
-            {property.address && (
-              <>
+            <View
+              style={[
+                styles.bottomColumn,
+
+                isDesktop && styles.bottomColumnDesktop,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Información del inmueble
+              </Text>
+
+              <AppCard>
+                <InformationRow label="Nombre" value={property.name} />
+
                 <Divider />
 
-                <InformationRow label="Dirección" value={property.address} />
-              </>
-            )}
+                <InformationRow label="Tipo" value={property.type} />
 
-            <Divider />
+                <Divider />
 
-            <InformationRow
-              label="Trabajadores registrados"
-              value={property.workers.toString()}
-            />
+                <InformationRow label="Municipio" value={property.city} />
 
-            <Divider />
+                <Divider />
 
-            <InformationRow
-              label="Formularios asignados"
-              value={propertyForms.length.toString()}
-            />
-          </AppCard>
-        </View>
+                <InformationRow label="Estado" value={property.state} />
+
+                {property.address && (
+                  <>
+                    <Divider />
+
+                    <InformationRow
+                      label="Dirección"
+                      value={property.address}
+                    />
+                  </>
+                )}
+
+                <Divider />
+
+                <InformationRow
+                  label="Trabajadores registrados"
+                  value={property.workers.toString()}
+                />
+
+                <Divider />
+
+                <InformationRow
+                  label="Formularios asignados"
+                  value={propertyForms.length.toString()}
+                />
+              </AppCard>
+            </View>
+          </View>
+        </ResponsiveContainer>
       </ScrollView>
     </Screen>
   );
@@ -459,6 +600,7 @@ function SummaryCard({
             color: colors.textSecondary,
           },
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
@@ -511,6 +653,7 @@ function FormCard({
               color: colors.primary,
             },
           ]}
+          numberOfLines={2}
         >
           ≡
         </Text>
@@ -690,8 +833,11 @@ function formatDate(date: string) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: Spacing.lg,
+  /*
+   * ResponsiveContainer controla el padding
+   * superior y horizontal.
+   */
+  scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
 
@@ -747,6 +893,12 @@ const styles = StyleSheet.create({
 
   headerInfo: {
     flex: 1,
+
+    /*
+     * Evita que nombres largos empujen
+     * otros elementos fuera de la pantalla.
+     */
+    minWidth: 0,
   },
 
   title: {
@@ -766,15 +918,13 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
   },
 
-  statsGrid: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-
-    marginBottom: Spacing.lg,
-  },
-
+  /*
+   * El ancho ya no se calcula mediante flex.
+   * ResponsiveGrid asigna el espacio.
+   */
   summaryCard: {
-    flex: 1,
+    width: "100%",
+    minHeight: 100,
   },
 
   summaryValue: {
@@ -789,6 +939,7 @@ const styles = StyleSheet.create({
   },
 
   mainAction: {
+    marginTop: Spacing.sm,
     marginBottom: Spacing.xl,
   },
 
@@ -800,9 +951,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+
+    gap: Spacing.md,
+
+    marginBottom: Spacing.sm,
   },
 
   sectionTitle: {
+    flexShrink: 1,
+
     fontSize: FontSize.cardTitle,
     fontWeight: "700",
 
@@ -821,13 +978,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  formList: {
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-
+  /*
+   * ResponsiveGrid controla el ancho externo
+   * de cada formulario.
+   */
   formCard: {
-    minHeight: 82,
+    width: "100%",
+    minHeight: 88,
 
     flexDirection: "row",
     alignItems: "center",
@@ -857,6 +1014,7 @@ const styles = StyleSheet.create({
 
   formInformation: {
     flex: 1,
+    minWidth: 0,
   },
 
   formTitle: {
@@ -868,6 +1026,8 @@ const styles = StyleSheet.create({
 
   formMeta: {
     flexDirection: "row",
+    flexWrap: "wrap",
+
     gap: Spacing.md,
   },
 
@@ -885,6 +1045,38 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.sm,
   },
 
+  /*
+   * Por defecto la parte inferior sigue siendo
+   * vertical. Es el comportamiento usado por
+   * teléfono y tablet.
+   */
+  bottomLayout: {
+    width: "100%",
+    gap: Spacing.xl,
+  },
+
+  /*
+   * En escritorio cambia a dos columnas.
+   */
+  bottomLayoutDesktop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  bottomColumn: {
+    width: "100%",
+  },
+
+  /*
+   * Cada columna ocupa la mitad aproximada
+   * cuando estamos en escritorio.
+   */
+  bottomColumnDesktop: {
+    flex: 1,
+    width: "auto",
+    minWidth: 0,
+  },
+
   inspectionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -894,6 +1086,7 @@ const styles = StyleSheet.create({
 
   inspectionInfo: {
     flex: 1,
+    minWidth: 0,
   },
 
   inspectionTitle: {
@@ -910,6 +1103,8 @@ const styles = StyleSheet.create({
   inspectionStatus: {
     fontSize: FontSize.caption,
     fontWeight: "600",
+
+    marginLeft: Spacing.sm,
   },
 
   informationRow: {

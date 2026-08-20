@@ -4,6 +4,8 @@ import { router, useLocalSearchParams } from "expo-router";
 
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
+import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
+import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/data/companies";
@@ -15,14 +17,31 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 import { useAppTheme } from "@/hooks/useAppTheme";
 
 export default function CompanyPropertiesScreen() {
+  /*
+   * Recupera los colores del tema actual.
+   * Esto mantiene la pantalla compatible con
+   * modo claro y modo oscuro.
+   */
   const { colors } = useAppTheme();
 
+  /*
+   * Obtiene el ID dinámico de la empresa desde la ruta:
+   *
+   * /empresas/[id]/inmuebles
+   */
   const { id } = useLocalSearchParams<{
     id: string;
   }>();
 
+  /*
+   * Busca la empresa correspondiente en la capa central de datos.
+   */
   const company = getCompanyById(id);
 
+  /*
+   * Si el ID no corresponde a una empresa existente,
+   * mostramos una pantalla controlada.
+   */
   if (!company) {
     return (
       <Screen>
@@ -53,138 +72,209 @@ export default function CompanyPropertiesScreen() {
     );
   }
 
+  /*
+   * Recuperamos únicamente los inmuebles
+   * pertenecientes a la empresa actual.
+   */
   const companyProperties = getPropertiesByCompanyId(company.id);
 
   return (
     <Screen padded={false}>
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Pressable
-            onPress={() =>
-              router.navigate({
-                pathname: "/empresas/[id]",
-                params: {
-                  id,
-                },
-              })
-            }
-          >
+        {/*
+         * ResponsiveContainer controla:
+         *
+         * - padding horizontal
+         * - espacio superior
+         * - ancho máximo
+         * - centrado en tablet y web
+         */}
+        <ResponsiveContainer>
+          {/* ====================================================== */}
+          {/* ENCABEZADO */}
+          {/* ====================================================== */}
+
+          <View style={styles.header}>
+            <Pressable
+              onPress={() =>
+                router.navigate({
+                  pathname: "/empresas/[id]",
+
+                  params: {
+                    id,
+                  },
+                })
+              }
+            >
+              <Text
+                style={[
+                  styles.backText,
+                  {
+                    color: colors.primary,
+                  },
+                ]}
+              >
+                ‹ Empresa
+              </Text>
+            </Pressable>
+
             <Text
               style={[
-                styles.backText,
+                styles.overline,
                 {
-                  color: colors.primary,
+                  /*
+                   * Utilizamos el color representativo
+                   * configurado para cada empresa.
+                   */
+                  color: company.branding.primaryColor,
                 },
               ]}
             >
-              ‹ Empresa
+              {company.name.toUpperCase()}
             </Text>
-          </Pressable>
 
-          <Text
-            style={[
-              styles.overline,
-              {
-                color: company.branding.primaryColor,
-              },
-            ]}
-          >
-            {company.name.toUpperCase()}
-          </Text>
-
-          <Text
-            style={[
-              styles.title,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Inmuebles
-          </Text>
-
-          <Text
-            style={[
-              styles.subtitle,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-          >
-            Sucursales, centros de trabajo e instalaciones asociadas a esta
-            empresa.
-          </Text>
-        </View>
-
-        <AppButton
-          onPress={() =>
-            router.navigate({
-              pathname: "/empresas/[id]/inmuebles/nuevo",
-              params: {
-                id,
-              },
-            })
-          }
-        >
-          + Registrar inmueble
-        </AppButton>
-
-        <View style={styles.list}>
-          {companyProperties.map((property) => {
-            const propertyInspections = getInspectionsByPropertyId(property.id);
-
-            const pending = propertyInspections.filter(
-              (inspection) => inspection.status !== "completed",
-            ).length;
-
-            return (
-              <PropertyCard
-                key={property.id}
-                id={property.id}
-                name={property.name}
-                address={`${property.city}, ${property.state}`}
-                type={property.type}
-                inspections={propertyInspections.length}
-                pending={pending}
-                companyId={id}
-              />
-            );
-          })}
-        </View>
-
-        {companyProperties.length === 0 && (
-          <AppCard style={styles.emptyCard}>
             <Text
               style={[
-                styles.emptyTitle,
+                styles.title,
                 {
                   color: colors.text,
                 },
               ]}
             >
-              No hay inmuebles registrados
+              Inmuebles
             </Text>
 
             <Text
               style={[
-                styles.emptyDescription,
+                styles.subtitle,
                 {
                   color: colors.textSecondary,
                 },
               ]}
             >
-              Registra el primer inmueble asociado a esta empresa.
+              Sucursales, centros de trabajo e instalaciones asociadas a esta
+              empresa.
             </Text>
-          </AppCard>
-        )}
+          </View>
+
+          {/* ====================================================== */}
+          {/* ACCIÓN PRINCIPAL */}
+          {/* ====================================================== */}
+
+          <View style={styles.mainAction}>
+            <AppButton
+              onPress={() =>
+                router.navigate({
+                  pathname: "/empresas/[id]/inmuebles/nuevo",
+
+                  params: {
+                    id,
+                  },
+                })
+              }
+            >
+              + Registrar inmueble
+            </AppButton>
+          </View>
+
+          {/* ====================================================== */}
+          {/* LISTADO DE INMUEBLES */}
+          {/* ====================================================== */}
+
+          {/*
+           * ResponsiveGrid adapta automáticamente
+           * la cantidad de tarjetas por fila:
+           *
+           * móvil   → 1 columna
+           * tablet  → 2 columnas
+           * desktop → 3 columnas
+           */}
+          <ResponsiveGrid
+            phoneColumns={1}
+            tabletColumns={2}
+            desktopColumns={3}
+            gap={Spacing.md}
+          >
+            {companyProperties.map((property) => {
+              /*
+               * Calculamos las inspecciones de cada inmueble.
+               * Así cada tarjeta refleja datos reales del modelo.
+               */
+              const propertyInspections = getInspectionsByPropertyId(
+                property.id,
+              );
+
+              /*
+               * Contamos como pendientes todas aquellas
+               * inspecciones que aún no estén completadas.
+               */
+              const pending = propertyInspections.filter(
+                (inspection) => inspection.status !== "completed",
+              ).length;
+
+              return (
+                <PropertyCard
+                  key={property.id}
+                  id={property.id}
+                  name={property.name}
+                  address={`${property.city}, ${property.state}`}
+                  type={property.type}
+                  inspections={propertyInspections.length}
+                  pending={pending}
+                  companyId={id}
+                />
+              );
+            })}
+          </ResponsiveGrid>
+
+          {/* ====================================================== */}
+          {/* ESTADO VACÍO */}
+          {/* ====================================================== */}
+
+          {companyProperties.length === 0 && (
+            <AppCard style={styles.emptyCard}>
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                No hay inmuebles registrados
+              </Text>
+
+              <Text
+                style={[
+                  styles.emptyDescription,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                Registra el primer inmueble asociado a esta empresa.
+              </Text>
+            </AppCard>
+          )}
+        </ResponsiveContainer>
       </ScrollView>
     </Screen>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                              PROPERTY CARD                                 */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Tarjeta reutilizable para representar un inmueble.
+ *
+ * La tarjeta no conoce la lógica de búsqueda de datos;
+ * únicamente recibe la información ya preparada.
+ */
 function PropertyCard({
   id,
   name,
@@ -209,14 +299,26 @@ function PropertyCard({
       onPress={() =>
         router.navigate({
           pathname: "/empresas/[id]/inmuebles/[propertyId]",
+
+          /*
+           * Enviamos tanto el ID de empresa
+           * como el ID del inmueble.
+           */
           params: {
             id: companyId,
             propertyId: id,
           },
         })
       }
+      style={({ pressed }) => ({
+        /*
+         * Feedback visual para móvil,
+         * tablet y mouse en web.
+         */
+        opacity: pressed ? 0.75 : 1,
+      })}
     >
-      <AppCard>
+      <AppCard style={styles.propertyCard}>
         <View style={styles.cardHeader}>
           <View
             style={[
@@ -246,6 +348,7 @@ function PropertyCard({
                   color: colors.text,
                 },
               ]}
+              numberOfLines={2}
             >
               {name}
             </Text>
@@ -257,6 +360,7 @@ function PropertyCard({
                   color: colors.textSecondary,
                 },
               ]}
+              numberOfLines={2}
             >
               {address}
             </Text>
@@ -268,6 +372,7 @@ function PropertyCard({
                   color: colors.textMuted,
                 },
               ]}
+              numberOfLines={1}
             >
               {type}
             </Text>
@@ -293,6 +398,8 @@ function PropertyCard({
             },
           ]}
         />
+
+        {/* RESUMEN DEL INMUEBLE */}
 
         <View style={styles.stats}>
           <Text
@@ -324,9 +431,19 @@ function PropertyCard({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                   STYLES                                   */
+/* -------------------------------------------------------------------------- */
+
 const styles = StyleSheet.create({
-  container: {
-    padding: Spacing.lg,
+  /*
+   * El ScrollView únicamente conserva
+   * padding inferior.
+   *
+   * El padding horizontal y superior
+   * ahora pertenecen a ResponsiveContainer.
+   */
+  scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
 
@@ -337,6 +454,7 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: FontSize.small,
     fontWeight: "600",
+
     marginBottom: Spacing.lg,
   },
 
@@ -344,12 +462,14 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
     fontWeight: "700",
     letterSpacing: 1,
+
     marginBottom: Spacing.sm,
   },
 
   title: {
     fontSize: FontSize.h1,
     fontWeight: "700",
+
     marginBottom: Spacing.sm,
   },
 
@@ -358,9 +478,20 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 
-  list: {
-    gap: Spacing.md,
-    marginTop: Spacing.lg,
+  mainAction: {
+    marginBottom: Spacing.lg,
+  },
+
+  /*
+   * ResponsiveGrid controla el ancho
+   * de cada PropertyCard.
+   *
+   * Por eso la tarjeta siempre ocupa
+   * el 100% del espacio asignado.
+   */
+  propertyCard: {
+    width: "100%",
+    minHeight: 180,
   },
 
   cardHeader: {
@@ -371,9 +502,12 @@ const styles = StyleSheet.create({
   propertyIcon: {
     width: 48,
     height: 48,
+
     borderRadius: Radius.md,
+
     alignItems: "center",
     justifyContent: "center",
+
     marginRight: Spacing.md,
   },
 
@@ -384,16 +518,25 @@ const styles = StyleSheet.create({
 
   propertyInfo: {
     flex: 1,
+
+    /*
+     * Evita desbordamientos cuando la tarjeta
+     * se hace más estrecha en tablet.
+     */
+    minWidth: 0,
   },
 
   propertyName: {
     fontSize: FontSize.body,
     fontWeight: "700",
+
     marginBottom: Spacing.xs,
   },
 
   propertyAddress: {
     fontSize: FontSize.small,
+    lineHeight: 20,
+
     marginBottom: Spacing.xs,
   },
 
@@ -403,17 +546,28 @@ const styles = StyleSheet.create({
 
   arrow: {
     fontSize: 28,
+
     marginLeft: Spacing.sm,
   },
 
   divider: {
     height: 1,
+
     marginVertical: Spacing.md,
   },
 
   stats: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+
+    /*
+     * Si una tarjeta queda muy estrecha,
+     * permitimos que el contenido se acomode.
+     */
+    flexWrap: "wrap",
+
+    gap: Spacing.sm,
   },
 
   stat: {
@@ -422,12 +576,13 @@ const styles = StyleSheet.create({
   },
 
   emptyCard: {
-    marginTop: Spacing.lg,
+    marginTop: Spacing.md,
   },
 
   emptyTitle: {
     fontSize: FontSize.body,
     fontWeight: "700",
+
     marginBottom: Spacing.sm,
   },
 

@@ -13,6 +13,8 @@ import { router, useLocalSearchParams } from "expo-router";
 
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
+import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
+import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/data/companies";
@@ -27,124 +29,145 @@ import { getPropertyById } from "@/data/properties";
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
+import { useResponsive } from "@/hooks/useResponsive";
 
 type ReportFormatOption = "excel" | "pdf";
 
 export default function NewReportScreen() {
   const { colors } = useAppTheme();
 
+  /*
+   * useResponsive nos permite modificar únicamente
+   * aquellas zonas donde un grid normal no es suficiente.
+   *
+   * Aquí lo utilizaremos principalmente para construir
+   * el layout principal de configuración + resumen.
+   */
+  const { isPhone } = useResponsive();
+
+  /*
+   * Parámetros recibidos desde Expo Router.
+   *
+   * inspectionId es opcional porque esta pantalla puede abrirse:
+   *
+   * 1. Desde Reportes.
+   * 2. Directamente desde una inspección.
+   */
   const { id, inspectionId: routeInspectionId } = useLocalSearchParams<{
     id: string;
     inspectionId?: string;
   }>();
 
   /*
-   * Obtenemos la empresa.
+   * Recuperamos la empresa.
    *
    * IMPORTANTE:
-   * No hacemos return todavía porque
-   * primero deben ejecutarse todos
-   * los hooks del componente.
+   * todavía NO hacemos return porque todos los Hooks
+   * deben ejecutarse siempre en el mismo orden.
    */
   const company = getCompanyById(id);
 
   /*
-   * Si la empresa existe obtenemos
-   * sus inspecciones.
+   * Recuperamos las inspecciones de la empresa.
    *
-   * Si no existe, devolvemos un array
-   * vacío temporalmente.
+   * Si la empresa no existe utilizamos temporalmente
+   * un arreglo vacío.
    */
   const companyInspections = company
     ? getInspectionsByCompanyId(company.id)
     : [];
 
   /*
-   * Si llegamos desde el detalle de
-   * una inspección:
+   * Si la pantalla recibió inspectionId y esa inspección
+   * existe, la seleccionamos automáticamente.
    *
-   * /reportes/nuevo?inspectionId=...
-   *
-   * utilizamos esa inspección.
-   *
-   * De lo contrario seleccionamos
-   * inicialmente la primera.
+   * De lo contrario utilizamos la primera disponible.
    */
   const initialInspectionId =
     routeInspectionId && getInspectionById(routeInspectionId)
       ? routeInspectionId
       : companyInspections[0]?.id;
 
+  /* ---------------------------------------------------------------------- */
+  /*                                ESTADO                                  */
+  /* ---------------------------------------------------------------------- */
+
   /*
-   * HOOK 1
+   * Inspección que alimentará el reporte.
    */
   const [selectedInspectionId, setSelectedInspectionId] = useState<
     string | undefined
   >(initialInspectionId);
 
   /*
-   * HOOK 2
+   * Formato de salida.
+   *
+   * En esta etapa mantenemos Excel y PDF preparados
+   * aunque todavía no generemos físicamente el archivo.
    */
   const [selectedFormat, setSelectedFormat] =
     useState<ReportFormatOption>("excel");
 
   /*
-   * HOOK 3
+   * Determina si las evidencias asociadas a la inspección
+   * deberán incorporarse al reporte.
    */
   const [includeEvidence, setIncludeEvidence] = useState(true);
 
+  /* ---------------------------------------------------------------------- */
+  /*                         DATOS DERIVADOS                                */
+  /* ---------------------------------------------------------------------- */
+
   /*
-   * Inspección actualmente
-   * seleccionada.
+   * Resolvemos la inspección seleccionada.
    */
   const selectedInspection = selectedInspectionId
     ? getInspectionById(selectedInspectionId)
     : undefined;
 
   /*
-   * Resolvemos el inmueble
-   * relacionado.
+   * Inspection
+   *     ↓
+   * Property
    */
   const selectedProperty = selectedInspection
     ? getPropertyById(selectedInspection.propertyId)
     : undefined;
 
   /*
-   * Resolvemos el formulario
-   * relacionado.
+   * Inspection
+   *     ↓
+   * Form
    */
   const selectedForm = selectedInspection
     ? getFormById(selectedInspection.formId)
     : undefined;
 
   /*
-   * Obtenemos las evidencias reales
-   * asociadas a la inspección.
+   * Inspection
+   *     ↓
+   * Evidences
    */
   const selectedEvidences = selectedInspection
     ? getEvidencesByInspectionId(selectedInspection.id)
     : [];
 
   /*
-   * HOOK 4
+   * El título se deriva del formulario.
    *
-   * Generamos dinámicamente
-   * el nombre del reporte.
+   * No necesitamos useMemo aquí porque la operación
+   * es pequeña y evita el problema de memoización
+   * que encontramos anteriormente con React Compiler.
    */
   const reportTitle = selectedForm
     ? `Reporte de ${selectedForm.title}`
     : "Nuevo reporte";
 
   /*
-   * IMPORTANTE:
+   * Todos los Hooks ya fueron ejecutados.
    *
-   * Este return está DESPUÉS
-   * de useState y useMemo.
-   *
-   * Esto evita el error:
-   *
-   * React Hook "useState"
-   * is called conditionally.
+   * Ahora sí podemos realizar un return condicional
+   * de forma segura.
    */
   if (!company) {
     return (
@@ -153,7 +176,6 @@ export default function NewReportScreen() {
           <Text
             style={{
               color: colors.primary,
-
               fontWeight: "600",
             }}
           >
@@ -177,12 +199,26 @@ export default function NewReportScreen() {
     );
   }
 
+  /* ---------------------------------------------------------------------- */
+  /*                         GENERACIÓN DEL REPORTE                          */
+  /* ---------------------------------------------------------------------- */
+
   /*
-   * Generación simulada.
+   * GENERACIÓN SIMULADA
    *
-   * Más adelante esta función
-   * llamará al servicio real de
-   * generación de reportes.
+   * Por ahora solamente validamos que exista una inspección
+   * y regresamos al historial.
+   *
+   * Más adelante este será el punto de entrada para:
+   *
+   * ReportRequest
+   *      ↓
+   * ReportService
+   *      ├── ExcelGenerator
+   *      └── PdfGenerator
+   *
+   * De esta forma Kobo NO quedará acoplado directamente
+   * al generador de archivos.
    */
   const handleGenerate = () => {
     if (!selectedInspection) {
@@ -201,320 +237,424 @@ export default function NewReportScreen() {
   return (
     <Screen padded={false}>
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* NAVEGACIÓN */}
+        <ResponsiveContainer>
+          {/* ============================================================ */}
+          {/* NAVEGACIÓN                                                   */}
+          {/* ============================================================ */}
 
-        <Pressable
-          onPress={() =>
-            router.navigate({
-              pathname: "/empresas/[id]/reportes",
+          <Pressable
+            onPress={() =>
+              router.navigate({
+                pathname: "/empresas/[id]/reportes",
 
-              params: {
-                id,
-              },
-            })
-          }
-        >
+                params: {
+                  id,
+                },
+              })
+            }
+          >
+            <Text
+              style={[
+                styles.backText,
+                {
+                  color: colors.primary,
+                },
+              ]}
+            >
+              ‹ Reportes
+            </Text>
+          </Pressable>
+
+          {/* ============================================================ */}
+          {/* EMPRESA                                                      */}
+          {/* ============================================================ */}
+
           <Text
             style={[
-              styles.backText,
+              styles.overline,
               {
-                color: colors.primary,
+                color: company.branding.primaryColor,
               },
             ]}
           >
-            ‹ Reportes
+            {company.name.toUpperCase()}
           </Text>
-        </Pressable>
 
-        {/* EMPRESA */}
+          {/* ============================================================ */}
+          {/* ENCABEZADO                                                   */}
+          {/* ============================================================ */}
 
-        <Text
-          style={[
-            styles.overline,
-            {
-              color: company.branding.primaryColor,
-            },
-          ]}
-        >
-          {company.name.toUpperCase()}
-        </Text>
-
-        {/* ENCABEZADO */}
-
-        <Text
-          style={[
-            styles.title,
-            {
-              color: colors.text,
-            },
-          ]}
-        >
-          Generar reporte
-        </Text>
-
-        <Text
-          style={[
-            styles.subtitle,
-            {
-              color: colors.textSecondary,
-            },
-          ]}
-        >
-          Selecciona la inspección y configura el contenido del reporte.
-        </Text>
-
-        {/* SELECCIÓN DE INSPECCIÓN */}
-
-        <View style={styles.section}>
           <Text
             style={[
-              styles.sectionTitle,
+              styles.title,
               {
                 color: colors.text,
               },
             ]}
           >
-            Seleccionar inspección
+            Generar reporte
           </Text>
 
           <Text
             style={[
-              styles.sectionDescription,
+              styles.subtitle,
               {
                 color: colors.textSecondary,
               },
             ]}
           >
-            El reporte se construirá a partir de la información capturada en una
-            inspección.
+            Selecciona la inspección y configura el contenido del reporte.
           </Text>
 
-          <View style={styles.inspectionList}>
-            {companyInspections.map((inspection) => {
-              const property = getPropertyById(inspection.propertyId);
+          {/* ============================================================ */}
+          {/* SELECCIÓN DE INSPECCIÓN                                      */}
+          {/* ============================================================ */}
 
-              const form = getFormById(inspection.formId);
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              1. Seleccionar inspección
+            </Text>
 
-              const selected = inspection.id === selectedInspectionId;
+            <Text
+              style={[
+                styles.sectionDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              El reporte se construirá a partir de la información capturada en
+              una inspección.
+            </Text>
 
-              return (
-                <InspectionOption
-                  key={inspection.id}
-                  title={form?.title ?? "Formulario no disponible"}
-                  property={property?.name ?? "Inmueble no disponible"}
-                  date={inspection.date}
-                  status={inspection.status}
-                  selected={selected}
-                  onPress={() => setSelectedInspectionId(inspection.id)}
-                />
-              );
-            })}
+            {/*
+             * ResponsiveGrid permite aprovechar mejor tablets y web:
+             *
+             * Móvil   → 1 inspección por fila
+             * Tablet  → 2 inspecciones por fila
+             * Desktop → 2 inspecciones por fila
+             *
+             * Utilizamos 2 y no 3 en escritorio porque estas tarjetas
+             * contienen bastante información.
+             */}
+            <ResponsiveGrid
+              phoneColumns={1}
+              tabletColumns={2}
+              desktopColumns={2}
+              gap={Spacing.sm}
+            >
+              {companyInspections.map((inspection) => {
+                const property = getPropertyById(inspection.propertyId);
+
+                const form = getFormById(inspection.formId);
+
+                const selected = inspection.id === selectedInspectionId;
+
+                return (
+                  <InspectionOption
+                    key={inspection.id}
+                    title={form?.title ?? "Formulario no disponible"}
+                    property={property?.name ?? "Inmueble no disponible"}
+                    date={inspection.date}
+                    status={inspection.status}
+                    selected={selected}
+                    onPress={() => setSelectedInspectionId(inspection.id)}
+                  />
+                );
+              })}
+            </ResponsiveGrid>
+
+            {companyInspections.length === 0 && (
+              <AppCard>
+                <Text
+                  style={[
+                    styles.emptyTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Sin inspecciones disponibles
+                </Text>
+
+                <Text
+                  style={[
+                    styles.emptyDescription,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Esta empresa todavía no tiene inspecciones registradas.
+                </Text>
+              </AppCard>
+            )}
           </View>
 
-          {companyInspections.length === 0 && (
-            <AppCard>
+          {/* ============================================================ */}
+          {/* CONFIGURACIÓN DEL REPORTE                                    */}
+          {/* ============================================================ */}
+
+          {selectedInspection && (
+            <>
               <Text
                 style={[
-                  styles.emptyTitle,
+                  styles.configurationTitle,
                   {
                     color: colors.text,
                   },
                 ]}
               >
-                Sin inspecciones disponibles
+                2. Configurar reporte
               </Text>
 
-              <Text
+              {/*
+               * MÓVIL:
+               *
+               * Configuración
+               * Resumen
+               *
+               * TABLET / DESKTOP:
+               *
+               * Configuración | Resumen
+               *
+               * No utilizamos dos layouts completamente diferentes.
+               * Simplemente cambiamos flexDirection según el dispositivo.
+               */}
+              <View
                 style={[
-                  styles.emptyDescription,
-                  {
-                    color: colors.textSecondary,
-                  },
+                  styles.configurationLayout,
+                  !isPhone && styles.configurationLayoutWide,
                 ]}
               >
-                Esta empresa todavía no tiene inspecciones registradas.
-              </Text>
-            </AppCard>
-          )}
-        </View>
+                {/* ====================================================== */}
+                {/* COLUMNA DE CONFIGURACIÓN                               */}
+                {/* ====================================================== */}
 
-        {/* RESTO DE OPCIONES */}
+                <View
+                  style={[
+                    styles.configurationColumn,
+                    !isPhone && styles.configurationColumnWide,
+                  ]}
+                >
+                  {/* FORMATO */}
 
-        {selectedInspection && (
-          <>
-            {/* FORMATO */}
-
-            <View style={styles.section}>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  {
-                    color: colors.text,
-                  },
-                ]}
-              >
-                Formato
-              </Text>
-
-              <View style={styles.formatRow}>
-                <FormatOption
-                  label="Excel"
-                  selected={selectedFormat === "excel"}
-                  onPress={() => setSelectedFormat("excel")}
-                />
-
-                <FormatOption
-                  label="PDF"
-                  selected={selectedFormat === "pdf"}
-                  onPress={() => setSelectedFormat("pdf")}
-                />
-              </View>
-            </View>
-
-            {/* CONTENIDO */}
-
-            <View style={styles.section}>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  {
-                    color: colors.text,
-                  },
-                ]}
-              >
-                Contenido
-              </Text>
-
-              <AppCard>
-                <View style={styles.optionRow}>
-                  <View style={styles.optionInfo}>
+                  <View style={styles.configurationSection}>
                     <Text
                       style={[
-                        styles.optionTitle,
+                        styles.sectionTitle,
                         {
                           color: colors.text,
                         },
                       ]}
                     >
-                      Incluir evidencias
+                      Formato
                     </Text>
 
+                    <View style={styles.formatRow}>
+                      <FormatOption
+                        label="Excel"
+                        description="Hoja de cálculo"
+                        selected={selectedFormat === "excel"}
+                        onPress={() => setSelectedFormat("excel")}
+                      />
+
+                      <FormatOption
+                        label="PDF"
+                        description="Documento"
+                        selected={selectedFormat === "pdf"}
+                        onPress={() => setSelectedFormat("pdf")}
+                      />
+                    </View>
+                  </View>
+
+                  {/* CONTENIDO */}
+
+                  <View style={styles.configurationSection}>
                     <Text
                       style={[
-                        styles.optionDescription,
+                        styles.sectionTitle,
                         {
-                          color: colors.textSecondary,
+                          color: colors.text,
                         },
                       ]}
                     >
-                      Agrega las fotografías y documentos relacionados con la
-                      inspección.
+                      Contenido
                     </Text>
+
+                    <AppCard>
+                      <View style={styles.optionRow}>
+                        <View style={styles.optionInfo}>
+                          <Text
+                            style={[
+                              styles.optionTitle,
+                              {
+                                color: colors.text,
+                              },
+                            ]}
+                          >
+                            Incluir evidencias
+                          </Text>
+
+                          <Text
+                            style={[
+                              styles.optionDescription,
+                              {
+                                color: colors.textSecondary,
+                              },
+                            ]}
+                          >
+                            Agrega las fotografías y documentos relacionados con
+                            la inspección.
+                          </Text>
+
+                          <Text
+                            style={[
+                              styles.evidenceCount,
+                              {
+                                color: colors.textMuted,
+                              },
+                            ]}
+                          >
+                            {selectedEvidences.length} evidencia
+                            {selectedEvidences.length === 1 ? "" : "s"}{" "}
+                            disponible
+                            {selectedEvidences.length === 1 ? "" : "s"}
+                          </Text>
+                        </View>
+
+                        <Switch
+                          value={includeEvidence}
+                          onValueChange={setIncludeEvidence}
+                        />
+                      </View>
+                    </AppCard>
                   </View>
-
-                  <Switch
-                    value={includeEvidence}
-                    onValueChange={setIncludeEvidence}
-                  />
                 </View>
-              </AppCard>
-            </View>
 
-            {/* RESUMEN */}
+                {/* ====================================================== */}
+                {/* COLUMNA DE RESUMEN                                     */}
+                {/* ====================================================== */}
 
-            <View style={styles.section}>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  {
-                    color: colors.text,
-                  },
-                ]}
-              >
-                Resumen
-              </Text>
+                <View
+                  style={[
+                    styles.summaryColumn,
+                    !isPhone && styles.summaryColumnWide,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.sectionTitle,
+                      {
+                        color: colors.text,
+                      },
+                    ]}
+                  >
+                    Resumen
+                  </Text>
 
-              <AppCard>
-                <InfoRow label="Empresa" value={company.name} />
+                  <AppCard style={styles.summaryCard}>
+                    <InfoRow label="Empresa" value={company.name} />
 
-                <Divider />
+                    <Divider />
 
-                <InfoRow
-                  label="Inmueble"
-                  value={selectedProperty?.name ?? "No disponible"}
-                />
+                    <InfoRow
+                      label="Inmueble"
+                      value={selectedProperty?.name ?? "No disponible"}
+                    />
 
-                <Divider />
+                    <Divider />
 
-                <InfoRow
-                  label="Inspección"
-                  value={selectedForm?.title ?? "No disponible"}
-                />
+                    <InfoRow
+                      label="Inspección"
+                      value={selectedForm?.title ?? "No disponible"}
+                    />
 
-                <Divider />
+                    <Divider />
 
-                <InfoRow label="Reporte" value={reportTitle} />
+                    <InfoRow label="Reporte" value={reportTitle} />
 
-                <Divider />
+                    <Divider />
 
-                <InfoRow
-                  label="Formato"
-                  value={selectedFormat === "excel" ? "Excel" : "PDF"}
-                />
+                    <InfoRow
+                      label="Formato"
+                      value={selectedFormat === "excel" ? "Excel" : "PDF"}
+                    />
 
-                <Divider />
+                    <Divider />
 
-                <InfoRow
-                  label="Evidencias disponibles"
-                  value={selectedEvidences.length.toString()}
-                />
+                    <InfoRow
+                      label="Evidencias disponibles"
+                      value={selectedEvidences.length.toString()}
+                    />
 
-                <Divider />
+                    <Divider />
 
-                <InfoRow
-                  label="Incluir evidencias"
-                  value={includeEvidence ? "Sí" : "No"}
-                />
-              </AppCard>
-            </View>
+                    <InfoRow
+                      label="Incluir evidencias"
+                      value={includeEvidence ? "Sí" : "No"}
+                    />
+                  </AppCard>
+                </View>
+              </View>
 
-            {/* ACCIONES */}
+              {/* ======================================================== */}
+              {/* ACCIONES                                                 */}
+              {/* ======================================================== */}
 
-            <View style={styles.actions}>
-              <AppButton onPress={handleGenerate}>Generar reporte</AppButton>
+              <View style={[styles.actions, !isPhone && styles.actionsWide]}>
+                <View style={styles.actionButton}>
+                  <AppButton onPress={handleGenerate}>
+                    Generar reporte
+                  </AppButton>
+                </View>
 
-              <AppButton
-                variant="ghost"
-                onPress={() =>
-                  router.navigate({
-                    pathname: "/empresas/[id]/reportes",
+                <View style={styles.actionButton}>
+                  <AppButton
+                    variant="ghost"
+                    onPress={() =>
+                      router.navigate({
+                        pathname: "/empresas/[id]/reportes",
 
-                    params: {
-                      id,
-                    },
-                  })
-                }
-              >
-                Cancelar
-              </AppButton>
-            </View>
-          </>
-        )}
+                        params: {
+                          id,
+                        },
+                      })
+                    }
+                  >
+                    Cancelar
+                  </AppButton>
+                </View>
+              </View>
+            </>
+          )}
 
-        <Text
-          style={[
-            styles.prototypeNotice,
-            {
-              color: colors.textMuted,
-            },
-          ]}
-        >
-          Prototipo visual: la generación del archivo todavía no está conectada
-          al servicio real.
-        </Text>
+          {/* ============================================================ */}
+          {/* AVISO DEL PROTOTIPO                                          */}
+          {/* ============================================================ */}
+
+          <Text
+            style={[
+              styles.prototypeNotice,
+              {
+                color: colors.textMuted,
+              },
+            ]}
+          >
+            Prototipo visual: la generación del archivo todavía no está
+            conectada al servicio real.
+          </Text>
+        </ResponsiveContainer>
       </ScrollView>
     </Screen>
   );
@@ -524,6 +664,12 @@ export default function NewReportScreen() {
 /*                              INSPECTION OPTION                             */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Tarjeta seleccionable que representa una inspección.
+ *
+ * No contiene lógica de datos propia.
+ * Recibe toda la información preparada desde la pantalla principal.
+ */
 function InspectionOption({
   title,
   property,
@@ -544,6 +690,10 @@ function InspectionOption({
 }) {
   const { colors } = useAppTheme();
 
+  /*
+   * Convertimos el estado técnico de la inspección
+   * a una etiqueta visible para el usuario.
+   */
   const statusLabel =
     status === "completed"
       ? "Finalizada"
@@ -573,6 +723,8 @@ function InspectionOption({
         },
       ]}
     >
+      {/* RADIO DE SELECCIÓN */}
+
       <View
         style={[
           styles.radio,
@@ -595,6 +747,8 @@ function InspectionOption({
         )}
       </View>
 
+      {/* INFORMACIÓN */}
+
       <View style={styles.inspectionInfo}>
         <Text
           style={[
@@ -604,6 +758,7 @@ function InspectionOption({
               color: colors.text,
             },
           ]}
+          numberOfLines={2}
         >
           {title}
         </Text>
@@ -616,6 +771,7 @@ function InspectionOption({
               color: colors.textSecondary,
             },
           ]}
+          numberOfLines={2}
         >
           {property}
         </Text>
@@ -632,6 +788,8 @@ function InspectionOption({
           {formatDate(date)}
         </Text>
       </View>
+
+      {/* ESTADO */}
 
       <Text
         style={[
@@ -652,12 +810,18 @@ function InspectionOption({
 /*                                FORMAT OPTION                               */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Opción reutilizable para elegir el formato
+ * del archivo que se generará.
+ */
 function FormatOption({
   label,
+  description,
   selected,
   onPress,
 }: {
   label: string;
+  description: string;
   selected: boolean;
   onPress: () => void;
 }) {
@@ -666,13 +830,15 @@ function FormatOption({
   return (
     <Pressable
       onPress={onPress}
-      style={[
+      style={({ pressed }) => [
         styles.formatOption,
 
         {
           backgroundColor: selected ? colors.primarySoft : colors.surface,
 
           borderColor: selected ? colors.primary : colors.border,
+
+          opacity: pressed ? 0.75 : 1,
         },
       ]}
     >
@@ -686,6 +852,18 @@ function FormatOption({
         ]}
       >
         {label}
+      </Text>
+
+      <Text
+        style={[
+          styles.formatDescription,
+
+          {
+            color: colors.textSecondary,
+          },
+        ]}
+      >
+        {description}
       </Text>
 
       <Text
@@ -739,6 +917,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                  DIVIDER                                   */
+/* -------------------------------------------------------------------------- */
+
 function Divider() {
   const { colors } = useAppTheme();
 
@@ -755,6 +937,23 @@ function Divider() {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                  HELPERS                                   */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Acepta:
+ *
+ * 2026-08-20
+ *
+ * o:
+ *
+ * 2026-08-20T12:30:00
+ *
+ * y devuelve:
+ *
+ * 20/08/2026
+ */
 function formatDate(date: string) {
   const normalized = date.includes("T") ? date.split("T")[0] : date;
 
@@ -774,9 +973,12 @@ function formatDate(date: string) {
 /* -------------------------------------------------------------------------- */
 
 const styles = StyleSheet.create({
-  container: {
-    padding: Spacing.lg,
-
+  /*
+   * ResponsiveContainer controla el padding horizontal
+   * y superior. ScrollView solamente conserva
+   * espacio inferior.
+   */
+  scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
 
@@ -834,12 +1036,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
 
-  inspectionList: {
-    gap: Spacing.sm,
-  },
-
+  /*
+   * Cada opción ocupa todo el ancho que
+   * ResponsiveGrid le asigne.
+   */
   inspectionOption: {
-    minHeight: 92,
+    width: "100%",
+
+    minHeight: 104,
 
     flexDirection: "row",
 
@@ -878,6 +1082,12 @@ const styles = StyleSheet.create({
 
   inspectionInfo: {
     flex: 1,
+
+    /*
+     * Evita que textos largos rompan la distribución
+     * horizontal de la tarjeta.
+     */
+    minWidth: 0,
   },
 
   inspectionTitle: {
@@ -891,6 +1101,8 @@ const styles = StyleSheet.create({
   inspectionProperty: {
     fontSize: FontSize.caption,
 
+    lineHeight: 18,
+
     marginBottom: Spacing.xs,
   },
 
@@ -899,6 +1111,8 @@ const styles = StyleSheet.create({
   },
 
   inspectionStatus: {
+    flexShrink: 0,
+
     fontSize: FontSize.caption,
 
     fontWeight: "700",
@@ -906,20 +1120,86 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.md,
   },
 
+  configurationTitle: {
+    fontSize: FontSize.h2,
+
+    fontWeight: "700",
+
+    marginBottom: Spacing.lg,
+  },
+
+  /*
+   * En móvil:
+   *
+   * configuración
+   * resumen
+   */
+  configurationLayout: {
+    width: "100%",
+
+    gap: Spacing.xl,
+  },
+
+  /*
+   * Tablet y desktop:
+   *
+   * configuración | resumen
+   */
+  configurationLayoutWide: {
+    flexDirection: "row",
+
+    alignItems: "flex-start",
+  },
+
+  configurationColumn: {
+    width: "100%",
+  },
+
+  configurationColumnWide: {
+    flex: 3,
+
+    width: "auto",
+
+    minWidth: 0,
+  },
+
+  summaryColumn: {
+    width: "100%",
+  },
+
+  summaryColumnWide: {
+    flex: 2,
+
+    width: "auto",
+
+    minWidth: 0,
+  },
+
+  configurationSection: {
+    marginBottom: Spacing.xl,
+  },
+
+  /*
+   * Excel y PDF permanecen uno al lado del otro.
+   * El contenido de cada tarjeta está preparado
+   * para espacios más pequeños.
+   */
   formatRow: {
     flexDirection: "row",
 
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
 
   formatOption: {
     flex: 1,
 
+    minWidth: 0,
+
     borderWidth: 1,
 
     borderRadius: Radius.lg,
 
-    padding: Spacing.lg,
+    padding: Spacing.md,
   },
 
   formatLabel: {
@@ -927,11 +1207,19 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+
+  formatDescription: {
+    fontSize: FontSize.caption,
+
+    marginBottom: Spacing.md,
   },
 
   formatSelection: {
     fontSize: FontSize.caption,
+
+    fontWeight: "600",
   },
 
   optionRow: {
@@ -942,6 +1230,8 @@ const styles = StyleSheet.create({
 
   optionInfo: {
     flex: 1,
+
+    minWidth: 0,
 
     marginRight: Spacing.md,
   },
@@ -958,6 +1248,22 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
 
     lineHeight: 19,
+  },
+
+  evidenceCount: {
+    fontSize: FontSize.caption,
+
+    fontWeight: "600",
+
+    marginTop: Spacing.sm,
+  },
+
+  /*
+   * En escritorio esta tarjeta forma la columna
+   * derecha de la configuración.
+   */
+  summaryCard: {
+    width: "100%",
   },
 
   infoLabel: {
@@ -978,8 +1284,28 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.md,
   },
 
+  /*
+   * Móvil:
+   * botones verticales.
+   */
   actions: {
     gap: Spacing.sm,
+
+    marginTop: Spacing.xl,
+  },
+
+  /*
+   * Tablet / desktop:
+   * botones en la misma fila.
+   */
+  actionsWide: {
+    flexDirection: "row",
+
+    justifyContent: "flex-end",
+  },
+
+  actionButton: {
+    minWidth: 200,
   },
 
   prototypeNotice: {

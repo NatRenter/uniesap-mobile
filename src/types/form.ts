@@ -1,7 +1,25 @@
+export type FormQuestionOption = {
+  /*
+   * Texto que verá el usuario.
+   *
+   * Ejemplo:
+   * "Buen estado"
+   */
+  label: string;
+
+  /*
+   * Valor interno que almacenaremos.
+   *
+   * Más adelante este valor será el que
+   * podremos transformar para enviarlo a Kobo.
+   */
+  value: string;
+};
+
 export type FormQuestionIntegration = {
   /*
-   * Nombre técnico del campo
-   * utilizado dentro de Kobo.
+   * Nombre técnico del campo utilizado
+   * dentro de Kobo.
    *
    * Ejemplo:
    * datos_generales/responsable
@@ -19,12 +37,19 @@ export type FormQuestion = {
   required?: boolean;
 
   /*
-   * Información específica de
-   * integraciones externas.
+   * Solo las preguntas de tipo "select"
+   * necesitan normalmente esta propiedad.
    *
-   * Es opcional para permitir que
-   * existan preguntas exclusivamente
-   * internas de UNIESAP.
+   * La dejamos opcional para mantener
+   * sencillo el modelo actual.
+   */
+  options?: FormQuestionOption[];
+
+  /*
+   * Información específica de integraciones externas.
+   *
+   * Es opcional porque pueden existir preguntas
+   * utilizadas únicamente por UNIESAP.
    */
   integration?: FormQuestionIntegration;
 };

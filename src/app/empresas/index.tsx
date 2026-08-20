@@ -4,6 +4,8 @@ import { router } from "expo-router";
 
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
+import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
+import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
@@ -48,58 +50,73 @@ export default function CompaniesScreen() {
   return (
     <Screen padded={false}>
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.navigate("/dashboard")}
-            style={styles.backButton}
-          >
+        <ResponsiveContainer>
+          {/* HEADER */}
+
+          <View style={styles.header}>
+            <Pressable
+              onPress={() => router.navigate("/dashboard")}
+              style={styles.backButton}
+            >
+              <Text
+                style={[
+                  styles.backText,
+                  {
+                    color: colors.primary,
+                  },
+                ]}
+              >
+                ‹ Dashboard
+              </Text>
+            </Pressable>
+
             <Text
               style={[
-                styles.backText,
+                styles.title,
                 {
-                  color: colors.primary,
+                  color: colors.text,
                 },
               ]}
             >
-              ‹ Dashboard
+              Empresas
             </Text>
-          </Pressable>
 
-          <Text
-            style={[
-              styles.title,
-              {
-                color: colors.text,
-              },
-            ]}
+            <Text
+              style={[
+                styles.subtitle,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Administra las empresas registradas en UNIESAP.
+            </Text>
+          </View>
+
+          {/* ACCIÓN PRINCIPAL */}
+
+          <View style={styles.mainAction}>
+            <AppButton onPress={() => router.navigate("/empresas/nueva")}>
+              + Registrar empresa
+            </AppButton>
+          </View>
+
+          {/* LISTADO RESPONSIVE */}
+
+          <ResponsiveGrid
+            phoneColumns={1}
+            tabletColumns={2}
+            desktopColumns={3}
+            gap={Spacing.md}
           >
-            Empresas
-          </Text>
-
-          <Text
-            style={[
-              styles.subtitle,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-          >
-            Administra las empresas registradas en UNIESAP.
-          </Text>
-        </View>
-
-        <AppButton onPress={() => router.navigate("/empresas/nueva")}>
-          + Registrar empresa
-        </AppButton>
-
-        <View style={styles.list}>
-          {companies.map((company) => (
-            <CompanyCard key={company.id} {...company} />
-          ))}
-        </View>
+            {companies.map((company) => (
+              <CompanyCard key={company.id} {...company} />
+            ))}
+          </ResponsiveGrid>
+        </ResponsiveContainer>
       </ScrollView>
     </Screen>
   );
@@ -134,8 +151,11 @@ function CompanyCard({
           },
         })
       }
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.75 : 1,
+      })}
     >
-      <AppCard style={styles.companyCard}>
+      <AppCard padded={false} style={styles.companyCard}>
         <View
           style={[
             styles.accent,
@@ -185,6 +205,7 @@ function CompanyCard({
                   color: colors.textSecondary,
                 },
               ]}
+              numberOfLines={2}
             >
               {location}
             </Text>
@@ -240,8 +261,7 @@ function CompanyCard({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: Spacing.lg,
+  scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
 
@@ -251,7 +271,6 @@ const styles = StyleSheet.create({
 
   backButton: {
     alignSelf: "flex-start",
-
     marginBottom: Spacing.lg,
   },
 
@@ -263,7 +282,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize.h1,
     fontWeight: "700",
-
     marginBottom: Spacing.sm,
   },
 
@@ -272,14 +290,12 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 
-  list: {
-    gap: Spacing.md,
-
-    marginTop: Spacing.lg,
+  mainAction: {
+    marginBottom: Spacing.lg,
   },
 
   companyCard: {
-    padding: 0,
+    width: "100%",
     overflow: "hidden",
   },
 
@@ -288,6 +304,8 @@ const styles = StyleSheet.create({
   },
 
   companyContent: {
+    minHeight: 110,
+
     flexDirection: "row",
     alignItems: "center",
 
@@ -313,24 +331,25 @@ const styles = StyleSheet.create({
 
   companyInformation: {
     flex: 1,
+    minWidth: 0,
   },
 
   companyName: {
     fontSize: FontSize.cardTitle,
     fontWeight: "700",
-
     marginBottom: Spacing.xs,
   },
 
   location: {
     fontSize: FontSize.small,
-
+    lineHeight: 20,
     marginBottom: Spacing.sm,
   },
 
   companyStats: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
   },
 
   stat: {
@@ -348,7 +367,6 @@ const styles = StyleSheet.create({
 
   arrow: {
     fontSize: 32,
-
     marginLeft: Spacing.sm,
   },
 });

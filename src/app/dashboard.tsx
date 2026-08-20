@@ -3,15 +3,43 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
 import { AppCard } from "@/components/ui/AppCard";
+import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
+import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 
+/*
+ * --------------------------------------------------------------------------
+ * EMPRESA ACTIVA TEMPORAL
+ * --------------------------------------------------------------------------
+ *
+ * Por ahora el Dashboard trabaja con AutoZone como empresa activa.
+ *
+ * Centralizamos aquí el ID para evitar repetir "1" en cada navegación.
+ *
+ * Más adelante este valor será sustituido por algo similar a:
+ *
+ * const { activeCompany } = useActiveCompany();
+ *
+ * y entonces todas las rutas utilizarán:
+ *
+ * activeCompany.id
+ */
+const ACTIVE_COMPANY_ID = "1";
+
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
 
+  /*
+   * Color representativo temporal de AutoZone.
+   *
+   * Más adelante deberá provenir directamente de:
+   *
+   * activeCompany.branding.primaryColor
+   */
   const companyColor = "#F97316";
 
   return (
@@ -20,69 +48,227 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* HEADER */}
+        <ResponsiveContainer>
+          {/* ============================================================ */}
+          {/* HEADER                                                       */}
+          {/* ============================================================ */}
 
-        <View style={styles.header}>
-          <View>
-            <Text
-              style={[
-                styles.brand,
+          <View style={styles.header}>
+            <View style={styles.headerText}>
+              <Text
+                style={[
+                  styles.brand,
+                  {
+                    color: colors.primary,
+                  },
+                ]}
+              >
+                UNIESAP
+              </Text>
+
+              <Text
+                style={[
+                  styles.title,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Hola 👋
+              </Text>
+
+              <Text
+                style={[
+                  styles.subtitle,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                Este es el resumen de tu actividad.
+              </Text>
+            </View>
+
+            {/*
+             * El perfil todavía no tiene una pantalla asociada.
+             *
+             * No agregamos navegación falsa por ahora.
+             * Cuando exista /perfil podremos conectar este botón.
+             */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.profileButton,
                 {
-                  color: colors.primary,
+                  backgroundColor: colors.primarySoft,
+                  opacity: pressed ? 0.75 : 1,
                 },
               ]}
             >
-              UNIESAP
-            </Text>
-
-            <Text
-              style={[
-                styles.title,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Hola 👋
-            </Text>
-
-            <Text
-              style={[
-                styles.subtitle,
-                {
-                  color: colors.textSecondary,
-                },
-              ]}
-            >
-              Este es el resumen de tu actividad.
-            </Text>
+              <Text
+                style={[
+                  styles.profileInitial,
+                  {
+                    color: colors.primary,
+                  },
+                ]}
+              >
+                A
+              </Text>
+            </Pressable>
           </View>
 
-          <Pressable
-            style={[
-              styles.profileButton,
-              {
-                backgroundColor: colors.primarySoft,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.profileInitial,
-                {
-                  color: colors.primary,
-                },
-              ]}
+          {/* ============================================================ */}
+          {/* EMPRESA ACTIVA                                               */}
+          {/* ============================================================ */}
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Empresa activa
+              </Text>
+
+              {/*
+               * Antes "Cambiar" era solamente visual.
+               *
+               * Ahora abre el listado de empresas para que el usuario
+               * pueda consultar otra empresa.
+               *
+               * Cuando implementemos activeCompany, seleccionar una
+               * empresa desde ese listado también cambiará el contexto
+               * activo del Dashboard.
+               */}
+              <Pressable
+                onPress={() => router.navigate("/empresas")}
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  style={[
+                    styles.link,
+                    {
+                      color: colors.primary,
+                    },
+                  ]}
+                >
+                  Cambiar
+                </Text>
+              </Pressable>
+            </View>
+
+            {/*
+             * La tarjeta de empresa ya tenía navegación correcta.
+             *
+             * La conservamos y solamente reutilizamos
+             * ACTIVE_COMPANY_ID.
+             */}
+            <Pressable
+              onPress={() =>
+                router.navigate({
+                  pathname: "/empresas/[id]",
+
+                  params: {
+                    id: ACTIVE_COMPANY_ID,
+                  },
+                })
+              }
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.8 : 1,
+              })}
             >
-              A
-            </Text>
-          </Pressable>
-        </View>
+              <AppCard padded={false} style={styles.companyCard}>
+                <View
+                  style={[
+                    styles.companyAccent,
+                    {
+                      backgroundColor: companyColor,
+                    },
+                  ]}
+                />
 
-        {/* EMPRESA ACTIVA */}
+                <View style={styles.companyContent}>
+                  <View
+                    style={[
+                      styles.companyLogo,
+                      {
+                        backgroundColor: `${companyColor}20`,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.companyLogoText,
+                        {
+                          color: companyColor,
+                        },
+                      ]}
+                    >
+                      AZ
+                    </Text>
+                  </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
+                  <View style={styles.companyInformation}>
+                    <Text
+                      style={[
+                        styles.companyName,
+                        {
+                          color: colors.text,
+                        },
+                      ]}
+                    >
+                      AutoZone
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.companyLocation,
+                        {
+                          color: colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      San Luis de la Paz, Guanajuato
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.companyActivity,
+                        {
+                          color: colors.textMuted,
+                        },
+                      ]}
+                    >
+                      Última actividad · hace 2 días
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.arrow,
+                      {
+                        color: colors.textMuted,
+                      },
+                    ]}
+                  >
+                    ›
+                  </Text>
+                </View>
+              </AppCard>
+            </Pressable>
+          </View>
+
+          {/* ============================================================ */}
+          {/* RESUMEN                                                      */}
+          {/* ============================================================ */}
+
+          <View style={styles.section}>
             <Text
               style={[
                 styles.sectionTitle,
@@ -91,230 +277,187 @@ export default function DashboardScreen() {
                 },
               ]}
             >
-              Empresa activa
+              Resumen
             </Text>
 
-            <Pressable>
-              <Text
-                style={[
-                  styles.link,
-                  {
-                    color: colors.primary,
-                  },
-                ]}
-              >
-                Cambiar
-              </Text>
-            </Pressable>
+            <ResponsiveGrid
+              phoneColumns={2}
+              tabletColumns={4}
+              desktopColumns={4}
+              gap={Spacing.md}
+            >
+              <StatCard value="12" label="Empresas" />
+
+              <StatCard value="28" label="Inmuebles" />
+
+              <StatCard value="46" label="Inspecciones" />
+
+              <StatCard value="5" label="Pendientes" highlighted />
+            </ResponsiveGrid>
           </View>
 
-          <Pressable
-            onPress={() =>
-              router.navigate({
-                pathname: "/empresas/[id]",
-                params: {
-                  id: "1",
+          {/* ============================================================ */}
+          {/* ACCIONES RÁPIDAS                                             */}
+          {/* ============================================================ */}
+
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                {
+                  color: colors.text,
                 },
-              })
-            }
-          >
-            <AppCard style={styles.companyCard}>
+              ]}
+            >
+              Acciones rápidas
+            </Text>
+
+            <ResponsiveGrid
+              phoneColumns={1}
+              tabletColumns={2}
+              desktopColumns={3}
+              gap={Spacing.md}
+            >
+              {/* -------------------------------------------------------- */}
+              {/* NUEVA EMPRESA                                            */}
+              {/* -------------------------------------------------------- */}
+
+              <QuickAction
+                icon="+"
+                title="Nueva empresa"
+                onPress={() => router.navigate("/empresas/nueva")}
+              />
+
+              {/* -------------------------------------------------------- */}
+              {/* NUEVA INSPECCIÓN                                         */}
+              {/* -------------------------------------------------------- */}
+
+              {/*
+               * Desde Dashboard todavía no conocemos el inmueble.
+               *
+               * Por eso NO debemos saltar directamente a captura.
+               *
+               * Flujo:
+               *
+               * Dashboard
+               *    ↓
+               * Inmuebles
+               *    ↓
+               * seleccionar inmueble
+               *    ↓
+               * Nueva inspección
+               *    ↓
+               * seleccionar formulario
+               *    ↓
+               * Captura
+               */}
+              <QuickAction
+                icon="✓"
+                title="Nueva inspección"
+                onPress={() =>
+                  router.navigate({
+                    pathname: "/empresas/[id]/inmuebles",
+
+                    params: {
+                      id: ACTIVE_COMPANY_ID,
+                    },
+                  })
+                }
+              />
+
+              {/* -------------------------------------------------------- */}
+              {/* REPORTES                                                 */}
+              {/* -------------------------------------------------------- */}
+
+              <QuickAction
+                icon="▤"
+                title="Ver reportes"
+                onPress={() =>
+                  router.navigate({
+                    pathname: "/empresas/[id]/reportes",
+
+                    params: {
+                      id: ACTIVE_COMPANY_ID,
+                    },
+                  })
+                }
+              />
+            </ResponsiveGrid>
+          </View>
+
+          {/* ============================================================ */}
+          {/* ACTIVIDAD RECIENTE                                           */}
+          {/* ============================================================ */}
+
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Actividad reciente
+            </Text>
+
+            <AppCard>
+              <ActivityItem
+                company="AutoZone"
+                action="Inspección actualizada"
+                time="Hace 2 horas"
+                accentColor="#F97316"
+              />
+
               <View
                 style={[
-                  styles.companyAccent,
+                  styles.divider,
                   {
-                    backgroundColor: companyColor,
+                    backgroundColor: colors.divider,
                   },
                 ]}
               />
 
-              <View style={styles.companyContent}>
-                <View
-                  style={[
-                    styles.companyLogo,
-                    {
-                      backgroundColor: `${companyColor}20`,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.companyLogoText,
-                      {
-                        color: companyColor,
-                      },
-                    ]}
-                  >
-                    AZ
-                  </Text>
-                </View>
+              <ActivityItem
+                company="LALA"
+                action="Reporte generado"
+                time="Ayer"
+                accentColor="#EF4444"
+              />
 
-                <View style={styles.companyInformation}>
-                  <Text
-                    style={[
-                      styles.companyName,
-                      {
-                        color: colors.text,
-                      },
-                    ]}
-                  >
-                    AutoZone
-                  </Text>
+              <View
+                style={[
+                  styles.divider,
+                  {
+                    backgroundColor: colors.divider,
+                  },
+                ]}
+              />
 
-                  <Text
-                    style={[
-                      styles.companyLocation,
-                      {
-                        color: colors.textSecondary,
-                      },
-                    ]}
-                  >
-                    San Luis de la Paz, Guanajuato
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.companyActivity,
-                      {
-                        color: colors.textMuted,
-                      },
-                    ]}
-                  >
-                    Última actividad · hace 2 días
-                  </Text>
-                </View>
-
-                <Text
-                  style={[
-                    styles.arrow,
-                    {
-                      color: colors.textMuted,
-                    },
-                  ]}
-                >
-                  ›
-                </Text>
-              </View>
+              <ActivityItem
+                company="Empresa Demo"
+                action="Empresa registrada"
+                time="Hace 3 días"
+                accentColor="#3B82F6"
+              />
             </AppCard>
-          </Pressable>
-        </View>
-
-        {/* RESUMEN */}
-
-        <View style={styles.section}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Resumen
-          </Text>
-
-          <View style={styles.statsGrid}>
-            <StatCard value="12" label="Empresas" />
-
-            <StatCard value="28" label="Inmuebles" />
-
-            <StatCard value="46" label="Inspecciones" />
-
-            <StatCard value="5" label="Pendientes" highlighted />
           </View>
-        </View>
-
-        {/* ACCIONES RÁPIDAS */}
-
-        <View style={styles.section}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Acciones rápidas
-          </Text>
-
-          <View style={styles.actions}>
-            <QuickAction
-              icon="+"
-              title="Nueva empresa"
-              onPress={() => router.navigate("/empresas/nueva")}
-            />
-
-            <QuickAction icon="✓" title="Nueva inspección" />
-
-            <QuickAction icon="▤" title="Ver reportes" />
-          </View>
-        </View>
-
-        {/* ACTIVIDAD */}
-
-        <View style={styles.section}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Actividad reciente
-          </Text>
-
-          <AppCard>
-            <ActivityItem
-              company="AutoZone"
-              action="Inspección actualizada"
-              time="Hace 2 horas"
-              accentColor="#F97316"
-            />
-
-            <View
-              style={[
-                styles.divider,
-                {
-                  backgroundColor: colors.divider,
-                },
-              ]}
-            />
-
-            <ActivityItem
-              company="LALA"
-              action="Reporte generado"
-              time="Ayer"
-              accentColor="#EF4444"
-            />
-
-            <View
-              style={[
-                styles.divider,
-                {
-                  backgroundColor: colors.divider,
-                },
-              ]}
-            />
-
-            <ActivityItem
-              company="Empresa Demo"
-              action="Empresa registrada"
-              time="Hace 3 días"
-              accentColor="#3B82F6"
-            />
-          </AppCard>
-        </View>
+        </ResponsiveContainer>
       </ScrollView>
     </Screen>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/*                              SUBCOMPONENTES                                */
+/*                              STAT CARD                                     */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Tarjeta utilizada en el resumen del Dashboard.
+ *
+ * highlighted permite destacar métricas que requieren atención,
+ * como inspecciones pendientes.
+ */
 function StatCard({
   value,
   label,
@@ -353,6 +496,16 @@ function StatCard({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                              QUICK ACTION                                  */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Acción rápida reutilizable.
+ *
+ * A diferencia de la versión anterior, los accesos principales
+ * del Dashboard ya reciben una función onPress real.
+ */
 function QuickAction({
   icon,
   title,
@@ -360,7 +513,7 @@ function QuickAction({
 }: {
   icon: string;
   title: string;
-  onPress?: () => void;
+  onPress: () => void;
 }) {
   const { colors } = useAppTheme();
 
@@ -369,6 +522,7 @@ function QuickAction({
       onPress={onPress}
       style={({ pressed }) => [
         styles.actionCard,
+
         {
           backgroundColor: colors.surface,
           borderColor: colors.border,
@@ -406,10 +560,35 @@ function QuickAction({
       >
         {title}
       </Text>
+
+      {/*
+       * Añadimos una indicación visual de navegación.
+       */}
+      <Text
+        style={[
+          styles.actionArrow,
+          {
+            color: colors.textMuted,
+          },
+        ]}
+      >
+        ›
+      </Text>
     </Pressable>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                              ACTIVITY ITEM                                 */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Elemento visual del historial reciente.
+ *
+ * Por ahora NO es Pressable porque todavía no contamos
+ * con IDs suficientes para garantizar que cada actividad
+ * pueda abrir correctamente su recurso asociado.
+ */
 function ActivityItem({
   company,
   action,
@@ -478,9 +657,12 @@ function ActivityItem({
 
 const styles = StyleSheet.create({
   scrollContent: {
-    padding: Spacing.lg,
     paddingBottom: Spacing.xxxl,
   },
+
+  /* -------------------------------------------------------------------- */
+  /* HEADER                                                               */
+  /* -------------------------------------------------------------------- */
 
   header: {
     flexDirection: "row",
@@ -488,6 +670,12 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
 
     marginBottom: Spacing.xl,
+  },
+
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: Spacing.md,
   },
 
   brand: {
@@ -513,6 +701,8 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
 
+    flexShrink: 0,
+
     borderRadius: Radius.full,
 
     alignItems: "center",
@@ -524,6 +714,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  /* -------------------------------------------------------------------- */
+  /* SECCIONES                                                            */
+  /* -------------------------------------------------------------------- */
+
   section: {
     marginBottom: Spacing.xl,
   },
@@ -532,6 +726,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+
+    gap: Spacing.md,
 
     marginBottom: Spacing.md,
   },
@@ -550,8 +746,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
 
+  /* -------------------------------------------------------------------- */
+  /* EMPRESA ACTIVA                                                       */
+  /* -------------------------------------------------------------------- */
+
   companyCard: {
-    padding: 0,
     overflow: "hidden",
   },
 
@@ -570,6 +769,8 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
 
+    flexShrink: 0,
+
     borderRadius: Radius.md,
 
     alignItems: "center",
@@ -585,6 +786,7 @@ const styles = StyleSheet.create({
 
   companyInformation: {
     flex: 1,
+    minWidth: 0,
   },
 
   companyName: {
@@ -605,21 +807,19 @@ const styles = StyleSheet.create({
   },
 
   arrow: {
+    flexShrink: 0,
+
     fontSize: 32,
+
     marginLeft: Spacing.sm,
   },
 
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-
-    justifyContent: "space-between",
-
-    rowGap: Spacing.md,
-  },
+  /* -------------------------------------------------------------------- */
+  /* RESUMEN                                                              */
+  /* -------------------------------------------------------------------- */
 
   statCard: {
-    width: "48%",
+    width: "100%",
   },
 
   statValue: {
@@ -633,11 +833,12 @@ const styles = StyleSheet.create({
     fontSize: FontSize.small,
   },
 
-  actions: {
-    gap: Spacing.sm,
-  },
+  /* -------------------------------------------------------------------- */
+  /* ACCIONES RÁPIDAS                                                     */
+  /* -------------------------------------------------------------------- */
 
   actionCard: {
+    width: "100%",
     minHeight: 72,
 
     flexDirection: "row",
@@ -653,6 +854,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
 
+    flexShrink: 0,
+
     borderRadius: Radius.md,
 
     alignItems: "center",
@@ -667,9 +870,24 @@ const styles = StyleSheet.create({
   },
 
   actionTitle: {
+    flex: 1,
+    minWidth: 0,
+
     fontSize: FontSize.body,
     fontWeight: "600",
   },
+
+  actionArrow: {
+    flexShrink: 0,
+
+    fontSize: 26,
+
+    marginLeft: Spacing.sm,
+  },
+
+  /* -------------------------------------------------------------------- */
+  /* ACTIVIDAD                                                            */
+  /* -------------------------------------------------------------------- */
 
   activity: {
     minHeight: 64,
@@ -682,6 +900,8 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
 
+    flexShrink: 0,
+
     borderRadius: Radius.full,
 
     marginRight: Spacing.md,
@@ -689,6 +909,7 @@ const styles = StyleSheet.create({
 
   activityContent: {
     flex: 1,
+    minWidth: 0,
   },
 
   activityCompany: {
@@ -703,6 +924,8 @@ const styles = StyleSheet.create({
   },
 
   activityTime: {
+    flexShrink: 0,
+
     fontSize: FontSize.caption,
 
     marginLeft: Spacing.sm,

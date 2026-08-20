@@ -3,6 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 
 import { AppCard } from "@/components/ui/AppCard";
+import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
+import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/data/companies";
@@ -15,14 +17,33 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 import { useAppTheme } from "@/hooks/useAppTheme";
 
 export default function CompanyInspectionsScreen() {
+  /*
+   * Obtiene los colores del tema actual.
+   *
+   * Esto mantiene automáticamente compatibilidad
+   * con modo claro y oscuro.
+   */
   const { colors } = useAppTheme();
 
+  /*
+   * Recupera el ID dinámico de la empresa:
+   *
+   * /empresas/[id]/inspecciones
+   */
   const { id } = useLocalSearchParams<{
     id: string;
   }>();
 
+  /*
+   * Recuperamos la empresa desde la capa
+   * centralizada de datos.
+   */
   const company = getCompanyById(id);
 
+  /*
+   * Si el ID no corresponde a una empresa
+   * existente mostramos un estado controlado.
+   */
   if (!company) {
     return (
       <Screen>
@@ -53,8 +74,19 @@ export default function CompanyInspectionsScreen() {
     );
   }
 
+  /*
+   * Recuperamos únicamente las inspecciones
+   * que pertenecen a la empresa actual.
+   */
   const companyInspections = getInspectionsByCompanyId(company.id);
 
+  /*
+   * Calculamos los contadores del resumen
+   * directamente desde los datos.
+   *
+   * Así evitamos mantener números escritos
+   * manualmente dentro de la interfaz.
+   */
   const completed = companyInspections.filter(
     (inspection) => inspection.status === "completed",
   ).length;
@@ -70,138 +102,218 @@ export default function CompanyInspectionsScreen() {
   return (
     <Screen padded={false}>
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
-          onPress={() =>
-            router.navigate({
-              pathname: "/empresas/[id]",
-              params: {
-                id,
-              },
-            })
-          }
-        >
+        {/*
+         * ResponsiveContainer controla globalmente:
+         *
+         * - espacio superior
+         * - padding horizontal
+         * - ancho máximo
+         * - centrado en tablet y web
+         */}
+        <ResponsiveContainer>
+          {/* ====================================================== */}
+          {/* NAVEGACIÓN */}
+          {/* ====================================================== */}
+
+          <Pressable
+            onPress={() =>
+              router.navigate({
+                pathname: "/empresas/[id]",
+
+                params: {
+                  id,
+                },
+              })
+            }
+          >
+            <Text
+              style={[
+                styles.backText,
+                {
+                  color: colors.primary,
+                },
+              ]}
+            >
+              ‹ Empresa
+            </Text>
+          </Pressable>
+
+          {/* ====================================================== */}
+          {/* CONTEXTO DE EMPRESA */}
+          {/* ====================================================== */}
+
           <Text
             style={[
-              styles.backText,
+              styles.overline,
               {
-                color: colors.primary,
+                /*
+                 * Conservamos el color representativo
+                 * definido para cada empresa.
+                 */
+                color: company.branding.primaryColor,
               },
             ]}
           >
-            ‹ Empresa
+            {company.name.toUpperCase()}
           </Text>
-        </Pressable>
 
-        <Text
-          style={[
-            styles.overline,
-            {
-              color: company.branding.primaryColor,
-            },
-          ]}
-        >
-          {company.name.toUpperCase()}
-        </Text>
+          {/* ====================================================== */}
+          {/* ENCABEZADO */}
+          {/* ====================================================== */}
 
-        <Text
-          style={[
-            styles.title,
-            {
-              color: colors.text,
-            },
-          ]}
-        >
-          Inspecciones
-        </Text>
+          <Text
+            style={[
+              styles.title,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Inspecciones
+          </Text>
 
-        <Text
-          style={[
-            styles.subtitle,
-            {
-              color: colors.textSecondary,
-            },
-          ]}
-        >
-          Consulta el historial de capturas realizadas para esta empresa.
-        </Text>
+          <Text
+            style={[
+              styles.subtitle,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Consulta el historial de capturas realizadas para esta empresa.
+          </Text>
 
-        <View style={styles.summary}>
-          <SummaryCard value={completed.toString()} label="Finalizadas" />
+          {/* ====================================================== */}
+          {/* RESUMEN */}
+          {/* ====================================================== */}
 
-          <SummaryCard
-            value={inProgress.toString()}
-            label="En proceso"
-            warning={inProgress > 0}
-          />
+          {/*
+           * Tenemos exactamente tres estados principales,
+           * por lo que mantenemos tres tarjetas en todos
+           * los tamaños.
+           */}
+          <ResponsiveGrid
+            phoneColumns={3}
+            tabletColumns={3}
+            desktopColumns={3}
+            gap={Spacing.sm}
+          >
+            <SummaryCard value={completed.toString()} label="Finalizadas" />
 
-          <SummaryCard value={drafts.toString()} label="Borradores" />
-        </View>
+            <SummaryCard
+              value={inProgress.toString()}
+              label="En proceso"
+              warning={inProgress > 0}
+            />
 
-        <Text
-          style={[
-            styles.sectionTitle,
-            {
-              color: colors.text,
-            },
-          ]}
-        >
-          Historial
-        </Text>
+            <SummaryCard value={drafts.toString()} label="Borradores" />
+          </ResponsiveGrid>
 
-        <View style={styles.list}>
-          {companyInspections.map((inspection) => {
-            const property = getPropertyById(inspection.propertyId);
+          {/* ====================================================== */}
+          {/* HISTORIAL */}
+          {/* ====================================================== */}
 
-            const form = getFormById(inspection.formId);
+          <Text
+            style={[
+              styles.sectionTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Historial
+          </Text>
 
-            return (
-              <InspectionCard
-                key={inspection.id}
-                inspectionId={inspection.id}
-                companyRouteId={id}
-                form={form?.title ?? "Formulario no disponible"}
-                property={property?.name ?? "Inmueble no disponible"}
-                date={inspection.date}
-                inspector={inspection.inspector}
-                status={inspection.status}
-              />
-            );
-          })}
-        </View>
+          {/*
+           * ResponsiveGrid reemplaza la lista vertical fija.
+           *
+           * Móvil   → 1 inspección por fila
+           * Tablet  → 2 inspecciones por fila
+           * Desktop → 3 inspecciones por fila
+           */}
+          <ResponsiveGrid
+            phoneColumns={1}
+            tabletColumns={2}
+            desktopColumns={3}
+            gap={Spacing.md}
+          >
+            {companyInspections.map((inspection) => {
+              /*
+               * Cada inspección solamente almacena IDs.
+               *
+               * Aquí resolvemos:
+               *
+               * propertyId → nombre del inmueble
+               * formId     → nombre del formulario
+               */
+              const property = getPropertyById(inspection.propertyId);
 
-        {companyInspections.length === 0 && (
-          <AppCard style={styles.emptyCard}>
-            <Text
-              style={[
-                styles.emptyTitle,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Sin inspecciones
-            </Text>
+              const form = getFormById(inspection.formId);
 
-            <Text
-              style={[
-                styles.emptyDescription,
-                {
-                  color: colors.textSecondary,
-                },
-              ]}
-            >
-              Todavía no existen inspecciones registradas para esta empresa.
-            </Text>
-          </AppCard>
-        )}
+              return (
+                <InspectionCard
+                  key={inspection.id}
+                  inspectionId={inspection.id}
+                  companyRouteId={id}
+                  form={form?.title ?? "Formulario no disponible"}
+                  property={property?.name ?? "Inmueble no disponible"}
+                  date={inspection.date}
+                  inspector={inspection.inspector}
+                  status={inspection.status}
+                />
+              );
+            })}
+          </ResponsiveGrid>
+
+          {/* ====================================================== */}
+          {/* ESTADO VACÍO */}
+          {/* ====================================================== */}
+
+          {companyInspections.length === 0 && (
+            <AppCard style={styles.emptyCard}>
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Sin inspecciones
+              </Text>
+
+              <Text
+                style={[
+                  styles.emptyDescription,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                Todavía no existen inspecciones registradas para esta empresa.
+              </Text>
+            </AppCard>
+          )}
+        </ResponsiveContainer>
       </ScrollView>
     </Screen>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                               SUMMARY CARD                                 */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Tarjeta pequeña utilizada para mostrar
+ * los contadores principales.
+ *
+ * warning permite resaltar valores
+ * que requieren atención.
+ */
 function SummaryCard({
   value,
   label,
@@ -233,6 +345,7 @@ function SummaryCard({
             color: colors.textSecondary,
           },
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
@@ -240,6 +353,17 @@ function SummaryCard({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                              INSPECTION CARD                               */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Tarjeta que representa una inspección.
+ *
+ * Recibe la información ya resuelta para que
+ * el componente no tenga que consultar
+ * directamente la capa de datos.
+ */
 function InspectionCard({
   inspectionId,
   companyRouteId,
@@ -255,10 +379,15 @@ function InspectionCard({
   property: string;
   date: string;
   inspector: string;
+
   status: "draft" | "in_progress" | "completed";
 }) {
   const { colors } = useAppTheme();
 
+  /*
+   * Traducimos el estado interno a una
+   * etiqueta entendible para el usuario.
+   */
   const statusLabel =
     status === "completed"
       ? "Finalizada"
@@ -266,6 +395,13 @@ function InspectionCard({
         ? "En proceso"
         : "Borrador";
 
+  /*
+   * El color también depende del estado:
+   *
+   * completed   → verde
+   * in_progress → advertencia
+   * draft       → neutro
+   */
   const statusColor =
     status === "completed"
       ? colors.success
@@ -278,14 +414,27 @@ function InspectionCard({
       onPress={() =>
         router.navigate({
           pathname: "/empresas/[id]/inspecciones/[inspectionId]",
+
+          /*
+           * Para abrir el detalle necesitamos
+           * conservar empresa + inspección.
+           */
           params: {
             id: companyRouteId,
             inspectionId,
           },
         })
       }
+      style={({ pressed }) => ({
+        /*
+         * Feedback visual al tocar la tarjeta.
+         */
+        opacity: pressed ? 0.75 : 1,
+      })}
     >
-      <AppCard>
+      <AppCard style={styles.inspectionCard}>
+        {/* CABECERA */}
+
         <View style={styles.cardHeader}>
           <View
             style={[
@@ -315,6 +464,7 @@ function InspectionCard({
                   color: colors.text,
                 },
               ]}
+              numberOfLines={2}
             >
               {form}
             </Text>
@@ -326,6 +476,7 @@ function InspectionCard({
                   color: colors.textSecondary,
                 },
               ]}
+              numberOfLines={2}
             >
               {property}
             </Text>
@@ -343,6 +494,8 @@ function InspectionCard({
           </Text>
         </View>
 
+        {/* DIVISOR */}
+
         <View
           style={[
             styles.divider,
@@ -352,8 +505,10 @@ function InspectionCard({
           ]}
         />
 
+        {/* METADATOS */}
+
         <View style={styles.meta}>
-          <View>
+          <View style={styles.metaInformation}>
             <Text
               style={[
                 styles.metaText,
@@ -372,6 +527,7 @@ function InspectionCard({
                   color: colors.textSecondary,
                 },
               ]}
+              numberOfLines={1}
             >
               Inspector: {inspector}
             </Text>
@@ -393,6 +549,22 @@ function InspectionCard({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                UTILIDADES                                  */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Convierte:
+ *
+ * 2026-08-20
+ *
+ * en:
+ *
+ * 20/08/2026
+ *
+ * Si el valor no tiene el formato esperado,
+ * regresamos el texto original.
+ */
 function formatDate(date: string) {
   const parts = date.split("-");
 
@@ -405,50 +577,71 @@ function formatDate(date: string) {
   return `${day}/${month}/${year}`;
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                   STYLES                                   */
+/* -------------------------------------------------------------------------- */
+
 const styles = StyleSheet.create({
-  container: {
-    padding: Spacing.lg,
+  /*
+   * ResponsiveContainer ya controla
+   * padding horizontal y superior.
+   *
+   * Aquí solamente necesitamos espacio
+   * inferior para el ScrollView.
+   */
+  scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
 
   backText: {
     fontSize: FontSize.small,
+
     fontWeight: "600",
+
     marginBottom: Spacing.lg,
   },
 
   overline: {
     fontSize: FontSize.caption,
+
     fontWeight: "700",
+
     letterSpacing: 1,
+
     marginBottom: Spacing.sm,
   },
 
   title: {
     fontSize: FontSize.h1,
+
     fontWeight: "700",
+
     marginBottom: Spacing.sm,
   },
 
   subtitle: {
     fontSize: FontSize.body,
+
     lineHeight: 24,
+
     marginBottom: Spacing.xl,
   },
 
-  summary: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
-  },
-
+  /*
+   * El ancho de SummaryCard lo determina
+   * ResponsiveGrid.
+   */
   summaryCard: {
-    flex: 1,
+    width: "100%",
+
+    minHeight: 100,
   },
 
   summaryValue: {
     fontSize: FontSize.h2,
+
     fontWeight: "700",
+
     marginBottom: Spacing.xs,
   },
 
@@ -458,16 +651,32 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: FontSize.cardTitle,
+
     fontWeight: "700",
+
+    marginTop: Spacing.xl,
+
     marginBottom: Spacing.md,
   },
 
-  list: {
-    gap: Spacing.md,
+  /*
+   * Cada tarjeta ocupa siempre el 100%
+   * del espacio que ResponsiveGrid le asigna.
+   */
+  inspectionCard: {
+    width: "100%",
+
+    /*
+     * Mantiene una altura mínima razonable.
+     * Esto ayuda a que las filas se vean más
+     * uniformes en tablet y escritorio.
+     */
+    minHeight: 190,
   },
 
   cardHeader: {
     flexDirection: "row",
+
     alignItems: "center",
   },
 
@@ -478,6 +687,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
 
     alignItems: "center",
+
     justifyContent: "center",
 
     marginRight: Spacing.md,
@@ -485,41 +695,65 @@ const styles = StyleSheet.create({
 
   iconText: {
     fontSize: FontSize.h3,
+
     fontWeight: "700",
   },
 
+  /*
+   * minWidth: 0 es importante dentro de
+   * layouts flex porque permite que Text
+   * se reduzca correctamente en tarjetas
+   * más estrechas.
+   */
   cardInfo: {
     flex: 1,
+    minWidth: 0,
   },
 
   formTitle: {
     fontSize: FontSize.body,
+
     fontWeight: "700",
+
     marginBottom: Spacing.xs,
   },
 
   property: {
     fontSize: FontSize.small,
+
+    lineHeight: 20,
   },
 
   arrow: {
     fontSize: 28,
+
     marginLeft: Spacing.sm,
   },
 
   divider: {
     height: 1,
+
     marginVertical: Spacing.md,
   },
 
   meta: {
     flexDirection: "row",
+
     justifyContent: "space-between",
+
     alignItems: "center",
+
+    gap: Spacing.md,
+  },
+
+  metaInformation: {
+    flex: 1,
+    minWidth: 0,
   },
 
   metaText: {
     fontSize: FontSize.caption,
+
     marginBottom: Spacing.xs,
   },
 
@@ -528,7 +762,10 @@ const styles = StyleSheet.create({
   },
 
   status: {
+    flexShrink: 0,
+
     fontSize: FontSize.caption,
+
     fontWeight: "700",
   },
 
@@ -538,22 +775,27 @@ const styles = StyleSheet.create({
 
   emptyTitle: {
     fontSize: FontSize.body,
+
     fontWeight: "700",
+
     marginBottom: Spacing.sm,
   },
 
   emptyDescription: {
     fontSize: FontSize.small,
+
     lineHeight: 20,
   },
 
   notFound: {
     flex: 1,
+
     justifyContent: "center",
   },
 
   notFoundTitle: {
     fontSize: FontSize.h2,
+
     fontWeight: "700",
   },
 });

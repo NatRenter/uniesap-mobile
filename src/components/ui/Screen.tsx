@@ -1,25 +1,33 @@
-import type { ReactNode } from "react";
+import { type PropsWithChildren } from "react";
 
-import { StyleSheet, View, type ViewProps } from "react-native";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Spacing } from "@/constants/theme";
 
+import { useResponsive } from "@/hooks/useResponsive";
+
 import { useAppTheme } from "@/hooks/useAppTheme";
 
-interface ScreenProps extends ViewProps {
-  children: ReactNode;
+type ScreenProps = PropsWithChildren<{
   padded?: boolean;
-}
 
-export function Screen({
-  children,
-  style,
-  padded = true,
-  ...props
-}: ScreenProps) {
+  style?: StyleProp<ViewStyle>;
+}>;
+
+export function Screen({ children, padded = true, style }: ScreenProps) {
   const { colors } = useAppTheme();
+
+  const { isPhone, isTablet } = useResponsive();
+
+  const horizontalPadding = isPhone
+    ? Spacing.lg
+    : isTablet
+      ? Spacing.xl
+      : Spacing.xxl;
+
+  const maxWidth = isPhone ? undefined : isTablet ? 900 : 1180;
 
   return (
     <SafeAreaView
@@ -31,8 +39,17 @@ export function Screen({
       ]}
     >
       <View
-        {...props}
-        style={[styles.container, padded && styles.padded, style]}
+        style={[
+          styles.container,
+
+          {
+            maxWidth,
+
+            paddingHorizontal: padded ? horizontalPadding : 0,
+          },
+
+          style,
+        ]}
       >
         {children}
       </View>
@@ -47,9 +64,9 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-  },
 
-  padded: {
-    padding: Spacing.lg,
+    width: "100%",
+
+    alignSelf: "center",
   },
 });
