@@ -1052,21 +1052,24 @@ function getSyncStatusInfo(
     case "synced":
       return {
         label: "Sincronizada",
-
         color: colors.success,
+      };
+
+    case "syncing":
+      return {
+        label: "Sincronizando",
+        color: colors.primary,
       };
 
     case "pending":
       return {
         label: "Pendiente",
-
         color: colors.warning,
       };
 
     case "error":
       return {
         label: "Error Kobo",
-
         color: colors.error,
       };
 
@@ -1074,7 +1077,6 @@ function getSyncStatusInfo(
     default:
       return {
         label: "Local",
-
         color: colors.textMuted,
       };
   }

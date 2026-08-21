@@ -7,7 +7,12 @@ export type InspectionResponse = {
 
 export type InspectionStatus = "draft" | "in_progress" | "completed";
 
-export type InspectionSyncStatus = "local" | "pending" | "synced" | "error";
+export type InspectionSyncStatus =
+  | "local"
+  | "pending"
+  | "synced"
+  | "error"
+  | "syncing";
 
 export type InspectionKoboReference = {
   provider: "kobo";

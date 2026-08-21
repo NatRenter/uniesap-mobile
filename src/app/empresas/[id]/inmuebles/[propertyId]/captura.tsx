@@ -20,8 +20,6 @@ import {
   updateInspection,
 } from "@/repositories/inspectionRepository";
 
-import { exportKoboSubmission } from "@/services/koboInspectionService";
-
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
@@ -404,7 +402,6 @@ export default function CaptureScreen() {
     }
 
     setProcessingAction("finish");
-
     setActionError(null);
 
     const responses = buildResponses();
@@ -412,35 +409,32 @@ export default function CaptureScreen() {
     const inspector = resolveInspectorName(form.questions, responses);
 
     /*
-     * inspectionId se conserva fuera del try
-     * para poder marcar la inspección como error
-     * incluso si Kobo falla.
+     * Si estamos continuando un borrador utilizamos
+     * exactamente el mismo registro.
      */
-    let inspectionId = createdInspectionId;
+    let currentInspectionId = createdInspectionId;
 
     try {
       /*
        * ================================================================
        * PASO 1
-       * GUARDAR PRIMERO EN UNIESAP
+       * FINALIZAR Y PERSISTIR EN UNIESAP
        * ================================================================
        *
-       * Nunca enviamos primero a Kobo.
+       * La captura ya NO intenta comunicarse directamente con Kobo.
        *
-       * Si la red falla, la inspección ya existe
-       * dentro del almacenamiento local.
+       * Formularios Kobo:
+       * completed + pending
+       *
+       * Formularios internos:
+       * completed + local
+       *
+       * Después, InspectionSyncQueueService será responsable
+       * de procesar las inspecciones pending.
        */
 
-      if (inspectionId) {
-        /*
-         * Si anteriormente Kobo falló,
-         * reutilizamos la misma inspección.
-         *
-         * También actualizamos las respuestas
-         * por si el usuario realizó cambios
-         * antes del reintento.
-         */
-        const updatedInspection = await updateInspection(inspectionId, {
+      if (currentInspectionId) {
+        const updatedInspection = await updateInspection(currentInspectionId, {
           inspector,
 
           responses,
@@ -448,6 +442,10 @@ export default function CaptureScreen() {
           status: "completed",
 
           integration: {
+            /*
+             * Si el formulario utiliza Kobo queda listo
+             * para entrar a la cola.
+             */
             syncStatus:
               form.integration?.provider === "kobo" ? "pending" : "local",
 
@@ -459,9 +457,6 @@ export default function CaptureScreen() {
           throw new Error("No fue posible recuperar la inspección guardada.");
         }
       } else {
-        /*
-         * Primera vez que se finaliza.
-         */
         const inspection = await createInspection({
           companyId: id,
 
@@ -479,118 +474,52 @@ export default function CaptureScreen() {
             form.integration?.provider === "kobo" ? "pending" : "local",
         });
 
-        inspectionId = inspection.id;
+        currentInspectionId = inspection.id;
 
         setCreatedInspectionId(inspection.id);
+      }
+
+      if (!currentInspectionId) {
+        throw new Error(
+          "No fue posible obtener el ID de la inspección finalizada.",
+        );
       }
 
       /*
        * ================================================================
        * PASO 2
-       * ¿EL FORMULARIO USA KOBO?
-       * ================================================================
-       */
-
-      if (!form.integration || form.integration.provider !== "kobo") {
-        console.log("Inspección interna guardada:", inspectionId);
-
-        navigateToProperty();
-
-        return;
-      }
-
-      /*
-       * ================================================================
-       * PASO 3
-       * SINCRONIZAR CON KOBO
+       * TERMINAR EL FLUJO DE CAPTURA
        * ================================================================
        *
-       * Actualmente esta llamada termina en
-       * MockKoboService porque KoboClient sigue
-       * configurado en modo mock.
+       * En este punto:
+       *
+       * ✓ la inspección está persistida;
+       * ✓ está marcada como completed;
+       * ✓ si utiliza Kobo está marcada como pending.
+       *
+       * No esperamos a Kobo y no bloqueamos al usuario.
        */
-      const exported = await exportKoboSubmission(form.id, responses);
+      console.log("Inspección finalizada y preparada para sincronización:", {
+        inspectionId: currentInspectionId,
 
-      /*
-       * ================================================================
-       * PASO 4
-       * GUARDAR LA REFERENCIA KOBO
-       * ================================================================
-       */
-
-      await updateInspection(inspectionId, {
-        integration: {
-          syncStatus: "synced",
-
-          kobo: {
-            provider: "kobo",
-
-            assetUid: exported.assetUid,
-
-            submissionId: exported.submission.submissionId,
-
-            /*
-             * Solo añadimos uuid cuando
-             * realmente existe.
-             */
-            ...(exported.submission.uuid
-              ? {
-                  uuid: exported.submission.uuid,
-                }
-              : {}),
-
-            syncedAt: exported.submission.syncedAt ?? new Date().toISOString(),
-          },
-
-          lastSyncError: undefined,
-        },
-      });
-
-      console.log("Inspección sincronizada con Kobo:", {
-        inspectionId,
-
-        submission: exported.submission,
-
-        payload: exported.payload,
+        syncStatus: form.integration?.provider === "kobo" ? "pending" : "local",
       });
 
       navigateToProperty();
     } catch (error) {
       const message = getErrorMessage(error);
 
-      /*
-       * Si la inspección ya alcanzó a guardarse,
-       * NO la eliminamos.
-       *
-       * Solo registramos el error de sincronización.
-       */
-      if (inspectionId) {
-        await updateInspection(inspectionId, {
-          integration: {
-            syncStatus: "error",
-
-            lastSyncError: message,
-          },
-        });
-
-        setCreatedInspectionId(inspectionId);
-      }
-
-      console.error(
-        "La inspección se guardó, pero ocurrió un error durante la sincronización:",
-        error,
-      );
+      console.error("No fue posible finalizar la inspección:", error);
 
       setActionError(
-        inspectionId
-          ? `La inspección fue guardada en UNIESAP, pero no pudo sincronizarse con Kobo: ${message}`
+        currentInspectionId
+          ? `La inspección permanece guardada en UNIESAP, pero ocurrió un error al finalizarla: ${message}`
           : `No fue posible guardar la inspección: ${message}`,
       );
     } finally {
       setProcessingAction(null);
     }
   };
-
   /* ---------------------------------------------------------------------- */
   /*                              NAVEGACIÓN                                */
   /* ---------------------------------------------------------------------- */
@@ -614,7 +543,7 @@ export default function CaptureScreen() {
     processingAction === "draft"
       ? "● Guardando..."
       : processingAction === "finish"
-        ? "● Sincronizando..."
+        ? "● Finalizando..."
         : createdInspectionId
           ? "● Guardada localmente"
           : "● Borrador";
@@ -818,7 +747,7 @@ export default function CaptureScreen() {
                       ]}
                     >
                       {processingAction === "finish"
-                        ? "Sincronizando"
+                        ? "Finalizando"
                         : processingAction === "draft"
                           ? "Guardando"
                           : createdInspectionId
@@ -953,7 +882,7 @@ export default function CaptureScreen() {
             <View style={styles.actionButton}>
               <AppButton onPress={handleFinish}>
                 {processingAction === "finish"
-                  ? "Sincronizando..."
+                  ? "Finalizando..."
                   : createdInspectionId
                     ? "Reintentar sincronización"
                     : "Finalizar inspección"}

@@ -16,14 +16,14 @@ import { getFormById } from "@/data/forms";
 import { getInspectionById } from "@/data/inspections";
 import { getPropertyById } from "@/data/properties";
 
-import { updateInspection } from "@/repositories/inspectionRepository";
-
-import { exportKoboSubmission } from "@/services/koboInspectionService";
+import { syncInspection } from "@/services/inspectionSyncService";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useResponsive } from "@/hooks/useResponsive";
+
+import type { InspectionSyncStatus } from "@/types/inspection";
 
 export default function InspectionDetailsScreen() {
   const { colors } = useAppTheme();
@@ -173,77 +173,29 @@ export default function InspectionDetailsScreen() {
     setIsRetrying(true);
     setRetryError(null);
 
-    /*
-     * Antes de reintentar dejamos registrado
-     * que la inspección está pendiente.
-     */
-    await updateInspection(inspection.id, {
-      integration: {
-        ...inspection.integration,
-
-        syncStatus: "pending",
-
-        lastSyncError: undefined,
-      },
-    });
-
-    setRefreshVersion((value) => value + 1);
-
     try {
       /*
-       * Reutilizamos exactamente las respuestas
-       * almacenadas en la inspección.
+       * Toda la lógica de sincronización vive ahora
+       * dentro de InspectionSyncService.
        *
-       * No creamos una segunda Inspection.
+       * Esta pantalla únicamente solicita el reintento.
        */
-      const exported = await exportKoboSubmission(
-        form.id,
-        inspection.responses,
-      );
+      const result = await syncInspection(inspection.id);
 
-      await updateInspection(inspection.id, {
-        integration: {
-          syncStatus: "synced",
+      if (result.status === "error") {
+        setRetryError(result.error);
+      } else {
+        console.log("Reintento de sincronización procesado:", result);
+      }
 
-          kobo: {
-            provider: "kobo",
-
-            assetUid: exported.assetUid,
-
-            submissionId: exported.submission.submissionId,
-
-            ...(exported.submission.uuid
-              ? {
-                  uuid: exported.submission.uuid,
-                }
-              : {}),
-
-            syncedAt: exported.submission.syncedAt ?? new Date().toISOString(),
-          },
-
-          lastSyncError: undefined,
-        },
-      });
-
-      console.log("Sincronización reintentada correctamente:", {
-        inspectionId: inspection.id,
-
-        submission: exported.submission,
-      });
-
+      /*
+       * El repositorio mantiene una copia hidratada en memoria.
+       * Forzamos un render para volver a leer la inspección
+       * y mostrar synced/error/syncing según corresponda.
+       */
       setRefreshVersion((value) => value + 1);
     } catch (error) {
       const message = getErrorMessage(error);
-
-      await updateInspection(inspection.id, {
-        integration: {
-          ...inspection.integration,
-
-          syncStatus: "error",
-
-          lastSyncError: message,
-        },
-      });
 
       setRetryError(message);
 
@@ -968,7 +920,7 @@ function Divider() {
 /* -------------------------------------------------------------------------- */
 
 function getSyncStatusInfo(
-  status: "local" | "pending" | "synced" | "error",
+  status: InspectionSyncStatus,
   colors: {
     success: string;
     warning: string;
@@ -986,6 +938,16 @@ function getSyncStatusInfo(
           "La inspección fue enviada correctamente y tiene una referencia Kobo asociada.",
 
         color: colors.success,
+      };
+
+    case "syncing":
+      return {
+        label: "Sincronizando con Kobo",
+
+        description:
+          "UNIESAP está enviando actualmente esta inspección al servicio Kobo.",
+
+        color: colors.primary,
       };
 
     case "pending":

@@ -51,7 +51,7 @@ type InspectionRow = {
 
   status: "draft" | "in_progress" | "completed";
 
-  sync_status: "local" | "pending" | "synced" | "error";
+  sync_status: "local" | "pending" | "syncing" | "synced" | "error";
 
   kobo_asset_uid: string | null;
 
