@@ -26,8 +26,8 @@ import type {
  * REPOSITORIO DE INSPECCIONES
  * ============================================================================
  *
- * Este repositorio continúa siendo el punto central desde el cual
- * las pantallas de UNIESAP consultan y modifican inspecciones.
+ * Esta capa continúa siendo el punto central desde el cual las pantallas
+ * de UNIESAP consultan y modifican inspecciones.
  *
  * Durante esta etapa utilizamos una estrategia híbrida:
  *
@@ -37,8 +37,18 @@ import type {
  * ANDROID / IOS
  *   → memoria + SQLite
  *
- * Más adelante migraremos las consultas a SQLite de forma completamente
- * asíncrona y podremos eliminar la copia temporal en memoria.
+ * Las consultas siguen siendo síncronas temporalmente porque leen la copia
+ * hidratada en memoria.
+ *
+ * Las mutaciones YA son asíncronas:
+ *
+ * createInspection()
+ * updateInspection()
+ * deleteInspection()
+ * updateInspectionSyncStatus()
+ *
+ * Esto garantiza que una operación de escritura no se considere terminada
+ * hasta que la persistencia correspondiente haya confirmado el guardado.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -46,15 +56,10 @@ import type {
 /* -------------------------------------------------------------------------- */
 
 /*
- * En web intentamos recuperar primero las inspecciones
- * almacenadas previamente en localStorage.
+ * En web intentamos recuperar primero localStorage.
  *
- * Si todavía no existen datos guardados,
- * utilizamos las inspecciones iniciales de desarrollo.
- *
- * En Android/iOS partimos temporalmente del seed y,
- * posteriormente, hydrateInspectionRepository()
- * sustituirá este contenido por lo almacenado en SQLite.
+ * En Android/iOS utilizamos temporalmente el seed mientras RootLayout
+ * inicializa SQLite e hidrata posteriormente este repositorio.
  */
 const initialRepositoryData =
   Platform.OS === "web"
@@ -62,20 +67,14 @@ const initialRepositoryData =
     : initialInspections;
 
 /*
- * IMPORTANTE:
- *
  * Conservamos siempre la misma referencia del arreglo.
  *
- * Algunas pantallas del prototipo todavía dependen
- * del comportamiento síncrono del repositorio.
+ * Algunas pantallas todavía utilizan las consultas síncronas y dependen
+ * de esta copia hidratada en memoria.
  */
 export const inspections: Inspection[] =
   initialRepositoryData.map(cloneInspection);
 
-/*
- * Evita hidratar SQLite varias veces
- * durante la misma ejecución.
- */
 let hydrationPromise: Promise<void> | null = null;
 
 let hydrated = false;
@@ -99,10 +98,6 @@ export type CreateInspectionInput = {
 
   syncStatus: InspectionSyncStatus;
 
-  /*
-   * Permitimos asociar evidencias desde el momento
-   * en que se crea una inspección.
-   */
   evidenceIds?: string[];
 };
 
@@ -111,27 +106,15 @@ export type CreateInspectionInput = {
 /* -------------------------------------------------------------------------- */
 
 /*
- * ============================================================================
- * hydrateInspectionRepository()
- * ============================================================================
+ * Reconstruye la copia en memoria a partir del almacenamiento persistente.
  *
- * ANDROID / IOS
+ * WEB:
+ * localStorage ya fue leído al crear initialRepositoryData.
  *
- * Lee SQLite y sustituye la copia temporal
- * almacenada en memoria.
- *
- * WEB
- *
- * localStorage ya fue leído durante la creación
- * de initialRepositoryData, así que únicamente
- * marcamos el repositorio como hidratado.
+ * ANDROID / IOS:
+ * lee SQLite después de que las migraciones y el seed hayan terminado.
  */
 export async function hydrateInspectionRepository(): Promise<void> {
-  /*
-   * --------------------------------------------------------------------------
-   * WEB
-   * --------------------------------------------------------------------------
-   */
   if (Platform.OS === "web") {
     hydrated = true;
 
@@ -142,20 +125,10 @@ export async function hydrateInspectionRepository(): Promise<void> {
     return;
   }
 
-  /*
-   * --------------------------------------------------------------------------
-   * ANDROID / IOS
-   * --------------------------------------------------------------------------
-   */
-
   if (hydrated) {
     return;
   }
 
-  /*
-   * Si otra parte de la aplicación ya inició
-   * la hidratación reutilizamos la misma Promise.
-   */
   if (hydrationPromise) {
     return hydrationPromise;
   }
@@ -165,17 +138,12 @@ export async function hydrateInspectionRepository(): Promise<void> {
   return hydrationPromise;
 }
 
-/*
- * Obtiene todas las inspecciones almacenadas
- * persistentemente en SQLite.
- */
-async function hydrateFromDatabase() {
+async function hydrateFromDatabase(): Promise<void> {
   const persistedInspections = await selectAllInspections();
 
   /*
    * No sustituimos la referencia de `inspections`.
-   *
-   * En su lugar reemplazamos su contenido.
+   * Reemplazamos únicamente su contenido.
    */
   inspections.splice(
     0,
@@ -195,10 +163,10 @@ async function hydrateFromDatabase() {
 /* -------------------------------------------------------------------------- */
 
 /*
- * Estas funciones siguen siendo síncronas temporalmente.
+ * Estas consultas permanecen síncronas por ahora.
  *
- * Esto permite mantener funcionando las pantallas actuales
- * mientras migramos progresivamente a SQLite asíncrono.
+ * RootLayout hidrata la copia en memoria antes de permitir que las pantallas
+ * de Android/iOS comiencen a utilizarla.
  */
 
 export function getInspections(): Inspection[] {
@@ -227,7 +195,21 @@ export function getInspectionsByPropertyId(propertyId: string): Inspection[] {
 /*                               CREACIÓN                                     */
 /* -------------------------------------------------------------------------- */
 
-export function createInspection(input: CreateInspectionInput): Inspection {
+/*
+ * Crea primero la inspección en la copia en memoria y después espera
+ * a que la plataforma confirme su persistencia.
+ *
+ * Si la persistencia falla:
+ *
+ * 1. revertimos el cambio en memoria;
+ * 2. propagamos el error a la pantalla.
+ *
+ * Así CaptureScreen NO continuará hacia Kobo si UNIESAP no pudo guardar
+ * primero la inspección.
+ */
+export async function createInspection(
+  input: CreateInspectionInput,
+): Promise<Inspection> {
   const inspection: Inspection = {
     id: createInspectionId(),
 
@@ -255,38 +237,47 @@ export function createInspection(input: CreateInspectionInput): Inspection {
   };
 
   /*
-   * Primero actualizamos la copia
-   * utilizada inmediatamente por la interfaz.
+   * Actualización optimista de la copia utilizada por la interfaz.
    */
   inspections.unshift(inspection);
 
-  /*
-   * WEB
-   *
-   * Persistimos el estado completo
-   * en localStorage.
-   */
-  persistWebState();
+  try {
+    await persistCreatedInspection(inspection);
 
-  /*
-   * ANDROID / IOS
-   *
-   * Persistimos la nueva inspección
-   * en SQLite.
-   */
-  persistNewInspection(inspection);
+    return cloneInspection(inspection);
+  } catch (error) {
+    /*
+     * La escritura persistente falló.
+     * Revertimos el alta en memoria.
+     */
+    removeInspectionFromMemory(inspection.id);
 
-  return cloneInspection(inspection);
+    /*
+     * En web volvemos a escribir localStorage por seguridad,
+     * aunque normalmente el error provino precisamente de esta escritura.
+     */
+    if (Platform.OS === "web") {
+      tryPersistWebState();
+    }
+
+    throw error;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
 /*                             ACTUALIZACIÓN                                  */
 /* -------------------------------------------------------------------------- */
 
-export function updateInspection(
+/*
+ * Actualiza una inspección existente y espera a que el nuevo estado quede
+ * persistido antes de resolver la Promise.
+ *
+ * Si la persistencia falla restauramos la versión anterior en memoria.
+ */
+export async function updateInspection(
   id: string,
   changes: Partial<Inspection>,
-): Inspection | undefined {
+): Promise<Inspection | undefined> {
   const inspectionIndex = inspections.findIndex(
     (inspection) => inspection.id === id,
   );
@@ -295,19 +286,213 @@ export function updateInspection(
     return undefined;
   }
 
-  const currentInspection = inspections[inspectionIndex];
+  const currentInspection = cloneInspection(inspections[inspectionIndex]);
+
+  const updatedInspection = mergeInspectionChanges(currentInspection, changes);
 
   /*
-   * Construimos la nueva versión sin permitir
-   * que respuestas, evidencias o integración
-   * se pierdan accidentalmente.
+   * Actualización optimista.
    */
-  const updatedInspection: Inspection = {
+  inspections[inspectionIndex] = updatedInspection;
+
+  try {
+    await persistUpdatedInspection(updatedInspection);
+
+    return cloneInspection(updatedInspection);
+  } catch (error) {
+    /*
+     * SQLite/localStorage no confirmó la actualización.
+     * Restauramos la versión previa en memoria.
+     */
+    inspections[inspectionIndex] = currentInspection;
+
+    if (Platform.OS === "web") {
+      tryPersistWebState();
+    }
+
+    throw error;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               ELIMINACIÓN                                  */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * La eliminación también espera confirmación de persistencia.
+ *
+ * En caso de error restauramos el registro eliminado en la posición
+ * que ocupaba originalmente.
+ */
+export async function deleteInspection(id: string): Promise<boolean> {
+  const inspectionIndex = inspections.findIndex(
+    (inspection) => inspection.id === id,
+  );
+
+  if (inspectionIndex === -1) {
+    return false;
+  }
+
+  const deletedInspection = cloneInspection(inspections[inspectionIndex]);
+
+  inspections.splice(inspectionIndex, 1);
+
+  try {
+    await persistDeletedInspection(id);
+
+    return true;
+  } catch (error) {
+    /*
+     * Revertimos la eliminación en memoria.
+     */
+    inspections.splice(inspectionIndex, 0, deletedInspection);
+
+    if (Platform.OS === "web") {
+      tryPersistWebState();
+    }
+
+    throw error;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                       ESTADO DE SINCRONIZACIÓN                             */
+/* -------------------------------------------------------------------------- */
+
+export async function updateInspectionSyncStatus(
+  id: string,
+  syncStatus: InspectionSyncStatus,
+  lastSyncError?: string,
+): Promise<Inspection | undefined> {
+  const inspection = getInspectionById(id);
+
+  if (!inspection) {
+    return undefined;
+  }
+
+  return updateInspection(id, {
+    integration: {
+      ...inspection.integration,
+
+      syncStatus,
+
+      lastSyncError,
+    },
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/*                     PERSISTENCIA SEGÚN PLATAFORMA                         */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Crear:
+ *
+ * WEB         → localStorage
+ * ANDROID/iOS → SQLite
+ */
+async function persistCreatedInspection(inspection: Inspection): Promise<void> {
+  if (Platform.OS === "web") {
+    persistWebState();
+
+    return;
+  }
+
+  await insertInspection(inspection);
+}
+
+/*
+ * Actualizar:
+ *
+ * WEB         → localStorage
+ * ANDROID/iOS → SQLite
+ */
+async function persistUpdatedInspection(inspection: Inspection): Promise<void> {
+  if (Platform.OS === "web") {
+    persistWebState();
+
+    return;
+  }
+
+  await replaceInspection(inspection);
+}
+
+/*
+ * Eliminar:
+ *
+ * WEB         → localStorage
+ * ANDROID/iOS → SQLite
+ */
+async function persistDeletedInspection(id: string): Promise<void> {
+  if (Platform.OS === "web") {
+    persistWebState();
+
+    return;
+  }
+
+  const deleted = await deleteInspectionFromDatabase(id);
+
+  /*
+   * Si SQLite no eliminó ninguna fila consideramos
+   * que la operación no quedó confirmada.
+   */
+  if (!deleted) {
+    throw new Error(
+      `No se encontró la inspección ${id} en SQLite para eliminarla.`,
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                          PERSISTENCIA WEB                                  */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * localStorage es síncrono, pero dejamos esta operación dentro del flujo
+ * async del repositorio para conservar una API homogénea entre plataformas.
+ */
+function persistWebState(): void {
+  saveWebInspections(inspections.map(cloneInspection));
+}
+
+/*
+ * Se utiliza únicamente durante rollbacks.
+ *
+ * No sustituye el error original si localStorage tampoco puede escribirse.
+ */
+function tryPersistWebState(): void {
+  try {
+    persistWebState();
+  } catch (error) {
+    console.error(
+      "No fue posible restaurar localStorage después de revertir una operación:",
+      error,
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                           FUSIÓN DE CAMBIOS                                */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Centralizamos aquí la lógica que conserva:
+ *
+ * responses
+ * evidenceIds
+ * integration
+ * integration.kobo
+ *
+ * durante una actualización parcial.
+ */
+function mergeInspectionChanges(
+  currentInspection: Inspection,
+  changes: Partial<Inspection>,
+): Inspection {
+  return {
     ...currentInspection,
 
     ...changes,
-
-    /* RESPUESTAS */
 
     responses:
       changes.responses !== undefined
@@ -318,14 +503,10 @@ export function updateInspection(
             ...response,
           })),
 
-    /* EVIDENCIAS */
-
     evidenceIds:
       changes.evidenceIds !== undefined
         ? [...changes.evidenceIds]
         : [...currentInspection.evidenceIds],
-
-    /* INTEGRACIÓN */
 
     integration:
       changes.integration !== undefined
@@ -334,16 +515,6 @@ export function updateInspection(
 
             ...changes.integration,
 
-            /*
-             * Kobo necesita una fusión adicional.
-             *
-             * Esto evita perder:
-             *
-             * assetUid
-             * submissionId
-             * uuid
-             * syncedAt
-             */
             ...(changes.integration.kobo
               ? {
                   kobo: {
@@ -374,202 +545,29 @@ export function updateInspection(
             }
           : undefined,
   };
-
-  /*
-   * Actualizamos la misma posición
-   * dentro del arreglo.
-   */
-  inspections[inspectionIndex] = updatedInspection;
-
-  /*
-   * WEB
-   */
-  persistWebState();
-
-  /*
-   * ANDROID / IOS
-   */
-  persistUpdatedInspection(updatedInspection);
-
-  return cloneInspection(updatedInspection);
-}
-
-/* -------------------------------------------------------------------------- */
-/*                               ELIMINACIÓN                                  */
-/* -------------------------------------------------------------------------- */
-
-export function deleteInspection(id: string): boolean {
-  const inspectionIndex = inspections.findIndex(
-    (inspection) => inspection.id === id,
-  );
-
-  if (inspectionIndex === -1) {
-    return false;
-  }
-
-  /*
-   * Eliminamos de memoria.
-   */
-  inspections.splice(inspectionIndex, 1);
-
-  /*
-   * IMPORTANTE:
-   *
-   * También actualizamos localStorage.
-   *
-   * Sin esta llamada, una inspección eliminada
-   * volvería a aparecer después de recargar web.
-   */
-  persistWebState();
-
-  /*
-   * Android/iOS:
-   * eliminamos de SQLite.
-   */
-  persistDeletedInspection(id);
-
-  return true;
-}
-
-/* -------------------------------------------------------------------------- */
-/*                       ESTADO DE SINCRONIZACIÓN                             */
-/* -------------------------------------------------------------------------- */
-
-export function updateInspectionSyncStatus(
-  id: string,
-  syncStatus: InspectionSyncStatus,
-  lastSyncError?: string,
-): Inspection | undefined {
-  const inspection = getInspectionById(id);
-
-  if (!inspection) {
-    return undefined;
-  }
-
-  /*
-   * Reutilizamos updateInspection()
-   * para que cualquier modificación de syncStatus
-   * también se persista automáticamente tanto en:
-   *
-   * localStorage
-   * SQLite
-   */
-  return updateInspection(id, {
-    integration: {
-      ...inspection.integration,
-
-      syncStatus,
-
-      lastSyncError,
-    },
-  });
-}
-
-/* -------------------------------------------------------------------------- */
-/*                          PERSISTENCIA WEB                                  */
-/* -------------------------------------------------------------------------- */
-
-/*
- * ============================================================================
- * persistWebState()
- * ============================================================================
- *
- * Esta era la función que faltaba en tu archivo.
- *
- * Cada vez que:
- *
- * - creamos
- * - actualizamos
- * - eliminamos
- *
- * una inspección, almacenamos el estado completo
- * del repositorio en localStorage.
- *
- * En Android/iOS simplemente no hace nada.
- */
-function persistWebState() {
-  if (Platform.OS !== "web") {
-    return;
-  }
-
-  saveWebInspections(inspections.map(cloneInspection));
-}
-
-/* -------------------------------------------------------------------------- */
-/*                         PERSISTENCIA SQLITE                                */
-/* -------------------------------------------------------------------------- */
-
-/*
- * Durante esta fase mantenemos una API síncrona
- * para las pantallas actuales.
- *
- * Las operaciones SQLite se ejecutan en segundo plano.
- *
- * Más adelante convertiremos createInspection(),
- * updateInspection() y deleteInspection() a async.
- */
-
-/*
- * CREAR EN SQLITE
- */
-function persistNewInspection(inspection: Inspection) {
-  if (Platform.OS === "web") {
-    return;
-  }
-
-  void insertInspection(inspection).catch((error) => {
-    console.error(
-      "No fue posible persistir la inspección nueva en SQLite:",
-      error,
-    );
-  });
-}
-
-/*
- * ACTUALIZAR EN SQLITE
- */
-function persistUpdatedInspection(inspection: Inspection) {
-  if (Platform.OS === "web") {
-    return;
-  }
-
-  void replaceInspection(inspection).catch((error) => {
-    console.error("No fue posible actualizar la inspección en SQLite:", error);
-  });
-}
-
-/*
- * ELIMINAR DE SQLITE
- */
-function persistDeletedInspection(id: string) {
-  if (Platform.OS === "web") {
-    return;
-  }
-
-  void deleteInspectionFromDatabase(id).catch((error) => {
-    console.error("No fue posible eliminar la inspección de SQLite:", error);
-  });
 }
 
 /* -------------------------------------------------------------------------- */
 /*                                UTILIDADES                                  */
 /* -------------------------------------------------------------------------- */
 
-/*
- * Genera un ID local suficientemente único
- * para la etapa actual.
- *
- * Más adelante podremos sustituirlo por UUID.
- */
 function createInspectionId(): string {
   return `inspection-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function removeInspectionFromMemory(id: string): void {
+  const inspectionIndex = inspections.findIndex(
+    (inspection) => inspection.id === id,
+  );
+
+  if (inspectionIndex !== -1) {
+    inspections.splice(inspectionIndex, 1);
+  }
+}
+
 /*
- * Devuelve una copia independiente de una Inspection.
- *
- * Así evitamos que una pantalla pueda modificar
- * accidentalmente el objeto que mantiene el repositorio.
+ * Evita que una pantalla modifique accidentalmente los objetos
+ * internos mantenidos por el repositorio.
  */
 function cloneInspection(inspection: Inspection): Inspection {
   return {

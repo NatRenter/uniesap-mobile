@@ -177,7 +177,7 @@ export default function InspectionDetailsScreen() {
      * Antes de reintentar dejamos registrado
      * que la inspección está pendiente.
      */
-    await updateInspection(inspection.id, {
+    updateInspection(inspection.id, {
       integration: {
         ...inspection.integration,
 
@@ -201,7 +201,7 @@ export default function InspectionDetailsScreen() {
         inspection.responses,
       );
 
-      await updateInspection(inspection.id, {
+      updateInspection(inspection.id, {
         integration: {
           syncStatus: "synced",
 
@@ -235,7 +235,7 @@ export default function InspectionDetailsScreen() {
     } catch (error) {
       const message = getErrorMessage(error);
 
-      await updateInspection(inspection.id, {
+      updateInspection(inspection.id, {
         integration: {
           ...inspection.integration,
 
@@ -832,36 +832,14 @@ export default function InspectionDetailsScreen() {
             {inspection.status !== "completed" && (
               <View style={styles.actionButton}>
                 {/*
-                 * Continuamos la inspección existente.
+                 * Todavía NO conectamos este botón.
                  *
-                 * CaptureScreen recibe inspectionId, reconstruye
-                 * las respuestas guardadas y actualiza esa misma
-                 * inspección en lugar de crear un duplicado.
+                 * Para continuar correctamente un borrador
+                 * CaptureScreen deberá aceptar inspectionId,
+                 * cargar sus respuestas existentes y actualizar
+                 * esa inspección en vez de crear otra.
                  */}
-                <AppButton
-                  onPress={() =>
-                    router.navigate({
-                      pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
-
-                      params: {
-                        id,
-
-                        propertyId: inspection.propertyId,
-
-                        formId: inspection.formId,
-
-                        /*
-                         * Este parámetro indica a CaptureScreen que
-                         * debe cargar y actualizar la inspección existente,
-                         * no crear una nueva.
-                         */
-                        inspectionId: inspection.id,
-                      },
-                    })
-                  }
-                >
-                  Continuar captura
-                </AppButton>
+                <AppButton>Continuar captura</AppButton>
               </View>
             )}
 

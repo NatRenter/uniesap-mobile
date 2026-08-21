@@ -12,6 +12,7 @@ import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/data/companies";
 import { getFormById } from "@/data/forms";
+import { getInspectionById } from "@/data/inspections";
 import { getPropertyById } from "@/data/properties";
 
 import {
@@ -75,11 +76,20 @@ export default function CaptureScreen() {
    *    ↓
    * Formulario
    */
-  const { id, propertyId, formId } = useLocalSearchParams<{
+  const { id, propertyId, formId, inspectionId } = useLocalSearchParams<{
     id: string;
     propertyId: string;
     formId?: string;
+    inspectionId?: string;
   }>();
+
+  /*
+   * Si recibimos inspectionId significa que estamos continuando
+   * una captura previamente guardada como borrador o en proceso.
+   */
+  const existingInspection = inspectionId
+    ? getInspectionById(inspectionId)
+    : undefined;
 
   /*
    * Resolvemos los modelos asociados a la ruta.
@@ -88,12 +98,35 @@ export default function CaptureScreen() {
 
   const property = getPropertyById(propertyId);
 
-  const form = formId ? getFormById(formId) : undefined;
+  /*
+   * Cuando continuamos un borrador podemos recuperar el formulario
+   * directamente desde la inspección guardada.
+   */
+  const resolvedFormId = formId ?? existingInspection?.formId;
+
+  const form = resolvedFormId ? getFormById(resolvedFormId) : undefined;
 
   /*
    * Respuestas actuales del formulario.
+   *
+   * Si estamos continuando una inspección, reconstruimos CaptureAnswers
+   * desde InspectionResponse[] para mostrar inmediatamente los valores
+   * que el usuario había guardado.
    */
-  const [answers, setAnswers] = useState<CaptureAnswers>({});
+  const [answers, setAnswers] = useState<CaptureAnswers>(() => {
+    if (!existingInspection) {
+      return {};
+    }
+
+    return existingInspection.responses.reduce<CaptureAnswers>(
+      (result, response) => {
+        result[response.questionId] = response.value;
+
+        return result;
+      },
+      {},
+    );
+  });
 
   /*
    * Acción que se encuentra actualmente
@@ -114,7 +147,7 @@ export default function CaptureScreen() {
    * una segunda inspección local.
    */
   const [createdInspectionId, setCreatedInspectionId] = useState<string | null>(
-    null,
+    existingInspection?.id ?? null,
   );
 
   /*
@@ -133,7 +166,12 @@ export default function CaptureScreen() {
    * React Hooks must be called in the exact
    * same order in every component render.
    */
-  if (!company || !property || !form) {
+  if (
+    !company ||
+    !property ||
+    !form ||
+    (inspectionId !== undefined && !existingInspection)
+  ) {
     return (
       <Screen>
         <Pressable onPress={() => router.back()}>
@@ -256,7 +294,7 @@ export default function CaptureScreen() {
   /*                          GUARDAR BORRADOR                              */
   /* ---------------------------------------------------------------------- */
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     /*
      * Evita crear dos borradores
      * mediante pulsaciones rápidas.
@@ -280,23 +318,56 @@ export default function CaptureScreen() {
        *
        * Kobo todavía NO participa.
        */
-      const inspection = createInspection({
-        companyId: id,
+      /*
+       * Si la captura ya corresponde a una inspección existente,
+       * actualizamos esa misma inspección.
+       *
+       * Esto evita crear un segundo borrador cada vez que el usuario
+       * entra, modifica algo y vuelve a guardar.
+       */
+      if (createdInspectionId) {
+        const updatedInspection = await updateInspection(createdInspectionId, {
+          inspector,
 
-        propertyId,
+          responses,
 
-        formId: form.id,
+          status: "draft",
 
-        inspector,
+          integration: {
+            syncStatus: "local",
 
-        responses,
+            lastSyncError: undefined,
+          },
+        });
 
-        status: "draft",
+        if (!updatedInspection) {
+          throw new Error(
+            "No fue posible encontrar el borrador que se intentó actualizar.",
+          );
+        }
 
-        syncStatus: "local",
-      });
+        console.log("Borrador actualizado:", updatedInspection);
+      } else {
+        const inspection = await createInspection({
+          companyId: id,
 
-      console.log("Borrador guardado:", inspection);
+          propertyId,
+
+          formId: form.id,
+
+          inspector,
+
+          responses,
+
+          status: "draft",
+
+          syncStatus: "local",
+        });
+
+        setCreatedInspectionId(inspection.id);
+
+        console.log("Borrador guardado:", inspection);
+      }
 
       navigateToProperty();
     } catch (error) {
@@ -369,7 +440,7 @@ export default function CaptureScreen() {
          * por si el usuario realizó cambios
          * antes del reintento.
          */
-        const updatedInspection = updateInspection(inspectionId, {
+        const updatedInspection = await updateInspection(inspectionId, {
           inspector,
 
           responses,
@@ -391,7 +462,7 @@ export default function CaptureScreen() {
         /*
          * Primera vez que se finaliza.
          */
-        const inspection = createInspection({
+        const inspection = await createInspection({
           companyId: id,
 
           propertyId,
@@ -447,7 +518,7 @@ export default function CaptureScreen() {
        * ================================================================
        */
 
-      updateInspection(inspectionId, {
+      await updateInspection(inspectionId, {
         integration: {
           syncStatus: "synced",
 
@@ -494,7 +565,7 @@ export default function CaptureScreen() {
        * Solo registramos el error de sincronización.
        */
       if (inspectionId) {
-        updateInspection(inspectionId, {
+        await updateInspection(inspectionId, {
           integration: {
             syncStatus: "error",
 
@@ -627,7 +698,7 @@ export default function CaptureScreen() {
                 },
               ]}
             >
-              NUEVA INSPECCIÓN
+              {existingInspection ? "CONTINUAR INSPECCIÓN" : "NUEVA INSPECCIÓN"}
             </Text>
 
             <Text

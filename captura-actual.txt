@@ -14,6 +14,13 @@ import { getCompanyById } from "@/data/companies";
 import { getFormById } from "@/data/forms";
 import { getPropertyById } from "@/data/properties";
 
+import {
+  createInspection,
+  updateInspection,
+} from "@/repositories/inspectionRepository";
+
+import { exportKoboSubmission } from "@/services/koboInspectionService";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
@@ -27,8 +34,12 @@ import type {
 } from "@/types/inspection";
 
 /*
- * Estado interno de las respuestas mientras
- * el usuario está realizando la captura.
+ * ============================================================================
+ * RESPUESTAS DE CAPTURA
+ * ============================================================================
+ *
+ * Mientras el usuario llena el formulario almacenamos las respuestas
+ * utilizando el ID interno de cada pregunta.
  *
  * Ejemplo:
  *
@@ -40,24 +51,29 @@ import type {
  */
 type CaptureAnswers = Record<string, InspectionResponseValue>;
 
+type ProcessingAction = "draft" | "finish" | null;
+
 export default function CaptureScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * En móvil usamos una sola columna.
+   * Móvil:
+   * una sola columna.
    *
-   * En tablet y escritorio mostramos
-   * la captura junto con un panel lateral.
+   * Tablet / escritorio:
+   * formulario + panel lateral.
    */
   const { isPhone } = useResponsive();
 
   /*
-   * Ruta:
+   * Parámetros necesarios para identificar
+   * completamente la inspección.
    *
-   * /empresas/[id]/inmuebles/[propertyId]/captura
-   *
-   * Además recibimos formId para saber qué
-   * FormDefinition debemos renderizar.
+   * Empresa
+   *    ↓
+   * Inmueble
+   *    ↓
+   * Formulario
    */
   const { id, propertyId, formId } = useLocalSearchParams<{
     id: string;
@@ -66,8 +82,7 @@ export default function CaptureScreen() {
   }>();
 
   /*
-   * Resolvemos los datos reales utilizados
-   * por la pantalla.
+   * Resolvemos los modelos asociados a la ruta.
    */
   const company = getCompanyById(id);
 
@@ -76,21 +91,47 @@ export default function CaptureScreen() {
   const form = formId ? getFormById(formId) : undefined;
 
   /*
-   * answers reemplaza los estados individuales:
-   *
-   * responsible
-   * observations
-   * hasRisk
-   *
-   * Ahora podemos manejar cualquier número
-   * de preguntas sin crear un useState
-   * diferente para cada una.
+   * Respuestas actuales del formulario.
    */
   const [answers, setAnswers] = useState<CaptureAnswers>({});
 
   /*
-   * Como todos los Hooks ya fueron ejecutados,
-   * ahora podemos hacer el return condicional.
+   * Acción que se encuentra actualmente
+   * en proceso.
+   *
+   * null     → sin procesamiento
+   * draft    → guardando borrador
+   * finish   → guardando/sincronizando
+   */
+  const [processingAction, setProcessingAction] =
+    useState<ProcessingAction>(null);
+
+  /*
+   * Si una sincronización falla mantenemos
+   * la inspección creada y guardamos su ID.
+   *
+   * De esta manera un reintento NO crea
+   * una segunda inspección local.
+   */
+  const [createdInspectionId, setCreatedInspectionId] = useState<string | null>(
+    null,
+  );
+
+  /*
+   * Error visible para el usuario.
+   */
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  /*
+   * IMPORTANTE:
+   *
+   * Todos los Hooks ya fueron ejecutados antes
+   * de este return condicional.
+   *
+   * Esto evita nuevamente errores de:
+   *
+   * React Hooks must be called in the exact
+   * same order in every component render.
    */
   if (!company || !property || !form) {
     return (
@@ -134,13 +175,15 @@ export default function CaptureScreen() {
     );
   }
 
+  const isProcessing = processingAction !== null;
+
   /* ---------------------------------------------------------------------- */
-  /*                       ACTUALIZACIÓN DE RESPUESTAS                       */
+  /*                     ACTUALIZACIÓN DE RESPUESTAS                        */
   /* ---------------------------------------------------------------------- */
 
   /*
-   * Todas las preguntas utilizan una misma función
-   * para modificar su respuesta.
+   * Todas las preguntas dinámicas utilizan
+   * esta misma función.
    */
   const updateAnswer = (questionId: string, value: InspectionResponseValue) => {
     setAnswers((currentAnswers) => ({
@@ -148,16 +191,21 @@ export default function CaptureScreen() {
 
       [questionId]: value,
     }));
+
+    /*
+     * Si el usuario corrige una respuesta,
+     * ocultamos cualquier mensaje anterior
+     * relacionado con validación.
+     */
+    if (actionError) {
+      setActionError(null);
+    }
   };
 
   /* ---------------------------------------------------------------------- */
   /*                              PROGRESO                                  */
   /* ---------------------------------------------------------------------- */
 
-  /*
-   * Consideramos contestada una pregunta cuando
-   * su respuesta tiene un valor útil.
-   */
   const answeredQuestions = form.questions.filter((question) =>
     isAnswered(answers[question.id]),
   ).length;
@@ -167,7 +215,7 @@ export default function CaptureScreen() {
   const progress = totalQuestions > 0 ? answeredQuestions / totalQuestions : 0;
 
   /* ---------------------------------------------------------------------- */
-  /*                         RESPUESTAS REQUERIDAS                           */
+  /*                      PREGUNTAS OBLIGATORIAS                            */
   /* ---------------------------------------------------------------------- */
 
   const requiredQuestions = form.questions.filter(
@@ -179,39 +227,304 @@ export default function CaptureScreen() {
   );
 
   /* ---------------------------------------------------------------------- */
-  /*                         FINALIZAR INSPECCIÓN                            */
+  /*                     CONSTRUIR InspectionResponse[]                     */
   /* ---------------------------------------------------------------------- */
 
-  const handleFinish = () => {
-    /*
-     * Evitamos finalizar mientras existan
-     * respuestas obligatorias pendientes.
-     */
-    if (!requiredCompleted) {
-      return;
-    }
-
-    /*
-     * Convertimos nuestro Record interno al modelo
-     * InspectionResponse[] que ya utiliza UNIESAP.
-     */
-    const responses: InspectionResponse[] = form.questions
+  /*
+   * Transformamos el estado interno:
+   *
+   * CaptureAnswers
+   *
+   * en:
+   *
+   * InspectionResponse[]
+   *
+   * Este último es el modelo oficial utilizado
+   * por UNIESAP y por la integración Kobo.
+   */
+  const buildResponses = (): InspectionResponse[] => {
+    return form.questions
       .filter((question) => isAnswered(answers[question.id]))
       .map((question) => ({
         questionId: question.id,
 
         value: answers[question.id] ?? null,
       }));
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /*                          GUARDAR BORRADOR                              */
+  /* ---------------------------------------------------------------------- */
+
+  const handleSaveDraft = () => {
+    /*
+     * Evita crear dos borradores
+     * mediante pulsaciones rápidas.
+     */
+    if (isProcessing) {
+      return;
+    }
+
+    setProcessingAction("draft");
+
+    setActionError(null);
+
+    try {
+      const responses = buildResponses();
+
+      const inspector = resolveInspectorName(form.questions, responses);
+
+      /*
+       * Un borrador se almacena solamente
+       * dentro de UNIESAP.
+       *
+       * Kobo todavía NO participa.
+       */
+      const inspection = createInspection({
+        companyId: id,
+
+        propertyId,
+
+        formId: form.id,
+
+        inspector,
+
+        responses,
+
+        status: "draft",
+
+        syncStatus: "local",
+      });
+
+      console.log("Borrador guardado:", inspection);
+
+      navigateToProperty();
+    } catch (error) {
+      console.error("Error guardando borrador:", error);
+
+      setActionError(getErrorMessage(error));
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /*                         FINALIZAR INSPECCIÓN                            */
+  /* ---------------------------------------------------------------------- */
+
+  const handleFinish = async () => {
+    /*
+     * Protección contra doble pulsación.
+     */
+    if (isProcessing) {
+      return;
+    }
 
     /*
-     * Por ahora verificamos el resultado
-     * en consola.
-     *
-     * El siguiente paso será mandar estas
-     * respuestas al mapper de Kobo.
+     * Antes de finalizar deben estar
+     * contestadas todas las obligatorias.
      */
-    console.log("Inspection responses:", responses);
+    if (!requiredCompleted) {
+      setActionError(
+        "Completa las preguntas obligatorias antes de finalizar la inspección.",
+      );
 
+      return;
+    }
+
+    setProcessingAction("finish");
+
+    setActionError(null);
+
+    const responses = buildResponses();
+
+    const inspector = resolveInspectorName(form.questions, responses);
+
+    /*
+     * inspectionId se conserva fuera del try
+     * para poder marcar la inspección como error
+     * incluso si Kobo falla.
+     */
+    let inspectionId = createdInspectionId;
+
+    try {
+      /*
+       * ================================================================
+       * PASO 1
+       * GUARDAR PRIMERO EN UNIESAP
+       * ================================================================
+       *
+       * Nunca enviamos primero a Kobo.
+       *
+       * Si la red falla, la inspección ya existe
+       * dentro del almacenamiento local.
+       */
+
+      if (inspectionId) {
+        /*
+         * Si anteriormente Kobo falló,
+         * reutilizamos la misma inspección.
+         *
+         * También actualizamos las respuestas
+         * por si el usuario realizó cambios
+         * antes del reintento.
+         */
+        const updatedInspection = updateInspection(inspectionId, {
+          inspector,
+
+          responses,
+
+          status: "completed",
+
+          integration: {
+            syncStatus:
+              form.integration?.provider === "kobo" ? "pending" : "local",
+
+            lastSyncError: undefined,
+          },
+        });
+
+        if (!updatedInspection) {
+          throw new Error("No fue posible recuperar la inspección guardada.");
+        }
+      } else {
+        /*
+         * Primera vez que se finaliza.
+         */
+        const inspection = createInspection({
+          companyId: id,
+
+          propertyId,
+
+          formId: form.id,
+
+          inspector,
+
+          responses,
+
+          status: "completed",
+
+          syncStatus:
+            form.integration?.provider === "kobo" ? "pending" : "local",
+        });
+
+        inspectionId = inspection.id;
+
+        setCreatedInspectionId(inspection.id);
+      }
+
+      /*
+       * ================================================================
+       * PASO 2
+       * ¿EL FORMULARIO USA KOBO?
+       * ================================================================
+       */
+
+      if (!form.integration || form.integration.provider !== "kobo") {
+        console.log("Inspección interna guardada:", inspectionId);
+
+        navigateToProperty();
+
+        return;
+      }
+
+      /*
+       * ================================================================
+       * PASO 3
+       * SINCRONIZAR CON KOBO
+       * ================================================================
+       *
+       * Actualmente esta llamada termina en
+       * MockKoboService porque KoboClient sigue
+       * configurado en modo mock.
+       */
+      const exported = await exportKoboSubmission(form.id, responses);
+
+      /*
+       * ================================================================
+       * PASO 4
+       * GUARDAR LA REFERENCIA KOBO
+       * ================================================================
+       */
+
+      updateInspection(inspectionId, {
+        integration: {
+          syncStatus: "synced",
+
+          kobo: {
+            provider: "kobo",
+
+            assetUid: exported.assetUid,
+
+            submissionId: exported.submission.submissionId,
+
+            /*
+             * Solo añadimos uuid cuando
+             * realmente existe.
+             */
+            ...(exported.submission.uuid
+              ? {
+                  uuid: exported.submission.uuid,
+                }
+              : {}),
+
+            syncedAt: exported.submission.syncedAt ?? new Date().toISOString(),
+          },
+
+          lastSyncError: undefined,
+        },
+      });
+
+      console.log("Inspección sincronizada con Kobo:", {
+        inspectionId,
+
+        submission: exported.submission,
+
+        payload: exported.payload,
+      });
+
+      navigateToProperty();
+    } catch (error) {
+      const message = getErrorMessage(error);
+
+      /*
+       * Si la inspección ya alcanzó a guardarse,
+       * NO la eliminamos.
+       *
+       * Solo registramos el error de sincronización.
+       */
+      if (inspectionId) {
+        updateInspection(inspectionId, {
+          integration: {
+            syncStatus: "error",
+
+            lastSyncError: message,
+          },
+        });
+
+        setCreatedInspectionId(inspectionId);
+      }
+
+      console.error(
+        "La inspección se guardó, pero ocurrió un error durante la sincronización:",
+        error,
+      );
+
+      setActionError(
+        inspectionId
+          ? `La inspección fue guardada en UNIESAP, pero no pudo sincronizarse con Kobo: ${message}`
+          : `No fue posible guardar la inspección: ${message}`,
+      );
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /*                              NAVEGACIÓN                                */
+  /* ---------------------------------------------------------------------- */
+
+  const navigateToProperty = () => {
     router.replace({
       pathname: "/empresas/[id]/inmuebles/[propertyId]",
 
@@ -221,6 +534,19 @@ export default function CaptureScreen() {
       },
     });
   };
+
+  /* ---------------------------------------------------------------------- */
+  /*                         TEXTO DE ESTADO                                */
+  /* ---------------------------------------------------------------------- */
+
+  const statusLabel =
+    processingAction === "draft"
+      ? "● Guardando..."
+      : processingAction === "finish"
+        ? "● Sincronizando..."
+        : createdInspectionId
+          ? "● Guardada localmente"
+          : "● Borrador";
 
   return (
     <Screen padded={false}>
@@ -235,7 +561,13 @@ export default function CaptureScreen() {
           {/* ============================================================ */}
 
           <View style={styles.topNavigation}>
-            <Pressable onPress={() => router.back()}>
+            <Pressable
+              onPress={() => {
+                if (!isProcessing) {
+                  router.back();
+                }
+              }}
+            >
               <Text
                 style={[
                   styles.backText,
@@ -260,17 +592,19 @@ export default function CaptureScreen() {
                 style={[
                   styles.draft,
                   {
-                    color: colors.warning,
+                    color: createdInspectionId
+                      ? colors.success
+                      : colors.warning,
                   },
                 ]}
               >
-                ● Borrador
+                {statusLabel}
               </Text>
             </View>
           </View>
 
           {/* ============================================================ */}
-          {/* FORMULARIO                                                   */}
+          {/* ENCABEZADO                                                   */}
           {/* ============================================================ */}
 
           <View style={styles.header}>
@@ -334,7 +668,7 @@ export default function CaptureScreen() {
           {/* ============================================================ */}
 
           <View style={[styles.mainLayout, !isPhone && styles.mainLayoutWide]}>
-            {/* CONTEXTO EN TELÉFONO */}
+            {/* CONTEXTO EN MÓVIL */}
 
             {isPhone && (
               <ContextPanel
@@ -367,7 +701,9 @@ export default function CaptureScreen() {
               ))}
             </View>
 
-            {/* PANEL LATERAL */}
+            {/* ========================================================== */}
+            {/* PANEL LATERAL TABLET / WEB                                */}
+            {/* ========================================================== */}
 
             {!isPhone && (
               <View style={styles.sideColumn}>
@@ -395,7 +731,9 @@ export default function CaptureScreen() {
                       style={[
                         styles.statusDot,
                         {
-                          backgroundColor: colors.warning,
+                          backgroundColor: createdInspectionId
+                            ? colors.success
+                            : colors.warning,
                         },
                       ]}
                     />
@@ -408,7 +746,13 @@ export default function CaptureScreen() {
                         },
                       ]}
                     >
-                      Borrador
+                      {processingAction === "finish"
+                        ? "Sincronizando"
+                        : processingAction === "draft"
+                          ? "Guardando"
+                          : createdInspectionId
+                            ? "Guardada"
+                            : "Borrador"}
                     </Text>
                   </View>
 
@@ -448,8 +792,8 @@ export default function CaptureScreen() {
                     ]}
                   >
                     {form.integration?.provider === "kobo"
-                      ? "Formulario preparado para Kobo"
-                      : "Formulario interno de UNIESAP"}
+                      ? "Formulario preparado para sincronización con Kobo."
+                      : "Formulario interno de UNIESAP."}
                   </Text>
 
                   {form.integration && (
@@ -488,17 +832,68 @@ export default function CaptureScreen() {
           )}
 
           {/* ============================================================ */}
+          {/* ERROR                                                        */}
+          {/* ============================================================ */}
+
+          {actionError && (
+            <AppCard style={styles.errorCard}>
+              <Text
+                style={[
+                  styles.errorTitle,
+                  {
+                    color: colors.error,
+                  },
+                ]}
+              >
+                No fue posible completar la operación
+              </Text>
+
+              <Text
+                style={[
+                  styles.errorDescription,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                {actionError}
+              </Text>
+
+              {createdInspectionId && (
+                <Text
+                  style={[
+                    styles.savedNotice,
+                    {
+                      color: colors.success,
+                    },
+                  ]}
+                >
+                  ✓ La inspección permanece guardada en UNIESAP.
+                </Text>
+              )}
+            </AppCard>
+          )}
+
+          {/* ============================================================ */}
           {/* ACCIONES                                                     */}
           {/* ============================================================ */}
 
           <View style={[styles.actions, !isPhone && styles.actionsWide]}>
             <View style={styles.actionButton}>
-              <AppButton onPress={handleFinish}>Finalizar inspección</AppButton>
+              <AppButton onPress={handleFinish}>
+                {processingAction === "finish"
+                  ? "Sincronizando..."
+                  : createdInspectionId
+                    ? "Reintentar sincronización"
+                    : "Finalizar inspección"}
+              </AppButton>
             </View>
 
             <View style={styles.actionButton}>
-              <AppButton variant="secondary" onPress={() => router.back()}>
-                Guardar borrador
+              <AppButton variant="secondary" onPress={handleSaveDraft}>
+                {processingAction === "draft"
+                  ? "Guardando..."
+                  : "Guardar borrador"}
               </AppButton>
             </View>
           </View>
@@ -511,8 +906,8 @@ export default function CaptureScreen() {
               },
             ]}
           >
-            Las preguntas ya se generan desde FormDefinition. La sincronización
-            final con Kobo se implementará en el siguiente paso.
+            Las inspecciones se almacenan primero en UNIESAP. Los formularios
+            vinculados con Kobo se sincronizan automáticamente al finalizar.
           </Text>
         </ResponsiveContainer>
       </ScrollView>
@@ -525,16 +920,10 @@ export default function CaptureScreen() {
 /* -------------------------------------------------------------------------- */
 
 /*
- * Este componente es el núcleo del formulario dinámico.
+ * El componente no conoce preguntas específicas.
  *
- * Ya NO conoce preguntas específicas como:
- *
- * "Responsable"
- * "¿Existe riesgo?"
- * "Observaciones"
- *
- * Simplemente recibe un FormQuestion y decide
- * qué componente debe mostrar según question.type.
+ * Recibe un FormQuestion y selecciona automáticamente
+ * el control adecuado según question.type.
  */
 function QuestionCard({
   number,
@@ -706,7 +1095,7 @@ function QuestionCard({
         />
       )}
 
-      {/* KOBO FIELD */}
+      {/* CAMPO KOBO */}
 
       {question.integration?.koboFieldName && (
         <Text
@@ -1152,10 +1541,57 @@ function isAnswered(value: InspectionResponseValue | undefined) {
   }
 
   /*
-   * false es una respuesta válida
-   * para preguntas booleanas.
+   * false cuenta como respuesta válida.
    */
   return true;
+}
+
+/*
+ * Mientras todavía no existe autenticación real,
+ * intentamos obtener el responsable desde las
+ * respuestas del propio formulario.
+ *
+ * Si el formulario no tiene ese campo utilizamos
+ * un valor temporal genérico.
+ */
+function resolveInspectorName(
+  questions: FormQuestion[],
+  responses: InspectionResponse[],
+): string {
+  const responsibleQuestion =
+    questions.find(
+      (question) =>
+        question.integration?.koboFieldName === "datos_generales/responsable",
+    ) ??
+    questions.find((question) =>
+      question.label.toLowerCase().includes("responsable"),
+    );
+
+  if (!responsibleQuestion) {
+    return "Usuario UNIESAP";
+  }
+
+  const response = responses.find(
+    (item) => item.questionId === responsibleQuestion.id,
+  );
+
+  if (typeof response?.value === "string" && response.value.trim().length > 0) {
+    return response.value.trim();
+  }
+
+  return "Usuario UNIESAP";
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Ocurrió un error desconocido.";
 }
 
 function getQuestionTypeLabel(type: FormQuestion["type"]) {
@@ -1192,12 +1628,18 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xxxl,
   },
 
+  /* -------------------------------------------------------------------- */
+  /* NAVEGACIÓN                                                           */
+  /* -------------------------------------------------------------------- */
+
   topNavigation: {
     flexDirection: "row",
 
     justifyContent: "space-between",
 
     alignItems: "center",
+
+    gap: Spacing.md,
 
     marginBottom: Spacing.xl,
   },
@@ -1221,6 +1663,10 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
   },
+
+  /* -------------------------------------------------------------------- */
+  /* ENCABEZADO                                                           */
+  /* -------------------------------------------------------------------- */
 
   header: {
     marginBottom: Spacing.lg,
@@ -1262,7 +1708,9 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 
-  /* PROGRESO */
+  /* -------------------------------------------------------------------- */
+  /* PROGRESO                                                             */
+  /* -------------------------------------------------------------------- */
 
   progressSection: {
     marginBottom: Spacing.xl,
@@ -1314,7 +1762,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
 
-  /* LAYOUT */
+  /* -------------------------------------------------------------------- */
+  /* LAYOUT                                                               */
+  /* -------------------------------------------------------------------- */
 
   mainLayout: {
     width: "100%",
@@ -1352,7 +1802,9 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
 
-  /* QUESTIONS */
+  /* -------------------------------------------------------------------- */
+  /* QUESTIONS                                                            */
+  /* -------------------------------------------------------------------- */
 
   questionCard: {
     width: "100%",
@@ -1416,7 +1868,9 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
   },
 
-  /* BOOLEAN */
+  /* -------------------------------------------------------------------- */
+  /* BOOLEAN                                                              */
+  /* -------------------------------------------------------------------- */
 
   booleanOptions: {
     flexDirection: "row",
@@ -1474,7 +1928,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  /* SELECT */
+  /* -------------------------------------------------------------------- */
+  /* SELECT                                                               */
+  /* -------------------------------------------------------------------- */
 
   selectOptions: {
     gap: Spacing.sm,
@@ -1500,7 +1956,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  /* PHOTO */
+  /* -------------------------------------------------------------------- */
+  /* PHOTO                                                                */
+  /* -------------------------------------------------------------------- */
 
   photoBox: {
     minHeight: 170,
@@ -1554,7 +2012,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  /* KOBO */
+  /* -------------------------------------------------------------------- */
+  /* KOBO                                                                 */
+  /* -------------------------------------------------------------------- */
 
   koboField: {
     fontSize: FontSize.caption,
@@ -1562,7 +2022,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
 
-  /* CONTEXT */
+  /* -------------------------------------------------------------------- */
+  /* CONTEXTO                                                             */
+  /* -------------------------------------------------------------------- */
 
   contextTitle: {
     fontSize: FontSize.body,
@@ -1602,7 +2064,9 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.sm,
   },
 
-  /* STATUS */
+  /* -------------------------------------------------------------------- */
+  /* STATUS                                                               */
+  /* -------------------------------------------------------------------- */
 
   statusTitle: {
     fontSize: FontSize.body,
@@ -1654,7 +2118,9 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
   },
 
-  /* VALIDATION */
+  /* -------------------------------------------------------------------- */
+  /* VALIDACIÓN                                                           */
+  /* -------------------------------------------------------------------- */
 
   validationMessage: {
     fontSize: FontSize.small,
@@ -1666,7 +2132,41 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
   },
 
-  /* ACTIONS */
+  /* -------------------------------------------------------------------- */
+  /* ERROR                                                                */
+  /* -------------------------------------------------------------------- */
+
+  errorCard: {
+    marginTop: Spacing.lg,
+  },
+
+  errorTitle: {
+    fontSize: FontSize.small,
+
+    fontWeight: "700",
+
+    marginBottom: Spacing.xs,
+  },
+
+  errorDescription: {
+    fontSize: FontSize.small,
+
+    lineHeight: 20,
+  },
+
+  savedNotice: {
+    fontSize: FontSize.caption,
+
+    fontWeight: "700",
+
+    lineHeight: 18,
+
+    marginTop: Spacing.md,
+  },
+
+  /* -------------------------------------------------------------------- */
+  /* ACTIONS                                                              */
+  /* -------------------------------------------------------------------- */
 
   actions: {
     gap: Spacing.sm,
@@ -1694,7 +2194,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
   },
 
-  /* ERROR */
+  /* -------------------------------------------------------------------- */
+  /* NOT FOUND                                                            */
+  /* -------------------------------------------------------------------- */
 
   notFound: {
     flex: 1,
