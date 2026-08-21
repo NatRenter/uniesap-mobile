@@ -2,25 +2,35 @@ import { useEffect, useState } from "react";
 
 import { StyleSheet, Text, View } from "react-native";
 
-import { hydrateInspectionRepository } from "@/repositories/inspectionRepository";
-
 import { Stack } from "expo-router";
+
 import { StatusBar } from "expo-status-bar";
 
 import { initializeDatabase } from "@/database/initializeDatabase.native";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
+import { useInspectionAutoSync } from "@/hooks/useInspectionAutoSync";
+
+import { hydrateInspectionRepository } from "@/repositories/inspectionRepository";
 
 /*
  * ============================================================================
  * ROOT LAYOUT - ANDROID / IOS
  * ============================================================================
  *
- * Este layout se utiliza en las plataformas nativas.
+ * Flujo de inicialización:
  *
- * Aquí sí podemos cargar SQLite porque expo-sqlite
- * forma parte de la aplicación Android/iOS.
+ * SQLite
+ *    ↓
+ * migraciones / seed
+ *    ↓
+ * hidratar repositorio
+ *    ↓
+ * aplicación preparada
+ *    ↓
+ * activar sincronización automática
  */
+
 export default function RootLayout() {
   const { colors, isDark } = useAppTheme();
 
@@ -29,8 +39,22 @@ export default function RootLayout() {
   const [databaseError, setDatabaseError] = useState<string | null>(null);
 
   /*
-   * Inicializamos SQLite antes de permitir
-   * que las pantallas utilicen la persistencia.
+   * IMPORTANTE:
+   *
+   * El hook siempre se ejecuta respetando
+   * las reglas de Hooks de React.
+   *
+   * Sin embargo permanece inactivo hasta
+   * que SQLite y el repositorio estén listos.
+   */
+  useInspectionAutoSync({
+    enabled: databaseReady === true,
+  });
+
+  /*
+   * ==========================================================================
+   * INICIALIZACIÓN LOCAL
+   * ==========================================================================
    */
   useEffect(() => {
     let active = true;
@@ -38,16 +62,17 @@ export default function RootLayout() {
     async function initialize() {
       try {
         /*
-         * Primero preparamos SQLite.
+         * PASO 1
+         *
+         * Inicializar SQLite.
          */
         await initializeDatabase();
 
         /*
-         * Después cargamos las inspecciones persistidas
-         * dentro del repositorio temporal en memoria.
+         * PASO 2
          *
-         * Gracias a esto las pantallas actuales todavía
-         * pueden realizar consultas síncronas.
+         * Reconstruir el repositorio en memoria
+         * usando los datos persistidos.
          */
         await hydrateInspectionRepository();
 
@@ -55,6 +80,12 @@ export default function RootLayout() {
           return;
         }
 
+        /*
+         * PASO 3
+         *
+         * Permitir renderizar la aplicación
+         * y activar useInspectionAutoSync().
+         */
         setDatabaseReady(true);
       } catch (error) {
         if (!active) {
@@ -74,7 +105,7 @@ export default function RootLayout() {
       }
     }
 
-    initialize();
+    void initialize();
 
     return () => {
       active = false;
@@ -82,8 +113,11 @@ export default function RootLayout() {
   }, []);
 
   /*
-   * Mientras SQLite prepara las tablas.
+   * ==========================================================================
+   * INICIALIZANDO
+   * ==========================================================================
    */
+
   if (databaseReady === null) {
     return (
       <View
@@ -122,10 +156,11 @@ export default function RootLayout() {
   }
 
   /*
-   * Si SQLite falla mostramos el error
-   * en lugar de abrir una aplicación
-   * con almacenamiento inconsistente.
+   * ==========================================================================
+   * ERROR SQLITE
+   * ==========================================================================
    */
+
   if (databaseReady === false) {
     return (
       <View
@@ -162,6 +197,12 @@ export default function RootLayout() {
       </View>
     );
   }
+
+  /*
+   * ==========================================================================
+   * APLICACIÓN
+   * ==========================================================================
+   */
 
   return (
     <>

@@ -1,12 +1,17 @@
 import { type PropsWithChildren } from "react";
 
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
 import { Radius, Spacing } from "@/constants/theme";
 
-import { useResponsive } from "@/hooks/useResponsive";
-
 import { useAppTheme } from "@/hooks/useAppTheme";
+import { useResponsive } from "@/hooks/useResponsive";
 
 type AppCardProps = PropsWithChildren<{
   style?: StyleProp<ViewStyle>;
@@ -36,6 +41,21 @@ export function AppCard({ children, style, padded = true }: AppCardProps) {
       style={[
         styles.card,
 
+        /*
+         * Sombra específica por plataforma.
+         *
+         * WEB
+         *   → boxShadow
+         *
+         * ANDROID
+         *   → elevation
+         *
+         * IOS
+         *   → shadowColor / shadowOffset /
+         *     shadowOpacity / shadowRadius
+         */
+        styles.platformShadow,
+
         {
           backgroundColor: colors.surface,
 
@@ -59,24 +79,54 @@ const styles = StyleSheet.create({
     borderWidth: 1,
 
     borderRadius: Radius.lg,
-
-    /*
-     * La sombra se mantiene discreta.
-     * Android utiliza elevation,
-     * mientras Web/iOS utilizan las
-     * propiedades de sombra disponibles.
-     */
-    shadowColor: "#000",
-
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-
-    shadowOpacity: 0.04,
-
-    shadowRadius: 3,
-
-    elevation: 1,
   },
+
+  /*
+   * ==========================================================================
+   * SOMBRA POR PLATAFORMA
+   * ==========================================================================
+   *
+   * Evitamos enviar shadow* a React Native Web.
+   *
+   * Esto elimina el warning:
+   *
+   * "shadow*" style props are deprecated. Use "boxShadow".
+   */
+  platformShadow:
+    Platform.select<ViewStyle>({
+      web: {
+        /*
+         * Equivalente aproximado a:
+         *
+         * offsetY: 1
+         * blur: 3
+         * opacity: 0.04
+         */
+        boxShadow: "0px 1px 3px rgba(0, 0, 0, 0.04)",
+      },
+
+      android: {
+        /*
+         * Android utiliza elevation
+         * para sombras nativas.
+         */
+        elevation: 1,
+      },
+
+      ios: {
+        shadowColor: "#000000",
+
+        shadowOffset: {
+          width: 0,
+
+          height: 1,
+        },
+
+        shadowOpacity: 0.04,
+
+        shadowRadius: 3,
+      },
+
+      default: {},
+    }) ?? {},
 });

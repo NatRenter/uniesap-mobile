@@ -1,8 +1,8 @@
 import { getInspections } from "@/repositories/inspectionRepository";
 
 import {
-    syncInspection,
-    type InspectionSyncResult,
+  syncInspection,
+  type InspectionSyncResult,
 } from "@/services/inspectionSyncService";
 
 import type { Inspection, InspectionSyncStatus } from "@/types/inspection";
@@ -18,8 +18,9 @@ import type { Inspection, InspectionSyncStatus } from "@/types/inspection";
  *
  * 1. localizar inspecciones pendientes;
  * 2. procesarlas una por una;
- * 3. delegar la sincronización individual a syncInspection();
- * 4. devolver un resumen del proceso.
+ * 3. delegar cada sincronización a syncInspection();
+ * 4. evitar ejecuciones simultáneas de la cola;
+ * 5. devolver un resumen del proceso.
  *
  *
  * Arquitectura:
@@ -87,6 +88,33 @@ export type InspectionSyncQueueResult = {
 };
 
 /* -------------------------------------------------------------------------- */
+/*                       CONTROL DE EJECUCIÓN                                 */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * ============================================================================
+ * SINGLE-FLIGHT
+ * ============================================================================
+ *
+ * Solamente permitimos UNA ejecución de la cola
+ * al mismo tiempo.
+ *
+ * Esto será importante cuando posteriormente existan
+ * diferentes disparadores:
+ *
+ * - botón manual
+ * - recuperación de conexión
+ * - inicio de la aplicación
+ * - sincronización automática
+ *
+ * Si alguien llama processInspectionSyncQueue()
+ * mientras ya existe una ejecución activa,
+ * devolvemos exactamente la misma Promise.
+ */
+
+let activeQueueProcess: Promise<InspectionSyncQueueResult> | null = null;
+
+/* -------------------------------------------------------------------------- */
 /*                      OBTENER CANDIDATOS                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -94,7 +122,7 @@ export type InspectionSyncQueueResult = {
  * Devuelve las inspecciones que actualmente
  * deberían formar parte de la cola.
  *
- * No modifica ningún estado.
+ * Esta función NO modifica estados.
  */
 export function getInspectionSyncQueue(
   options: InspectionSyncQueueOptions = {},
@@ -108,7 +136,7 @@ export function getInspectionSyncQueue(
       .filter((inspection) => {
         /*
          * Los borradores y capturas todavía
-         * en proceso no deben enviarse.
+         * en proceso NO deben sincronizarse.
          */
         if (inspection.status !== "completed") {
           return false;
@@ -119,7 +147,7 @@ export function getInspectionSyncQueue(
         /*
          * pending:
          *
-         * candidato principal de la cola.
+         * candidato principal.
          */
         if (syncStatus === "pending") {
           return true;
@@ -128,7 +156,8 @@ export function getInspectionSyncQueue(
         /*
          * error:
          *
-         * opcionalmente permitimos reintento.
+         * puede reintentarse cuando
+         * includeErrors sea true.
          */
         if (syncStatus === "error" && includeErrors) {
           return true;
@@ -138,23 +167,32 @@ export function getInspectionSyncQueue(
          * syncing:
          *
          * puede significar que la aplicación
-         * se cerró durante una sincronización.
-         *
-         * En esta primera versión volvemos
-         * a intentarla.
+         * se cerró o interrumpió mientras
+         * sincronizaba.
          */
         if (syncStatus === "syncing" && includeInterrupted) {
           return true;
         }
 
+        /*
+         * local:
+         *
+         * formulario interno.
+         *
+         * No necesita Kobo.
+         *
+         *
+         * synced:
+         *
+         * ya terminó correctamente.
+         */
         return false;
       })
       /*
-       * Procesamos primero las inspecciones
-       * más antiguas.
+       * FIFO:
        *
-       * Esto hace que la cola tenga un
-       * comportamiento similar a FIFO.
+       * primero procesamos las inspecciones
+       * más antiguas.
        */
       .sort(
         (first, second) =>
@@ -174,19 +212,98 @@ export function getInspectionSyncQueueCount(
 }
 
 /* -------------------------------------------------------------------------- */
-/*                       PROCESAR COLA                                        */
+/*                     CONSULTAR ESTADO DE LA COLA                            */
 /* -------------------------------------------------------------------------- */
 
-export async function processInspectionSyncQueue(
+/*
+ * Permite saber si actualmente
+ * existe una sincronización activa.
+ */
+export function isInspectionSyncQueueProcessing(): boolean {
+  return activeQueueProcess !== null;
+}
+
+/*
+ * Devuelve la Promise activa.
+ *
+ * Puede ser útil posteriormente para:
+ *
+ * - indicadores globales;
+ * - herramientas de desarrollo;
+ * - esperar a que termine una sincronización;
+ * - evitar lanzar procesos duplicados.
+ */
+export function getActiveInspectionSyncQueueProcess(): Promise<InspectionSyncQueueResult> | null {
+  return activeQueueProcess;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                     PROCESAR COLA - FUNCIÓN PÚBLICA                        */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * ============================================================================
+ * processInspectionSyncQueue()
+ * ============================================================================
+ *
+ * Esta es la función que utilizarán:
+ *
+ * - sync-test
+ * - futuro detector de conectividad
+ * - futuro sincronizador automático
+ *
+ * Si ya existe una ejecución activa,
+ * NO generamos otra.
+ */
+export function processInspectionSyncQueue(
+  options: InspectionSyncQueueOptions = {},
+): Promise<InspectionSyncQueueResult> {
+  /*
+   * Ya existe un proceso.
+   *
+   * Reutilizamos la misma Promise.
+   */
+  if (activeQueueProcess) {
+    console.log("La cola de sincronización ya se encuentra en ejecución.");
+
+    return activeQueueProcess;
+  }
+
+  /*
+   * Creamos una nueva ejecución.
+   */
+  activeQueueProcess = processQueueInternal(options).finally(() => {
+    /*
+     * Tanto si finaliza correctamente
+     * como si ocurre un error inesperado,
+     * liberamos el bloqueo.
+     */
+    activeQueueProcess = null;
+  });
+
+  return activeQueueProcess;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                    PROCESAR COLA - IMPLEMENTACIÓN                          */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * La implementación real está separada de la función pública.
+ *
+ * Esto evita que una llamada recursiva o simultánea
+ * pueda saltarse el control single-flight.
+ */
+async function processQueueInternal(
   options: InspectionSyncQueueOptions = {},
 ): Promise<InspectionSyncQueueResult> {
   /*
    * Tomamos una fotografía de la cola
-   * al inicio del proceso.
+   * en el momento de comenzar.
    *
-   * Si durante la sincronización aparece
-   * otra inspección nueva, quedará para
-   * la siguiente ejecución.
+   * Si aparece una inspección nueva mientras
+   * estamos procesando, quedará para la
+   * siguiente ejecución.
    */
   const candidates = getInspectionSyncQueue(options);
 
@@ -207,23 +324,33 @@ export async function processInspectionSyncQueue(
   /*
    * Primera versión:
    *
-   * Procesamiento SECUENCIAL.
+   * PROCESAMIENTO SECUENCIAL.
    *
-   * No utilizamos Promise.all porque:
+   * No usamos Promise.all().
    *
+   * Motivos:
+   *
+   * - mantiene orden FIFO;
    * - reduce carga sobre Kobo;
    * - facilita depuración;
-   * - conserva orden FIFO;
-   * - permite implementar límites/reintentos posteriormente.
+   * - simplifica reintentos;
+   * - evita varias submissions simultáneas.
    */
   for (const inspection of candidates) {
     const previousStatus = inspection.integration?.syncStatus ?? "local";
 
     try {
+      /*
+       * Cada inspección utiliza el mismo
+       * servicio centralizado.
+       */
       const syncResult = await syncInspection(inspection.id);
 
       result.processed += 1;
 
+      /*
+       * Clasificamos el resultado.
+       */
       switch (syncResult.status) {
         case "synced":
           result.synced += 1;
@@ -241,6 +368,11 @@ export async function processInspectionSyncQueue(
           break;
       }
 
+      /*
+       * Conservamos el resultado individual
+       * para herramientas de diagnóstico
+       * y futuras interfaces.
+       */
       result.items.push({
         inspectionId: inspection.id,
 
@@ -250,11 +382,18 @@ export async function processInspectionSyncQueue(
       });
     } catch (error) {
       /*
-       * syncInspection normalmente convierte
-       * los errores Kobo en status: "error".
+       * Normalmente syncInspection()
+       * convierte errores Kobo en:
        *
-       * Este catch protege la cola contra errores
-       * inesperados del repositorio o del propio servicio.
+       * status: "error"
+       *
+       * Este catch está pensado para fallos
+       * inesperados:
+       *
+       * - almacenamiento;
+       * - repositorio;
+       * - programación;
+       * - datos corruptos.
        */
       result.processed += 1;
 
@@ -267,6 +406,9 @@ export async function processInspectionSyncQueue(
     }
   }
 
+  /*
+   * Resumen útil para desarrollo.
+   */
   console.log("Cola de sincronización procesada:", {
     totalCandidates: result.totalCandidates,
 

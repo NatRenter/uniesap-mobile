@@ -1,36 +1,74 @@
 import { Stack } from "expo-router";
+
 import { StatusBar } from "expo-status-bar";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
+import { useInspectionAutoSync } from "@/hooks/useInspectionAutoSync";
+
+import { hydrateInspectionRepository } from "@/repositories/inspectionRepository";
+
+import { useEffect, useState } from "react";
 
 /*
  * ============================================================================
  * ROOT LAYOUT - WEB
  * ============================================================================
  *
- * Este archivo sustituye automáticamente a _layout.tsx
- * cuando Expo Router compila la aplicación web.
+ * Web no utiliza SQLite.
  *
- * NO importa:
+ * Persistencia:
  *
- * - expo-sqlite
- * - database.ts
- * - migrations.ts
- * - initializeDatabase.native.ts
+ * localStorage
  *
- * Por eso el bundle web nunca debería alcanzar
- * wa-sqlite.wasm.
+ * Sincronización:
  *
- * Web seguirá funcionando como entorno de:
- *
- * - desarrollo visual
- * - pruebas responsive
- * - navegación
- *
- * mientras SQLite se utiliza en Android/iOS.
+ * NetInfo
+ *    ↓
+ * useInspectionAutoSync
+ *    ↓
+ * InspectionSyncQueueService
  */
+
 export default function WebRootLayout() {
   const { isDark } = useAppTheme();
+
+  const [repositoryReady, setRepositoryReady] = useState(false);
+
+  /*
+   * El repositorio web ya recupera localStorage
+   * durante su inicialización.
+   *
+   * Ejecutamos hydrateInspectionRepository()
+   * para mantener el mismo ciclo conceptual que
+   * utilizamos en Android.
+   */
+  useEffect(() => {
+    let active = true;
+
+    async function initialize() {
+      await hydrateInspectionRepository();
+
+      if (!active) {
+        return;
+      }
+
+      setRepositoryReady(true);
+    }
+
+    void initialize();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  /*
+   * Solamente activamos la sincronización cuando
+   * el repositorio web está preparado.
+   */
+  useInspectionAutoSync({
+    enabled: repositoryReady,
+  });
 
   return (
     <>
