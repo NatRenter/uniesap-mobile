@@ -18,13 +18,13 @@ import { useAppTheme } from "@/hooks/useAppTheme";
  *
  * Por ahora el Dashboard trabaja con AutoZone como empresa activa.
  *
- * Centralizamos aquí el ID para evitar repetir "1" en cada navegación.
+ * Centralizamos aquÃ el ID para evitar repetir "1" en cada navegaciÃ³n.
  *
- * Más adelante este valor será sustituido por algo similar a:
+ * MÃ¡s adelante este valor serÃ¡ sustituido por algo similar a:
  *
  * const { activeCompany } = useActiveCompany();
  *
- * y entonces todas las rutas utilizarán:
+ * y entonces todas las rutas utilizarÃ¡n:
  *
  * activeCompany.id
  */
@@ -36,7 +36,7 @@ export default function DashboardScreen() {
   /*
    * Color representativo temporal de AutoZone.
    *
-   * Más adelante deberá provenir directamente de:
+   * MÃ¡s adelante deberÃ¡ provenir directamente de:
    *
    * activeCompany.branding.primaryColor
    */
@@ -90,10 +90,10 @@ export default function DashboardScreen() {
             </View>
 
             {/*
-             * El perfil todavía no tiene una pantalla asociada.
+             * El perfil todavÃa no tiene una pantalla asociada.
              *
-             * No agregamos navegación falsa por ahora.
-             * Cuando exista /perfil podremos conectar este botón.
+             * No agregamos navegaciÃ³n falsa por ahora.
+             * Cuando exista /perfil podremos conectar este botÃ³n.
              */}
             <Pressable
               style={({ pressed }) => [
@@ -141,7 +141,7 @@ export default function DashboardScreen() {
                * pueda consultar otra empresa.
                *
                * Cuando implementemos activeCompany, seleccionar una
-               * empresa desde ese listado también cambiará el contexto
+               * empresa desde ese listado tambiÃ©n cambiarÃ¡ el contexto
                * activo del Dashboard.
                */}
               <Pressable
@@ -164,7 +164,7 @@ export default function DashboardScreen() {
             </View>
 
             {/*
-             * La tarjeta de empresa ya tenía navegación correcta.
+             * La tarjeta de empresa ya tenÃa navegaciÃ³n correcta.
              *
              * La conservamos y solamente reutilizamos
              * ACTIVE_COMPANY_ID.
@@ -245,7 +245,7 @@ export default function DashboardScreen() {
                         },
                       ]}
                     >
-                      Última actividad · hace 2 días
+                      Última actividad · hace 2 dÃas
                     </Text>
                   </View>
 
@@ -297,7 +297,7 @@ export default function DashboardScreen() {
           </View>
 
           {/* ============================================================ */}
-          {/* ACCIONES RÁPIDAS                                             */}
+          {/* ACCIONES RÃPIDAS                                             */}
           {/* ============================================================ */}
 
           <View style={styles.section}>
@@ -333,7 +333,7 @@ export default function DashboardScreen() {
               {/* -------------------------------------------------------- */}
 
               {/*
-               * Desde Dashboard todavía no conocemos el inmueble.
+               * Desde Dashboard todavÃa no conocemos el inmueble.
                *
                * Por eso NO debemos saltar directamente a captura.
                *
@@ -386,6 +386,113 @@ export default function DashboardScreen() {
           </View>
 
           {/* ============================================================ */}
+          {/* HERRAMIENTAS DE DESARROLLO                                   */}
+          {/* ============================================================ */}
+
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Herramientas de desarrollo
+            </Text>
+
+            <Text
+              style={[
+                styles.developmentDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Accesos temporales para validar persistencia, sincronización y
+              comportamiento offline durante el desarrollo del prototipo.
+            </Text>
+
+            <Pressable
+              onPress={() => router.navigate("/sync-test")}
+              style={({ pressed }) => [
+                styles.developmentCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.warning,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.developmentIcon,
+                  {
+                    backgroundColor: colors.primarySoft,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.developmentIconText,
+                    {
+                      color: colors.primary,
+                    },
+                  ]}
+                >
+                  ↻
+                </Text>
+              </View>
+
+              <View style={styles.developmentContent}>
+                <Text
+                  style={[
+                    styles.developmentTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Cola de sincronización
+                </Text>
+
+                <Text
+                  style={[
+                    styles.developmentSubtitle,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Abre /sync-test usando el almacenamiento del entorno actual.
+                </Text>
+
+                <Text
+                  style={[
+                    styles.developmentEnvironment,
+                    {
+                      color: colors.warning,
+                    },
+                  ]}
+                >
+                  WEB → localStorage · ANDROID → SQLite
+                </Text>
+              </View>
+
+              <Text
+                style={[
+                  styles.actionArrow,
+                  {
+                    color: colors.textMuted,
+                  },
+                ]}
+              >
+                ›
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* ============================================================ */}
           {/* ACTIVIDAD RECIENTE                                           */}
           {/* ============================================================ */}
 
@@ -404,7 +511,7 @@ export default function DashboardScreen() {
             <AppCard>
               <ActivityItem
                 company="AutoZone"
-                action="Inspección actualizada"
+                action="InspecciÃ³n actualizada"
                 time="Hace 2 horas"
                 accentColor="#F97316"
               />
@@ -437,7 +544,7 @@ export default function DashboardScreen() {
               <ActivityItem
                 company="Empresa Demo"
                 action="Empresa registrada"
-                time="Hace 3 días"
+                time="Hace 3 dÃas"
                 accentColor="#3B82F6"
               />
             </AppCard>
@@ -455,7 +562,7 @@ export default function DashboardScreen() {
 /*
  * Tarjeta utilizada en el resumen del Dashboard.
  *
- * highlighted permite destacar métricas que requieren atención,
+ * highlighted permite destacar mÃ©tricas que requieren atenciÃ³n,
  * como inspecciones pendientes.
  */
 function StatCard({
@@ -501,10 +608,10 @@ function StatCard({
 /* -------------------------------------------------------------------------- */
 
 /*
- * Acción rápida reutilizable.
+ * Acción rÃ¡pida reutilizable.
  *
- * A diferencia de la versión anterior, los accesos principales
- * del Dashboard ya reciben una función onPress real.
+ * A diferencia de la versiÃ³n anterior, los accesos principales
+ * del Dashboard ya reciben una funciÃ³n onPress real.
  */
 function QuickAction({
   icon,
@@ -562,7 +669,7 @@ function QuickAction({
       </Text>
 
       {/*
-       * Añadimos una indicación visual de navegación.
+       * Añadimos una indicaciÃ³n visual de navegaciÃ³n.
        */}
       <Text
         style={[
@@ -585,7 +692,7 @@ function QuickAction({
 /*
  * Elemento visual del historial reciente.
  *
- * Por ahora NO es Pressable porque todavía no contamos
+ * Por ahora NO es Pressable porque todavÃa no contamos
  * con IDs suficientes para garantizar que cada actividad
  * pueda abrir correctamente su recurso asociado.
  */
@@ -834,7 +941,7 @@ const styles = StyleSheet.create({
   },
 
   /* -------------------------------------------------------------------- */
-  /* ACCIONES RÁPIDAS                                                     */
+  /* ACCIONES RÃPIDAS                                                     */
   /* -------------------------------------------------------------------- */
 
   actionCard: {
@@ -883,6 +990,71 @@ const styles = StyleSheet.create({
     fontSize: 26,
 
     marginLeft: Spacing.sm,
+  },
+
+  /* -------------------------------------------------------------------- */
+  /* HERRAMIENTAS DE DESARROLLO                                          */
+  /* -------------------------------------------------------------------- */
+
+  developmentDescription: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+    marginTop: -Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+
+  developmentCard: {
+    width: "100%",
+    minHeight: 88,
+
+    flexDirection: "row",
+    alignItems: "center",
+
+    padding: Spacing.md,
+
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+  },
+
+  developmentIcon: {
+    width: 44,
+    height: 44,
+
+    flexShrink: 0,
+
+    borderRadius: Radius.md,
+
+    alignItems: "center",
+    justifyContent: "center",
+
+    marginRight: Spacing.md,
+  },
+
+  developmentIconText: {
+    fontSize: FontSize.h3,
+    fontWeight: "700",
+  },
+
+  developmentContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  developmentTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+    marginBottom: Spacing.xs,
+  },
+
+  developmentSubtitle: {
+    fontSize: FontSize.caption,
+    lineHeight: 18,
+    marginBottom: Spacing.xs,
+  },
+
+  developmentEnvironment: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
   },
 
   /* -------------------------------------------------------------------- */

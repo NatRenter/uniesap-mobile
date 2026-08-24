@@ -5,6 +5,8 @@ import {
   updateInspection,
 } from "@/repositories/inspectionRepository";
 
+import { getNetworkAvailability } from "@/services/networkService";
+
 import { exportKoboSubmission } from "@/services/koboInspectionService";
 
 import type { Inspection } from "@/types/inspection";
@@ -18,16 +20,21 @@ import type { Inspection } from "@/types/inspection";
 export type InspectionSyncResult =
   | {
       status: "synced";
+
       inspection: Inspection;
     }
   | {
       status: "skipped";
+
       inspection: Inspection;
+
       reason: string;
     }
   | {
       status: "error";
+
       inspection: Inspection;
+
       error: string;
     };
 
@@ -36,11 +43,17 @@ export type InspectionSyncResult =
  * SINCRONIZAR UNA INSPECCIÓN
  * ============================================================================
  *
- * Esta función concentra todo el proceso:
+ * Esta función es el ÚNICO punto desde el cual una inspección
+ * debe intentar sincronizarse con Kobo.
+ *
+ *
+ * Flujo:
  *
  * Inspection
  *    ↓
- * pending
+ * validar estado
+ *    ↓
+ * validar conectividad
  *    ↓
  * syncing
  *    ↓
@@ -48,13 +61,24 @@ export type InspectionSyncResult =
  *    ↓
  * synced / error
  *
- * CaptureScreen ya no necesita conocer los detalles
- * de cómo se actualizan los estados Kobo.
+ *
+ * Gracias a esta validación central:
+ *
+ * - CaptureScreen no conoce Kobo;
+ * - /sync-test no puede saltarse la conectividad;
+ * - Reintentar sincronización tampoco puede saltársela;
+ * - MockKoboService no falsea nuestras pruebas offline.
  */
 
 export async function syncInspection(
   inspectionId: string,
 ): Promise<InspectionSyncResult> {
+  /*
+   * ==========================================================================
+   * OBTENER INSPECCIÓN
+   * ==========================================================================
+   */
+
   const inspection = getInspectionById(inspectionId);
 
   if (!inspection) {
@@ -62,52 +86,86 @@ export async function syncInspection(
   }
 
   /*
-   * Las inspecciones no terminadas no deben
-   * sincronizarse todavía.
+   * ==========================================================================
+   * VALIDAR QUE ESTÉ TERMINADA
+   * ==========================================================================
+   *
+   * Borradores y capturas en proceso nunca deben
+   * crear submissions Kobo.
    */
+
   if (inspection.status !== "completed") {
     return {
       status: "skipped",
+
       inspection,
+
       reason: "La inspección todavía no está finalizada.",
     };
   }
 
   /*
-   * Una inspección que ya está sincronizada
-   * no debe crear otra submission Kobo.
+   * ==========================================================================
+   * EVITAR DUPLICADOS
+   * ==========================================================================
+   *
+   * Una inspección que ya está synced no debe
+   * crear otra submission.
    */
+
   if (inspection.integration?.syncStatus === "synced") {
     return {
       status: "skipped",
+
       inspection,
+
       reason: "La inspección ya está sincronizada.",
     };
   }
+
+  /*
+   * ==========================================================================
+   * RESOLVER FORMULARIO
+   * ==========================================================================
+   */
 
   const form = getFormById(inspection.formId);
 
   if (!form) {
     return markSyncError(
       inspection,
+
       `Formulario no encontrado: ${inspection.formId}`,
     );
   }
 
   /*
-   * Formularios exclusivamente internos
-   * permanecen locales.
+   * ==========================================================================
+   * FORMULARIOS INTERNOS
+   * ==========================================================================
+   *
+   * Algunos formularios podrán pertenecer únicamente
+   * a UNIESAP y no tener integración Kobo.
+   *
+   * Estos registros permanecen como:
+   *
+   * completed + local
    */
+
   if (!form.integration || form.integration.provider !== "kobo") {
-    const localInspection = await updateInspection(inspection.id, {
-      integration: {
-        ...inspection.integration,
+    const localInspection = await updateInspection(
+      inspection.id,
 
-        syncStatus: "local",
+      {
+        integration: {
+          ...inspection.integration,
 
-        lastSyncError: undefined,
+          syncStatus: "local",
+
+          lastSyncError: undefined,
+        },
       },
-    });
+    );
 
     if (!localInspection) {
       throw new Error(
@@ -117,24 +175,114 @@ export async function syncInspection(
 
     return {
       status: "skipped",
+
       inspection: localInspection,
+
       reason: "El formulario no utiliza Kobo.",
     };
   }
 
   /*
-   * Marcamos explícitamente que el proceso
-   * de sincronización comenzó.
+   * ==========================================================================
+   * VALIDAR CONECTIVIDAD
+   * ==========================================================================
+   *
+   * Esta comprobación ocurre ANTES de cambiar el estado
+   * de la inspección a "syncing".
+   *
+   * Es especialmente importante mientras usamos
+   * MockKoboService, porque el Mock podría responder
+   * correctamente aunque físicamente no exista Internet.
+   *
+   *
+   * OFFLINE:
+   *
+   * pending
+   *    ↓
+   * permanece pending
+   *
+   *
+   * error
+   *    ↓
+   * permanece error
+   *
+   *
+   * syncing interrumpido
+   *    ↓
+   * permanece syncing hasta que vuelva a procesarse
    */
-  const syncingInspection = await updateInspection(inspection.id, {
-    integration: {
-      ...inspection.integration,
 
-      syncStatus: "syncing",
+  let networkAvailable: boolean;
 
-      lastSyncError: undefined,
+  try {
+    networkAvailable = await getNetworkAvailability();
+  } catch (error) {
+    /*
+     * Si ni siquiera podemos determinar el estado
+     * de red, actuamos de forma conservadora.
+     *
+     * No intentamos Kobo.
+     */
+
+    console.warn(
+      "No fue posible comprobar la conectividad antes de sincronizar:",
+      error,
+    );
+
+    return {
+      status: "skipped",
+
+      inspection,
+
+      reason: "No fue posible comprobar la conexión a Internet.",
+    };
+  }
+
+  if (!networkAvailable) {
+    console.log(
+      "Sincronización omitida porque el dispositivo está sin conexión:",
+      {
+        inspectionId: inspection.id,
+
+        syncStatus: inspection.integration?.syncStatus ?? "local",
+      },
+    );
+
+    return {
+      status: "skipped",
+
+      inspection,
+
+      reason: "Sin conexión a Internet. La inspección permanece pendiente.",
+    };
+  }
+
+  /*
+   * ==========================================================================
+   * MARCAR COMO SYNCING
+   * ==========================================================================
+   *
+   * Llegados aquí sabemos que:
+   *
+   * ✓ está completada;
+   * ✓ necesita Kobo;
+   * ✓ no está sincronizada;
+   * ✓ existe conectividad.
+   */
+
+  const syncingInspection = await updateInspection(
+    inspection.id,
+
+    {
+      integration: {
+        ...inspection.integration,
+
+        syncStatus: "syncing",
+
+        lastSyncError: undefined,
+      },
     },
-  });
+  );
 
   if (!syncingInspection) {
     throw new Error(
@@ -142,46 +290,64 @@ export async function syncInspection(
     );
   }
 
+  /*
+   * ==========================================================================
+   * SINCRONIZAR CON KOBO
+   * ==========================================================================
+   */
+
   try {
     /*
-     * Toda la conversión:
+     * koboInspectionService se encarga de:
      *
      * InspectionResponse[]
-     *        ↓
+     *          ↓
+     * mapper
+     *          ↓
      * KoboSubmissionData
-     *        ↓
-     * KoboService
-     *
-     * sigue concentrada en koboInspectionService.
+     *          ↓
+     * KoboService.createSubmission()
      */
+
     const exported = await exportKoboSubmission(
       inspection.formId,
+
       inspection.responses,
     );
 
-    const syncedInspection = await updateInspection(inspection.id, {
-      integration: {
-        syncStatus: "synced",
+    /*
+     * =========================================================================
+     * GUARDAR REFERENCIA KOBO
+     * =========================================================================
+     */
 
-        kobo: {
-          provider: "kobo",
+    const syncedInspection = await updateInspection(
+      inspection.id,
 
-          assetUid: exported.assetUid,
+      {
+        integration: {
+          syncStatus: "synced",
 
-          submissionId: exported.submission.submissionId,
+          kobo: {
+            provider: "kobo",
 
-          ...(exported.submission.uuid
-            ? {
-                uuid: exported.submission.uuid,
-              }
-            : {}),
+            assetUid: exported.assetUid,
 
-          syncedAt: exported.submission.syncedAt ?? new Date().toISOString(),
+            submissionId: exported.submission.submissionId,
+
+            ...(exported.submission.uuid
+              ? {
+                  uuid: exported.submission.uuid,
+                }
+              : {}),
+
+            syncedAt: exported.submission.syncedAt ?? new Date().toISOString(),
+          },
+
+          lastSyncError: undefined,
         },
-
-        lastSyncError: undefined,
       },
-    });
+    );
 
     if (!syncedInspection) {
       throw new Error(
@@ -197,10 +363,29 @@ export async function syncInspection(
 
     return {
       status: "synced",
+
       inspection: syncedInspection,
     };
   } catch (error) {
-    return markSyncError(inspection, getErrorMessage(error));
+    /*
+     * =========================================================================
+     * ERROR KOBO
+     * =========================================================================
+     *
+     * La inspección NO se pierde.
+     *
+     * Se mantiene persistida como:
+     *
+     * completed + error
+     *
+     * y podrá entrar nuevamente a la cola.
+     */
+
+    return markSyncError(
+      inspection,
+
+      getErrorMessage(error),
+    );
   }
 }
 
@@ -212,17 +397,22 @@ export async function syncInspection(
 
 async function markSyncError(
   inspection: Inspection,
+
   message: string,
 ): Promise<InspectionSyncResult> {
-  const failedInspection = await updateInspection(inspection.id, {
-    integration: {
-      ...inspection.integration,
+  const failedInspection = await updateInspection(
+    inspection.id,
 
-      syncStatus: "error",
+    {
+      integration: {
+        ...inspection.integration,
 
-      lastSyncError: message,
+        syncStatus: "error",
+
+        lastSyncError: message,
+      },
     },
-  });
+  );
 
   if (!failedInspection) {
     throw new Error(
@@ -230,9 +420,17 @@ async function markSyncError(
     );
   }
 
+  console.error("Inspección marcada con error de sincronización:", {
+    inspectionId: inspection.id,
+
+    error: message,
+  });
+
   return {
     status: "error",
+
     inspection: failedInspection,
+
     error: message,
   };
 }
