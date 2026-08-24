@@ -3,33 +3,26 @@ import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Stack } from "expo-router";
-
 import { StatusBar } from "expo-status-bar";
+
+import {
+  deleteEvidenceFromDatabase,
+  insertEvidence,
+  replaceEvidence,
+  selectAllEvidences,
+} from "@/database/evidenceDatabase";
 
 import { initializeDatabase } from "@/database/initializeDatabase.native";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useInspectionAutoSync } from "@/hooks/useInspectionAutoSync";
 
-import { hydrateInspectionRepository } from "@/repositories/inspectionRepository";
+import {
+  configureEvidenceRepositoryPersistence,
+  hydrateEvidenceRepository,
+} from "@/repositories/evidenceRepository";
 
-/*
- * ============================================================================
- * ROOT LAYOUT - ANDROID / IOS
- * ============================================================================
- *
- * Flujo de inicialización:
- *
- * SQLite
- *    ↓
- * migraciones / seed
- *    ↓
- * hidratar repositorio
- *    ↓
- * aplicación preparada
- *    ↓
- * activar sincronización automática
- */
+import { hydrateInspectionRepository } from "@/repositories/inspectionRepository";
 
 export default function RootLayout() {
   const { colors, isDark } = useAppTheme();
@@ -38,54 +31,33 @@ export default function RootLayout() {
 
   const [databaseError, setDatabaseError] = useState<string | null>(null);
 
-  /*
-   * IMPORTANTE:
-   *
-   * El hook siempre se ejecuta respetando
-   * las reglas de Hooks de React.
-   *
-   * Sin embargo permanece inactivo hasta
-   * que SQLite y el repositorio estén listos.
-   */
   useInspectionAutoSync({
     enabled: databaseReady === true,
   });
 
-  /*
-   * ==========================================================================
-   * INICIALIZACIÓN LOCAL
-   * ==========================================================================
-   */
   useEffect(() => {
     let active = true;
 
     async function initialize() {
       try {
-        /*
-         * PASO 1
-         *
-         * Inicializar SQLite.
-         */
         await initializeDatabase();
 
-        /*
-         * PASO 2
-         *
-         * Reconstruir el repositorio en memoria
-         * usando los datos persistidos.
-         */
-        await hydrateInspectionRepository();
+        configureEvidenceRepositoryPersistence({
+          loadAll: selectAllEvidences,
+          insert: insertEvidence,
+          replace: replaceEvidence,
+          delete: deleteEvidenceFromDatabase,
+        });
+
+        await Promise.all([
+          hydrateInspectionRepository(),
+          hydrateEvidenceRepository(),
+        ]);
 
         if (!active) {
           return;
         }
 
-        /*
-         * PASO 3
-         *
-         * Permitir renderizar la aplicación
-         * y activar useInspectionAutoSync().
-         */
         setDatabaseReady(true);
       } catch (error) {
         if (!active) {
@@ -97,10 +69,9 @@ export default function RootLayout() {
             ? error.message
             : "Error desconocido inicializando la base de datos.";
 
-        console.error("Error inicializando SQLite:", error);
+        console.error("Error inicializando almacenamiento local:", error);
 
         setDatabaseError(message);
-
         setDatabaseReady(false);
       }
     }
@@ -111,12 +82,6 @@ export default function RootLayout() {
       active = false;
     };
   }, []);
-
-  /*
-   * ==========================================================================
-   * INICIALIZANDO
-   * ==========================================================================
-   */
 
   if (databaseReady === null) {
     return (
@@ -155,12 +120,6 @@ export default function RootLayout() {
     );
   }
 
-  /*
-   * ==========================================================================
-   * ERROR SQLITE
-   * ==========================================================================
-   */
-
   if (databaseReady === false) {
     return (
       <View
@@ -198,12 +157,6 @@ export default function RootLayout() {
     );
   }
 
-  /*
-   * ==========================================================================
-   * APLICACIÓN
-   * ==========================================================================
-   */
-
   return (
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
@@ -211,7 +164,6 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-
           animation: "slide_from_right",
         }}
       />
@@ -222,39 +174,28 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   center: {
     flex: 1,
-
     alignItems: "center",
-
     justifyContent: "center",
-
     padding: 32,
   },
 
   loadingTitle: {
     fontSize: 28,
-
     fontWeight: "700",
-
     marginBottom: 8,
   },
 
   loadingText: {
     maxWidth: 420,
-
     fontSize: 15,
-
     lineHeight: 22,
-
     textAlign: "center",
   },
 
   errorTitle: {
     fontSize: 20,
-
     fontWeight: "700",
-
     textAlign: "center",
-
     marginBottom: 12,
   },
 });

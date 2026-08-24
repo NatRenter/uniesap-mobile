@@ -9,6 +9,8 @@ export type Evidence = {
   propertyId: string;
   inspectionId: string;
 
+  questionId?: string;
+
   title: string;
 
   type: EvidenceType;
@@ -20,4 +22,10 @@ export type Evidence = {
 
   localUri?: string;
   remoteUri?: string;
+
+  mimeType?: string;
+  fileName?: string;
+  fileSize?: number;
+
+  createdAt?: string;
 };

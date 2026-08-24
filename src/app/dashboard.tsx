@@ -490,6 +490,85 @@ export default function DashboardScreen() {
                 ›
               </Text>
             </Pressable>
+
+            <Pressable
+              onPress={() => router.navigate("/evidence-test")}
+              style={({ pressed }) => [
+                styles.developmentCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.primary,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.developmentIcon,
+                  {
+                    backgroundColor: colors.primarySoft,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.developmentIconText,
+                    {
+                      color: colors.primary,
+                    },
+                  ]}
+                >
+                  ▧
+                </Text>
+              </View>
+
+              <View style={styles.developmentContent}>
+                <Text
+                  style={[
+                    styles.developmentTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Prueba de evidencias
+                </Text>
+
+                <Text
+                  style={[
+                    styles.developmentSubtitle,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Abre /evidence-test para validar creación, persistencia y
+                  eliminación de evidencias en el entorno actual.
+                </Text>
+
+                <Text
+                  style={[
+                    styles.developmentEnvironment,
+                    {
+                      color: colors.primary,
+                    },
+                  ]}
+                >
+                  WEB → localStorage · ANDROID → SQLite
+                </Text>
+              </View>
+
+              <Text
+                style={[
+                  styles.actionArrow,
+                  {
+                    color: colors.textMuted,
+                  },
+                ]}
+              >
+                ›
+              </Text>
+            </Pressable>
           </View>
 
           {/* ============================================================ */}
@@ -1006,6 +1085,8 @@ const styles = StyleSheet.create({
   developmentCard: {
     width: "100%",
     minHeight: 88,
+
+    marginBottom: Spacing.md,
 
     flexDirection: "row",
     alignItems: "center",
