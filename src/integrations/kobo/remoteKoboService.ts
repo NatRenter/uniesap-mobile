@@ -2,22 +2,15 @@ import type { KoboService } from "./koboService";
 
 import type {
   KoboAssetReference,
+  KoboAttachmentReference,
+  KoboSubmissionAttachment,
   KoboSubmissionData,
   KoboSubmissionId,
+  KoboSubmissionPackage,
   KoboSubmissionReference,
 } from "./types";
 
 export type RemoteKoboServiceConfig = {
-  /*
-   * URL de la API/backend de UNIESAP.
-   *
-   * Ejemplo futuro:
-   *
-   * https://api.uniesap.com
-   *
-   * NO tiene que ser necesariamente
-   * la URL directa de Kobo.
-   */
   baseUrl: string;
 
   getAccessToken?: () => Promise<string | null>;
@@ -25,10 +18,6 @@ export type RemoteKoboServiceConfig = {
 
 export class RemoteKoboService implements KoboService {
   constructor(private readonly config: RemoteKoboServiceConfig) {}
-
-  /* -------------------------------------------------------------------- */
-  /*                                  READ                                */
-  /* -------------------------------------------------------------------- */
 
   async getAsset(assetUid: string): Promise<KoboAssetReference> {
     return this.request<KoboAssetReference>(
@@ -53,27 +42,42 @@ export class RemoteKoboService implements KoboService {
     );
   }
 
-  /* -------------------------------------------------------------------- */
-  /*                                 WRITE                                */
-  /* -------------------------------------------------------------------- */
-
   async createSubmission(
     assetUid: string,
-    data: KoboSubmissionData,
+    submission: KoboSubmissionPackage,
   ): Promise<KoboSubmissionReference> {
     return this.request<KoboSubmissionReference>(
       `/integrations/kobo/assets/${encodeURIComponent(assetUid)}/submissions`,
       {
         method: "POST",
 
-        body: JSON.stringify(data),
+        body: JSON.stringify(submission),
       },
     );
   }
 
-  /* -------------------------------------------------------------------- */
-  /*                                REQUEST                               */
-  /* -------------------------------------------------------------------- */
+  /*
+   * Endpoint futuro del backend UNIESAP.
+   *
+   * El backend será responsable de leer el archivo real
+   * y enviarlo a Kobo con el formato requerido.
+   */
+  async uploadAttachment(
+    assetUid: string,
+    submissionId: KoboSubmissionId,
+    attachment: KoboSubmissionAttachment,
+  ): Promise<KoboAttachmentReference> {
+    return this.request<KoboAttachmentReference>(
+      `/integrations/kobo/assets/${encodeURIComponent(
+        assetUid,
+      )}/submissions/${encodeURIComponent(String(submissionId))}/attachments`,
+      {
+        method: "POST",
+
+        body: JSON.stringify(attachment),
+      },
+    );
+  }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const baseUrl = this.config.baseUrl.replace(/\/+$/, "");
@@ -85,18 +89,11 @@ export class RemoteKoboService implements KoboService {
     const response = await fetch(`${baseUrl}${path}`, {
       ...init,
 
-      /*
-       * GET continúa siendo
-       * el valor por defecto.
-       */
       method: init?.method ?? "GET",
 
       headers: {
         Accept: "application/json",
 
-        /*
-         * Lo necesitamos para POST.
-         */
         "Content-Type": "application/json",
 
         ...(accessToken
@@ -119,15 +116,10 @@ export class RemoteKoboService implements KoboService {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*                               ERROR MESSAGE                                */
-/* -------------------------------------------------------------------------- */
-
 async function readErrorMessage(response: Response) {
   try {
     const data = (await response.json()) as {
       message?: string;
-
       detail?: string;
     };
 

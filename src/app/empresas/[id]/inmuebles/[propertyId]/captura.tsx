@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { Image } from "expo-image";
+
 import { router, useLocalSearchParams } from "expo-router";
 
 import { AppButton } from "@/components/ui/AppButton";
@@ -16,15 +18,28 @@ import { getInspectionById } from "@/data/inspections";
 import { getPropertyById } from "@/data/properties";
 
 import {
+  createEvidence,
+  deleteEvidence,
+  getEvidencesByQuestionId,
+} from "@/repositories/evidenceRepository";
+
+import {
   createInspection,
   updateInspection,
 } from "@/repositories/inspectionRepository";
+
+import {
+  captureEvidencePhoto,
+  deleteEvidenceMedia,
+  pickEvidencePhoto,
+} from "@/services/evidenceMediaService";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useResponsive } from "@/hooks/useResponsive";
 
+import type { Evidence } from "@/types/evidence";
 import type { FormQuestion, FormQuestionOption } from "@/types/form";
 
 import type {
@@ -51,6 +66,8 @@ import type {
 type CaptureAnswers = Record<string, InspectionResponseValue>;
 
 type ProcessingAction = "draft" | "finish" | null;
+
+type PhotoProcessingAction = "camera" | "gallery" | "delete" | null;
 
 export default function CaptureScreen() {
   const { colors } = useAppTheme();
@@ -138,6 +155,31 @@ export default function CaptureScreen() {
     useState<ProcessingAction>(null);
 
   /*
+   * Estado independiente para operaciones de evidencia.
+   *
+   * Mantenerlo separado evita mezclar:
+   *
+   * - guardado/finalización de inspecciones;
+   * - cámara/galería/eliminación de fotografías.
+   */
+  const [photoProcessingAction, setPhotoProcessingAction] =
+    useState<PhotoProcessingAction>(null);
+
+  const [photoProcessingQuestionId, setPhotoProcessingQuestionId] = useState<
+    string | null
+  >(null);
+
+  /*
+   * EvidenceRepository no es reactivo todavía.
+   *
+   * Este contador fuerza una nueva lectura visual después de
+   * crear o eliminar una evidencia.
+   */
+  const [evidenceVersion, setEvidenceVersion] = useState(0);
+
+  void evidenceVersion;
+
+  /*
    * Si una sincronización falla mantenemos
    * la inspección creada y guardamos su ID.
    *
@@ -211,7 +253,8 @@ export default function CaptureScreen() {
     );
   }
 
-  const isProcessing = processingAction !== null;
+  const isProcessing =
+    processingAction !== null || photoProcessingAction !== null;
 
   /* ---------------------------------------------------------------------- */
   /*                     ACTUALIZACIÓN DE RESPUESTAS                        */
@@ -242,9 +285,23 @@ export default function CaptureScreen() {
   /*                              PROGRESO                                  */
   /* ---------------------------------------------------------------------- */
 
-  const answeredQuestions = form.questions.filter((question) =>
-    isAnswered(answers[question.id]),
-  ).length;
+  const getQuestionEvidenceCount = (questionId: string) => {
+    if (!createdInspectionId) {
+      return 0;
+    }
+
+    return getEvidencesByQuestionId(createdInspectionId, questionId).length;
+  };
+
+  const isQuestionAnswered = (question: FormQuestion) => {
+    if (question.type === "photo") {
+      return getQuestionEvidenceCount(question.id) > 0;
+    }
+
+    return isAnswered(answers[question.id]);
+  };
+
+  const answeredQuestions = form.questions.filter(isQuestionAnswered).length;
 
   const totalQuestions = form.questions.length;
 
@@ -258,9 +315,7 @@ export default function CaptureScreen() {
     (question) => question.required,
   );
 
-  const requiredCompleted = requiredQuestions.every((question) =>
-    isAnswered(answers[question.id]),
-  );
+  const requiredCompleted = requiredQuestions.every(isQuestionAnswered);
 
   /* ---------------------------------------------------------------------- */
   /*                     CONSTRUIR InspectionResponse[]                     */
@@ -279,13 +334,344 @@ export default function CaptureScreen() {
    * por UNIESAP y por la integración Kobo.
    */
   const buildResponses = (): InspectionResponse[] => {
-    return form.questions
-      .filter((question) => isAnswered(answers[question.id]))
-      .map((question) => ({
+    return (
+      form.questions
+        /*
+         * Las fotografías ya no se guardan como valores simulados
+         * dentro de InspectionResponse.
+         *
+         * Cada fotografía vive como Evidence independiente.
+         */
+        .filter(
+          (question) =>
+            question.type !== "photo" && isAnswered(answers[question.id]),
+        )
+        .map((question) => ({
+          questionId: question.id,
+
+          value: answers[question.id] ?? null,
+        }))
+    );
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /*                     EVIDENCIAS FOTOGRÁFICAS                            */
+  /* ---------------------------------------------------------------------- */
+
+  const refreshEvidences = () => {
+    setEvidenceVersion((value) => value + 1);
+  };
+
+  /*
+   * Una Evidence necesita inspectionId desde el momento de su creación.
+   *
+   * Por eso, si el usuario toma una fotografía antes de guardar manualmente,
+   * creamos automáticamente el borrador local de la inspección.
+   *
+   * Si el borrador ya existe, lo actualizamos con las respuestas actuales.
+   */
+  const ensureDraftInspection = async (): Promise<string> => {
+    const responses = buildResponses();
+
+    const inspector = resolveInspectorName(form.questions, responses);
+
+    if (createdInspectionId) {
+      const currentInspection = getInspectionById(createdInspectionId);
+
+      const updatedInspection = await updateInspection(createdInspectionId, {
+        inspector,
+
+        responses,
+
+        status:
+          currentInspection?.status === "completed" ? "completed" : "draft",
+
+        integration: {
+          ...currentInspection?.integration,
+
+          syncStatus:
+            currentInspection?.status === "completed"
+              ? (currentInspection.integration?.syncStatus ?? "local")
+              : "local",
+
+          lastSyncError: undefined,
+        },
+      });
+
+      if (!updatedInspection) {
+        throw new Error(
+          "No fue posible preparar la inspección para asociar evidencias.",
+        );
+      }
+
+      return updatedInspection.id;
+    }
+
+    const inspection = await createInspection({
+      companyId: id,
+
+      propertyId,
+
+      formId: form.id,
+
+      inspector,
+
+      responses,
+
+      status: "draft",
+
+      syncStatus: "local",
+    });
+
+    setCreatedInspectionId(inspection.id);
+
+    return inspection.id;
+  };
+
+  const handleCaptureEvidence = async (question: FormQuestion) => {
+    if (isProcessing) {
+      return;
+    }
+
+    setPhotoProcessingQuestionId(question.id);
+    setPhotoProcessingAction("camera");
+    setActionError(null);
+
+    try {
+      const inspectionForEvidenceId = await ensureDraftInspection();
+
+      const media = await captureEvidencePhoto();
+
+      if (!media) {
+        return;
+      }
+
+      const evidence = await createEvidence({
+        companyId: id,
+
+        propertyId,
+
+        inspectionId: inspectionForEvidenceId,
+
         questionId: question.id,
 
-        value: answers[question.id] ?? null,
-      }));
+        title: `${question.label} - fotografía`,
+
+        type: "photo",
+
+        status: "pending",
+
+        description:
+          "Evidencia fotográfica capturada durante una inspección UNIESAP.",
+
+        localUri: media.localUri,
+
+        fileName: media.fileName,
+
+        ...(media.mimeType
+          ? {
+              mimeType: media.mimeType,
+            }
+          : {}),
+
+        ...(media.fileSize !== undefined
+          ? {
+              fileSize: media.fileSize,
+            }
+          : {}),
+      });
+
+      const currentInspection = getInspectionById(inspectionForEvidenceId);
+
+      if (!currentInspection) {
+        throw new Error(
+          "La evidencia fue creada, pero no fue posible recuperar la inspección asociada.",
+        );
+      }
+
+      const nextEvidenceIds = Array.from(
+        new Set([...currentInspection.evidenceIds, evidence.id]),
+      );
+
+      const updatedInspection = await updateInspection(
+        inspectionForEvidenceId,
+        {
+          evidenceIds: nextEvidenceIds,
+        },
+      );
+
+      if (!updatedInspection) {
+        throw new Error(
+          "La fotografía fue guardada, pero no fue posible asociarla a la inspección.",
+        );
+      }
+
+      console.log("Evidencia fotográfica agregada a la inspección:", {
+        inspectionId: inspectionForEvidenceId,
+        questionId: question.id,
+        evidenceId: evidence.id,
+      });
+
+      refreshEvidences();
+    } catch (error) {
+      console.error("Error capturando evidencia fotográfica:", error);
+
+      setActionError(getErrorMessage(error));
+    } finally {
+      setPhotoProcessingAction(null);
+      setPhotoProcessingQuestionId(null);
+    }
+  };
+
+  const handlePickEvidence = async (question: FormQuestion) => {
+    if (isProcessing) {
+      return;
+    }
+
+    setPhotoProcessingQuestionId(question.id);
+    setPhotoProcessingAction("gallery");
+    setActionError(null);
+
+    try {
+      const inspectionForEvidenceId = await ensureDraftInspection();
+
+      const media = await pickEvidencePhoto();
+
+      if (!media) {
+        return;
+      }
+
+      const evidence = await createEvidence({
+        companyId: id,
+
+        propertyId,
+
+        inspectionId: inspectionForEvidenceId,
+
+        questionId: question.id,
+
+        title: `${question.label} - fotografía`,
+
+        type: "photo",
+
+        status: "pending",
+
+        description:
+          "Evidencia fotográfica seleccionada durante una inspección UNIESAP.",
+
+        localUri: media.localUri,
+
+        fileName: media.fileName,
+
+        ...(media.mimeType
+          ? {
+              mimeType: media.mimeType,
+            }
+          : {}),
+
+        ...(media.fileSize !== undefined
+          ? {
+              fileSize: media.fileSize,
+            }
+          : {}),
+      });
+
+      const currentInspection = getInspectionById(inspectionForEvidenceId);
+
+      if (!currentInspection) {
+        throw new Error(
+          "La evidencia fue creada, pero no fue posible recuperar la inspección asociada.",
+        );
+      }
+
+      const nextEvidenceIds = Array.from(
+        new Set([...currentInspection.evidenceIds, evidence.id]),
+      );
+
+      const updatedInspection = await updateInspection(
+        inspectionForEvidenceId,
+        {
+          evidenceIds: nextEvidenceIds,
+        },
+      );
+
+      if (!updatedInspection) {
+        throw new Error(
+          "La fotografía fue guardada, pero no fue posible asociarla a la inspección.",
+        );
+      }
+
+      console.log("Evidencia fotográfica seleccionada para la inspección:", {
+        inspectionId: inspectionForEvidenceId,
+        questionId: question.id,
+        evidenceId: evidence.id,
+      });
+
+      refreshEvidences();
+    } catch (error) {
+      console.error("Error seleccionando evidencia fotográfica:", error);
+
+      setActionError(getErrorMessage(error));
+    } finally {
+      setPhotoProcessingAction(null);
+      setPhotoProcessingQuestionId(null);
+    }
+  };
+
+  const handleDeleteEvidence = async (evidence: Evidence) => {
+    if (isProcessing) {
+      return;
+    }
+
+    setPhotoProcessingQuestionId(evidence.questionId ?? null);
+    setPhotoProcessingAction("delete");
+    setActionError(null);
+
+    try {
+      const currentInspection = getInspectionById(evidence.inspectionId);
+
+      const deleted = await deleteEvidence(evidence.id);
+
+      if (!deleted) {
+        throw new Error("No fue posible eliminar la evidencia seleccionada.");
+      }
+
+      if (currentInspection) {
+        const updatedInspection = await updateInspection(currentInspection.id, {
+          evidenceIds: currentInspection.evidenceIds.filter(
+            (evidenceId) => evidenceId !== evidence.id,
+          ),
+        });
+
+        if (!updatedInspection) {
+          console.warn(
+            "La evidencia fue eliminada, pero no fue posible actualizar evidenceIds de la inspección.",
+            {
+              inspectionId: currentInspection.id,
+              evidenceId: evidence.id,
+            },
+          );
+        }
+      }
+
+      try {
+        await deleteEvidenceMedia(evidence.localUri);
+      } catch (mediaError) {
+        console.error(
+          "La evidencia fue eliminada, pero falló la limpieza del archivo local:",
+          mediaError,
+        );
+      }
+
+      refreshEvidences();
+    } catch (error) {
+      console.error("Error eliminando evidencia fotográfica:", error);
+
+      setActionError(getErrorMessage(error));
+    } finally {
+      setPhotoProcessingAction(null);
+      setPhotoProcessingQuestionId(null);
+    }
   };
 
   /* ---------------------------------------------------------------------- */
@@ -697,6 +1083,22 @@ export default function CaptureScreen() {
                   question={question}
                   value={answers[question.id] ?? null}
                   onChange={(value) => updateAnswer(question.id, value)}
+                  evidences={
+                    createdInspectionId
+                      ? getEvidencesByQuestionId(
+                          createdInspectionId,
+                          question.id,
+                        )
+                      : []
+                  }
+                  photoProcessingAction={
+                    photoProcessingQuestionId === question.id
+                      ? photoProcessingAction
+                      : null
+                  }
+                  onCapturePhoto={() => handleCaptureEvidence(question)}
+                  onPickPhoto={() => handlePickEvidence(question)}
+                  onDeletePhoto={handleDeleteEvidence}
                 />
               ))}
             </View>
@@ -930,11 +1332,21 @@ function QuestionCard({
   question,
   value,
   onChange,
+  evidences,
+  photoProcessingAction,
+  onCapturePhoto,
+  onPickPhoto,
+  onDeletePhoto,
 }: {
   number: number;
   question: FormQuestion;
   value: InspectionResponseValue;
   onChange: (value: InspectionResponseValue) => void;
+  evidences: Evidence[];
+  photoProcessingAction: PhotoProcessingAction;
+  onCapturePhoto: () => void;
+  onPickPhoto: () => void;
+  onDeletePhoto: (evidence: Evidence) => void;
 }) {
   const { colors } = useAppTheme();
 
@@ -1088,10 +1500,11 @@ function QuestionCard({
 
       {question.type === "photo" && (
         <PhotoQuestion
-          selected={
-            typeof value === "string" && value.startsWith("mock-photo:")
-          }
-          onPress={() => onChange(`mock-photo:${question.id}`)}
+          evidences={evidences}
+          processingAction={photoProcessingAction}
+          onCapturePhoto={onCapturePhoto}
+          onPickPhoto={onPickPhoto}
+          onDeletePhoto={onDeletePhoto}
         />
       )}
 
@@ -1207,72 +1620,217 @@ function SelectQuestion({
 /* -------------------------------------------------------------------------- */
 
 function PhotoQuestion({
-  selected,
-  onPress,
+  evidences,
+  processingAction,
+  onCapturePhoto,
+  onPickPhoto,
+  onDeletePhoto,
 }: {
-  selected: boolean;
-  onPress: () => void;
+  evidences: Evidence[];
+  processingAction: PhotoProcessingAction;
+  onCapturePhoto: () => void;
+  onPickPhoto: () => void;
+  onDeletePhoto: (evidence: Evidence) => void;
 }) {
   const { colors } = useAppTheme();
 
+  const isProcessing = processingAction !== null;
+
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.photoBox,
-        {
-          backgroundColor: selected ? colors.primarySoft : colors.surface,
-
-          borderColor: selected ? colors.primary : colors.border,
-
-          opacity: pressed ? 0.75 : 1,
-        },
-      ]}
-    >
+    <View style={styles.photoSection}>
       <View
         style={[
-          styles.photoIconContainer,
+          styles.photoSummary,
           {
-            backgroundColor: selected ? colors.surface : colors.primarySoft,
+            backgroundColor:
+              evidences.length > 0
+                ? colors.primarySoft
+                : colors.surfaceSecondary,
+
+            borderColor: evidences.length > 0 ? colors.primary : colors.border,
           },
         ]}
       >
-        <Text
+        <View
           style={[
-            styles.photoIcon,
+            styles.photoIconContainer,
             {
-              color: colors.primary,
+              backgroundColor: colors.surface,
             },
           ]}
         >
-          {selected ? "✓" : "+"}
-        </Text>
+          <Text
+            style={[
+              styles.photoIcon,
+              {
+                color: colors.primary,
+              },
+            ]}
+          >
+            {evidences.length > 0 ? "✓" : "+"}
+          </Text>
+        </View>
+
+        <View style={styles.photoSummaryContent}>
+          <Text
+            style={[
+              styles.photoTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            {evidences.length > 0
+              ? `${evidences.length} fotografía${
+                  evidences.length === 1 ? "" : "s"
+                }`
+              : "Sin fotografías"}
+          </Text>
+
+          <Text
+            style={[
+              styles.photoDescription,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Agrega todas las evidencias necesarias. UNIESAP no establece un
+            límite fijo de fotografías para esta pregunta.
+          </Text>
+        </View>
       </View>
 
-      <Text
-        style={[
-          styles.photoTitle,
-          {
-            color: colors.text,
-          },
-        ]}
-      >
-        {selected ? "Fotografía agregada" : "Agregar fotografía"}
-      </Text>
+      <View style={styles.photoActions}>
+        <View style={styles.photoActionButton}>
+          <AppButton onPress={onCapturePhoto}>
+            {processingAction === "camera"
+              ? "Abriendo cámara..."
+              : "Tomar fotografía"}
+          </AppButton>
+        </View>
 
-      <Text
-        style={[
-          styles.photoDescription,
-          {
-            color: colors.textSecondary,
-          },
-        ]}
-      >
-        {selected
-          ? "Evidencia simulada agregada al formulario."
-          : "La cámara real se conectará posteriormente."}
-      </Text>
-    </Pressable>
+        <View style={styles.photoActionButton}>
+          <AppButton variant="secondary" onPress={onPickPhoto}>
+            {processingAction === "gallery"
+              ? "Abriendo galería..."
+              : "Seleccionar fotografía"}
+          </AppButton>
+        </View>
+      </View>
+
+      {isProcessing && processingAction === "delete" && (
+        <Text
+          style={[
+            styles.photoProcessingText,
+            {
+              color: colors.textMuted,
+            },
+          ]}
+        >
+          Eliminando evidencia...
+        </Text>
+      )}
+
+      {evidences.length > 0 && (
+        <View style={styles.photoGrid}>
+          {evidences.map((evidence) => (
+            <View
+              key={evidence.id}
+              style={[
+                styles.photoEvidenceCard,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              {evidence.localUri ? (
+                <Image
+                  source={{
+                    uri: evidence.localUri,
+                  }}
+                  style={styles.photoPreview}
+                  contentFit="cover"
+                  transition={150}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.photoPreviewFallback,
+                    {
+                      backgroundColor: colors.primarySoft,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.photoPreviewFallbackText,
+                      {
+                        color: colors.primary,
+                      },
+                    ]}
+                  >
+                    FOTO
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.photoEvidenceInfo}>
+                <Text
+                  style={[
+                    styles.photoEvidenceName,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {evidence.fileName ?? evidence.title}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.photoEvidenceMeta,
+                    {
+                      color: colors.textMuted,
+                    },
+                  ]}
+                >
+                  {evidence.fileSize !== undefined
+                    ? formatEvidenceFileSize(evidence.fileSize)
+                    : "Archivo local"}
+                </Text>
+
+                <Pressable
+                  disabled={isProcessing}
+                  onPress={() => onDeletePhoto(evidence)}
+                  style={({ pressed }) => [
+                    styles.photoDeleteButton,
+                    {
+                      borderColor: colors.error,
+
+                      opacity: pressed || isProcessing ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.photoDeleteText,
+                      {
+                        color: colors.error,
+                      },
+                    ]}
+                  >
+                    Eliminar
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -1592,6 +2150,20 @@ function getErrorMessage(error: unknown): string {
   }
 
   return "Ocurrió un error desconocido.";
+}
+
+function formatEvidenceFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const kilobytes = bytes / 1024;
+
+  if (kilobytes < 1024) {
+    return `${kilobytes.toFixed(1)} KB`;
+  }
+
+  return `${(kilobytes / 1024).toFixed(2)} MB`;
 }
 
 function getQuestionTypeLabel(type: FormQuestion["type"]) {
@@ -1960,20 +2532,22 @@ const styles = StyleSheet.create({
   /* PHOTO                                                                */
   /* -------------------------------------------------------------------- */
 
-  photoBox: {
-    minHeight: 170,
+  photoSection: {
+    gap: Spacing.md,
+  },
 
-    borderWidth: 1,
+  photoSummary: {
+    minHeight: 112,
 
-    borderStyle: "dashed",
-
-    borderRadius: Radius.lg,
+    flexDirection: "row",
 
     alignItems: "center",
 
-    justifyContent: "center",
+    padding: Spacing.md,
 
-    padding: Spacing.lg,
+    borderWidth: 1,
+
+    borderRadius: Radius.lg,
   },
 
   photoIconContainer: {
@@ -1981,13 +2555,15 @@ const styles = StyleSheet.create({
 
     height: 48,
 
+    flexShrink: 0,
+
     alignItems: "center",
 
     justifyContent: "center",
 
     borderRadius: Radius.full,
 
-    marginBottom: Spacing.sm,
+    marginRight: Spacing.md,
   },
 
   photoIcon: {
@@ -1996,10 +2572,16 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  photoSummaryContent: {
+    flex: 1,
+
+    minWidth: 0,
+  },
+
   photoTitle: {
     fontSize: FontSize.body,
 
-    fontWeight: "600",
+    fontWeight: "700",
 
     marginBottom: Spacing.xs,
   },
@@ -2008,8 +2590,104 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
 
     lineHeight: 18,
+  },
 
-    textAlign: "center",
+  photoActions: {
+    flexDirection: "row",
+
+    flexWrap: "wrap",
+
+    gap: Spacing.sm,
+  },
+
+  photoActionButton: {
+    flexGrow: 1,
+
+    minWidth: 190,
+  },
+
+  photoProcessingText: {
+    fontSize: FontSize.caption,
+
+    fontWeight: "600",
+  },
+
+  photoGrid: {
+    flexDirection: "row",
+
+    flexWrap: "wrap",
+
+    gap: Spacing.md,
+  },
+
+  photoEvidenceCard: {
+    width: 180,
+
+    overflow: "hidden",
+
+    borderWidth: 1,
+
+    borderRadius: Radius.md,
+  },
+
+  photoPreview: {
+    width: "100%",
+
+    aspectRatio: 4 / 3,
+  },
+
+  photoPreviewFallback: {
+    width: "100%",
+
+    aspectRatio: 4 / 3,
+
+    alignItems: "center",
+
+    justifyContent: "center",
+  },
+
+  photoPreviewFallbackText: {
+    fontSize: FontSize.caption,
+
+    fontWeight: "700",
+  },
+
+  photoEvidenceInfo: {
+    padding: Spacing.sm,
+  },
+
+  photoEvidenceName: {
+    fontSize: FontSize.caption,
+
+    fontWeight: "700",
+
+    marginBottom: Spacing.xs,
+  },
+
+  photoEvidenceMeta: {
+    fontSize: FontSize.caption,
+
+    marginBottom: Spacing.sm,
+  },
+
+  photoDeleteButton: {
+    minHeight: 34,
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    paddingHorizontal: Spacing.sm,
+
+    borderWidth: 1,
+
+    borderRadius: Radius.md,
+  },
+
+  photoDeleteText: {
+    fontSize: FontSize.caption,
+
+    fontWeight: "700",
   },
 
   /* -------------------------------------------------------------------- */

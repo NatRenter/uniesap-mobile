@@ -19,6 +19,16 @@ type EvidenceRow = {
   file_name: string | null;
   file_size: number | null;
   created_at: string | null;
+
+  /*
+   * Campos de idempotencia individual de attachments.
+   */
+  kobo_upload_operation_id: string | null;
+  kobo_attachment_id: string | null;
+  kobo_asset_uid: string | null;
+  kobo_submission_id: string | null;
+  kobo_uploaded_at: string | null;
+  last_upload_error: string | null;
 };
 
 export async function countEvidences(): Promise<number> {
@@ -52,7 +62,13 @@ export async function selectAllEvidences(): Promise<Evidence[]> {
       mime_type,
       file_name,
       file_size,
-      created_at
+      created_at,
+      kobo_upload_operation_id,
+      kobo_attachment_id,
+      kobo_asset_uid,
+      kobo_submission_id,
+      kobo_uploaded_at,
+      last_upload_error
     FROM evidences
     ORDER BY created_at ASC, date ASC, id ASC;
   `);
@@ -81,9 +97,18 @@ export async function insertEvidence(evidence: Evidence): Promise<void> {
         mime_type,
         file_name,
         file_size,
-        created_at
+        created_at,
+        kobo_upload_operation_id,
+        kobo_attachment_id,
+        kobo_asset_uid,
+        kobo_submission_id,
+        kobo_uploaded_at,
+        last_upload_error
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      );
     `,
     evidence.id,
     evidence.companyId,
@@ -101,12 +126,23 @@ export async function insertEvidence(evidence: Evidence): Promise<void> {
     evidence.fileName ?? null,
     evidence.fileSize ?? null,
     evidence.createdAt ?? null,
+    evidence.integration?.kobo?.uploadOperationId ?? null,
+    evidence.integration?.kobo?.attachmentId ?? null,
+    evidence.integration?.kobo?.assetUid ?? null,
+    evidence.integration?.kobo?.submissionId !== undefined
+      ? String(evidence.integration.kobo.submissionId)
+      : null,
+    evidence.integration?.kobo?.uploadedAt ?? null,
+    evidence.integration?.kobo?.lastUploadError ?? null,
   );
 }
 
 export async function replaceEvidence(evidence: Evidence): Promise<void> {
   const database = await getDatabase();
 
+  /*
+   * INSERT OR REPLACE conserva el comportamiento actual del repositorio.
+   */
   await database.runAsync(
     `
       INSERT OR REPLACE INTO evidences (
@@ -125,9 +161,18 @@ export async function replaceEvidence(evidence: Evidence): Promise<void> {
         mime_type,
         file_name,
         file_size,
-        created_at
+        created_at,
+        kobo_upload_operation_id,
+        kobo_attachment_id,
+        kobo_asset_uid,
+        kobo_submission_id,
+        kobo_uploaded_at,
+        last_upload_error
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      );
     `,
     evidence.id,
     evidence.companyId,
@@ -145,6 +190,14 @@ export async function replaceEvidence(evidence: Evidence): Promise<void> {
     evidence.fileName ?? null,
     evidence.fileSize ?? null,
     evidence.createdAt ?? null,
+    evidence.integration?.kobo?.uploadOperationId ?? null,
+    evidence.integration?.kobo?.attachmentId ?? null,
+    evidence.integration?.kobo?.assetUid ?? null,
+    evidence.integration?.kobo?.submissionId !== undefined
+      ? String(evidence.integration.kobo.submissionId)
+      : null,
+    evidence.integration?.kobo?.uploadedAt ?? null,
+    evidence.integration?.kobo?.lastUploadError ?? null,
   );
 }
 
@@ -163,22 +216,113 @@ export async function deleteEvidenceFromDatabase(id: string): Promise<boolean> {
 }
 
 function mapEvidenceRow(row: EvidenceRow): Evidence {
+  const hasKoboIntegration =
+    row.kobo_upload_operation_id !== null ||
+    row.kobo_attachment_id !== null ||
+    row.kobo_asset_uid !== null ||
+    row.kobo_submission_id !== null ||
+    row.kobo_uploaded_at !== null ||
+    row.last_upload_error !== null;
+
   return {
     id: row.id,
     companyId: row.company_id,
     propertyId: row.property_id,
     inspectionId: row.inspection_id,
-    ...(row.question_id ? { questionId: row.question_id } : {}),
+
+    ...(row.question_id
+      ? {
+          questionId: row.question_id,
+        }
+      : {}),
+
     title: row.title,
     type: row.type,
     status: row.status,
     date: row.date,
-    ...(row.description ? { description: row.description } : {}),
-    ...(row.local_uri ? { localUri: row.local_uri } : {}),
-    ...(row.remote_uri ? { remoteUri: row.remote_uri } : {}),
-    ...(row.mime_type ? { mimeType: row.mime_type } : {}),
-    ...(row.file_name ? { fileName: row.file_name } : {}),
-    ...(row.file_size !== null ? { fileSize: row.file_size } : {}),
-    ...(row.created_at ? { createdAt: row.created_at } : {}),
+
+    ...(row.description
+      ? {
+          description: row.description,
+        }
+      : {}),
+
+    ...(row.local_uri
+      ? {
+          localUri: row.local_uri,
+        }
+      : {}),
+
+    ...(row.remote_uri
+      ? {
+          remoteUri: row.remote_uri,
+        }
+      : {}),
+
+    ...(row.mime_type
+      ? {
+          mimeType: row.mime_type,
+        }
+      : {}),
+
+    ...(row.file_name
+      ? {
+          fileName: row.file_name,
+        }
+      : {}),
+
+    ...(row.file_size !== null
+      ? {
+          fileSize: row.file_size,
+        }
+      : {}),
+
+    ...(row.created_at
+      ? {
+          createdAt: row.created_at,
+        }
+      : {}),
+
+    ...(hasKoboIntegration && row.kobo_upload_operation_id
+      ? {
+          integration: {
+            kobo: {
+              provider: "kobo" as const,
+
+              uploadOperationId: row.kobo_upload_operation_id,
+
+              ...(row.kobo_attachment_id
+                ? {
+                    attachmentId: row.kobo_attachment_id,
+                  }
+                : {}),
+
+              ...(row.kobo_asset_uid
+                ? {
+                    assetUid: row.kobo_asset_uid,
+                  }
+                : {}),
+
+              ...(row.kobo_submission_id
+                ? {
+                    submissionId: row.kobo_submission_id,
+                  }
+                : {}),
+
+              ...(row.kobo_uploaded_at
+                ? {
+                    uploadedAt: row.kobo_uploaded_at,
+                  }
+                : {}),
+
+              ...(row.last_upload_error
+                ? {
+                    lastUploadError: row.last_upload_error,
+                  }
+                : {}),
+            },
+          },
+        }
+      : {}),
   };
 }

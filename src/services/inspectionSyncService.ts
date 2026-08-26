@@ -1,84 +1,194 @@
 import { getFormById } from "@/data/forms";
 
 import {
+  getEvidenceById,
+  getEvidencesByInspectionId,
+  updateEvidence,
+} from "@/repositories/evidenceRepository";
+
+import {
   getInspectionById,
   updateInspection,
 } from "@/repositories/inspectionRepository";
 
+import {
+  exportKoboSubmission,
+  uploadKoboAttachment,
+} from "@/services/koboInspectionService";
+
 import { getNetworkAvailability } from "@/services/networkService";
 
-import { exportKoboSubmission } from "@/services/koboInspectionService";
-
 import type { Inspection } from "@/types/inspection";
-
-/*
- * ============================================================================
- * RESULTADO DE SINCRONIZACIÓN
- * ============================================================================
- */
 
 export type InspectionSyncResult =
   | {
       status: "synced";
-
       inspection: Inspection;
     }
   | {
       status: "skipped";
-
       inspection: Inspection;
-
       reason: string;
     }
   | {
       status: "error";
-
       inspection: Inspection;
-
       error: string;
     };
 
 /*
  * ============================================================================
- * SINCRONIZAR UNA INSPECCIÓN
+ * FALLO SIMULADO DESPUÉS DE LA SUBMISSION
  * ============================================================================
  *
- * Esta función es el ÚNICO punto desde el cual una inspección
- * debe intentar sincronizarse con Kobo.
+ * Prueba anterior:
  *
+ * Kobo acepta la submission
+ *        ↓
+ * UNIESAP falla antes de guardar el resultado local.
  *
- * Flujo:
+ * Es una prueba one-shot:
+ * después de ejecutarse se desarma automáticamente.
+ */
+
+let failAfterSubmissionOnce = false;
+
+export function armInspectionSyncFailureAfterSubmission(): void {
+  failAfterSubmissionOnce = true;
+}
+
+export function isInspectionSyncFailureAfterSubmissionArmed(): boolean {
+  return failAfterSubmissionOnce;
+}
+
+function consumeInspectionSyncFailureAfterSubmission(): boolean {
+  if (!failAfterSubmissionOnce) {
+    return false;
+  }
+
+  failAfterSubmissionOnce = false;
+
+  return true;
+}
+
+/*
+ * ============================================================================
+ * FALLO SIMULADO DESPUÉS DE QUE KOBO ACEPTA 1 ATTACHMENT
+ * ============================================================================
  *
- * Inspection
- *    ↓
- * validar estado
- *    ↓
- * validar conectividad
- *    ↓
- * syncing
- *    ↓
- * exportKoboSubmission()
- *    ↓
- * synced / error
+ * Esta prueba cubre el escenario más delicado de una evidencia:
  *
+ * Mock/Kobo acepta la fotografía
+ *        ↓
+ * la referencia idempotente queda persistida
+ *        ↓
+ * UNIESAP falla ANTES de marcar Evidence como synced
+ *        ↓
+ * reintento
+ *        ↓
+ * Kobo reconoce uploadOperationId
+ *        ↓
+ * devuelve el mismo attachmentId
  *
- * Gracias a esta validación central:
+ * Es one-shot y se desarma automáticamente al utilizarse.
+ */
+
+let failAfterAttachmentAcceptedOnce = false;
+
+export function armInspectionSyncFailureAfterAttachmentAccepted(): void {
+  failAfterAttachmentAcceptedOnce = true;
+}
+
+export function isInspectionSyncFailureAfterAttachmentAcceptedArmed(): boolean {
+  return failAfterAttachmentAcceptedOnce;
+}
+
+function consumeInspectionSyncFailureAfterAttachmentAccepted(): boolean {
+  if (!failAfterAttachmentAcceptedOnce) {
+    return false;
+  }
+
+  failAfterAttachmentAcceptedOnce = false;
+
+  return true;
+}
+
+/*
+ * ============================================================================
+ * FALLO SIMULADO DESPUÉS DE N ATTACHMENTS
+ * ============================================================================
  *
- * - CaptureScreen no conoce Kobo;
- * - /sync-test no puede saltarse la conectividad;
- * - Reintentar sincronización tampoco puede saltársela;
- * - MockKoboService no falsea nuestras pruebas offline.
+ * Nueva prueba:
+ *
+ * foto 1 → synced
+ * foto 2 → synced
+ * foto 3 → todavía pendiente
+ *        ↓
+ * fallo simulado
+ *
+ * El valor guarda cuántas evidencias nuevas deben subirse
+ * antes de provocar el fallo.
+ */
+
+let failAfterAttachmentCountOnce: number | null = null;
+
+export function armInspectionSyncFailureAfterAttachments(
+  attachmentCount: number,
+): void {
+  if (!Number.isInteger(attachmentCount) || attachmentCount < 1) {
+    throw new Error(
+      "La cantidad de evidencias para la prueba debe ser un entero mayor o igual a 1.",
+    );
+  }
+
+  failAfterAttachmentCountOnce = attachmentCount;
+}
+
+export function isInspectionSyncFailureAfterAttachmentsArmed(): boolean {
+  return failAfterAttachmentCountOnce !== null;
+}
+
+function shouldFailAfterAttachmentUpload(
+  uploadedCount: number,
+  currentIndex: number,
+  totalAttachments: number,
+): boolean {
+  const targetCount = failAfterAttachmentCountOnce;
+
+  if (targetCount === null) {
+    return false;
+  }
+
+  /*
+   * Queremos que el fallo ocurra a mitad del proceso.
+   *
+   * Si ya estamos en el último attachment,
+   * dejamos terminar normalmente.
+   */
+  const hasMoreAttachments = currentIndex < totalAttachments - 1;
+
+  if (uploadedCount < targetCount || !hasMoreAttachments) {
+    return false;
+  }
+
+  /*
+   * One-shot:
+   * se desarma antes de lanzar el error.
+   */
+  failAfterAttachmentCountOnce = null;
+
+  return true;
+}
+
+/*
+ * ============================================================================
+ * SINCRONIZAR INSPECCIÓN
+ * ============================================================================
  */
 
 export async function syncInspection(
   inspectionId: string,
 ): Promise<InspectionSyncResult> {
-  /*
-   * ==========================================================================
-   * OBTENER INSPECCIÓN
-   * ==========================================================================
-   */
-
   const inspection = getInspectionById(inspectionId);
 
   if (!inspection) {
@@ -86,86 +196,47 @@ export async function syncInspection(
   }
 
   /*
-   * ==========================================================================
-   * VALIDAR QUE ESTÉ TERMINADA
-   * ==========================================================================
-   *
-   * Borradores y capturas en proceso nunca deben
-   * crear submissions Kobo.
+   * Borradores o capturas en proceso nunca deben enviarse a Kobo.
    */
-
   if (inspection.status !== "completed") {
     return {
       status: "skipped",
-
       inspection,
-
       reason: "La inspección todavía no está finalizada.",
     };
   }
 
   /*
-   * ==========================================================================
-   * EVITAR DUPLICADOS
-   * ==========================================================================
-   *
-   * Una inspección que ya está synced no debe
-   * crear otra submission.
+   * Una inspección ya sincronizada no vuelve a enviarse.
    */
-
   if (inspection.integration?.syncStatus === "synced") {
     return {
       status: "skipped",
-
       inspection,
-
       reason: "La inspección ya está sincronizada.",
     };
   }
-
-  /*
-   * ==========================================================================
-   * RESOLVER FORMULARIO
-   * ==========================================================================
-   */
 
   const form = getFormById(inspection.formId);
 
   if (!form) {
     return markSyncError(
       inspection,
-
       `Formulario no encontrado: ${inspection.formId}`,
     );
   }
 
   /*
-   * ==========================================================================
-   * FORMULARIOS INTERNOS
-   * ==========================================================================
-   *
-   * Algunos formularios podrán pertenecer únicamente
-   * a UNIESAP y no tener integración Kobo.
-   *
-   * Estos registros permanecen como:
-   *
-   * completed + local
+   * Formularios locales que no utilizan Kobo.
    */
-
   if (!form.integration || form.integration.provider !== "kobo") {
-    const localInspection = await updateInspection(
-      inspection.id,
-
-      {
-        integration: {
-          ...inspection.integration,
-
-          syncStatus: "local",
-
-          lastSyncError: undefined,
-        },
+    const localInspection = await updateInspection(inspection.id, {
+      integration: {
+        ...inspection.integration,
+        syncStatus: "local",
+        lastSyncError: undefined,
       },
-    );
+    });
 
     if (!localInspection) {
       throw new Error(
@@ -175,41 +246,15 @@ export async function syncInspection(
 
     return {
       status: "skipped",
-
       inspection: localInspection,
-
       reason: "El formulario no utiliza Kobo.",
     };
   }
 
   /*
    * ==========================================================================
-   * VALIDAR CONECTIVIDAD
+   * CONECTIVIDAD
    * ==========================================================================
-   *
-   * Esta comprobación ocurre ANTES de cambiar el estado
-   * de la inspección a "syncing".
-   *
-   * Es especialmente importante mientras usamos
-   * MockKoboService, porque el Mock podría responder
-   * correctamente aunque físicamente no exista Internet.
-   *
-   *
-   * OFFLINE:
-   *
-   * pending
-   *    ↓
-   * permanece pending
-   *
-   *
-   * error
-   *    ↓
-   * permanece error
-   *
-   *
-   * syncing interrumpido
-   *    ↓
-   * permanece syncing hasta que vuelva a procesarse
    */
 
   let networkAvailable: boolean;
@@ -217,13 +262,6 @@ export async function syncInspection(
   try {
     networkAvailable = await getNetworkAvailability();
   } catch (error) {
-    /*
-     * Si ni siquiera podemos determinar el estado
-     * de red, actuamos de forma conservadora.
-     *
-     * No intentamos Kobo.
-     */
-
     console.warn(
       "No fue posible comprobar la conectividad antes de sincronizar:",
       error,
@@ -231,58 +269,42 @@ export async function syncInspection(
 
     return {
       status: "skipped",
-
       inspection,
-
       reason: "No fue posible comprobar la conexión a Internet.",
     };
   }
 
   if (!networkAvailable) {
-    console.log(
-      "Sincronización omitida porque el dispositivo está sin conexión:",
-      {
-        inspectionId: inspection.id,
-
-        syncStatus: inspection.integration?.syncStatus ?? "local",
-      },
-    );
-
     return {
       status: "skipped",
-
       inspection,
-
       reason: "Sin conexión a Internet. La inspección permanece pendiente.",
     };
   }
 
   /*
    * ==========================================================================
-   * MARCAR COMO SYNCING
+   * IDENTIDAD IDEMPOTENTE DE LA INSPECCIÓN
    * ==========================================================================
    *
-   * Llegados aquí sabemos que:
-   *
-   * ✓ está completada;
-   * ✓ necesita Kobo;
-   * ✓ no está sincronizada;
-   * ✓ existe conectividad.
+   * La misma inspección siempre conserva el mismo syncOperationId.
    */
 
-  const syncingInspection = await updateInspection(
-    inspection.id,
+  const syncOperationId =
+    inspection.integration?.syncOperationId ??
+    createSyncOperationId(inspection.id);
 
-    {
-      integration: {
-        ...inspection.integration,
+  const syncAttempt = (inspection.integration?.syncAttempt ?? 0) + 1;
 
-        syncStatus: "syncing",
-
-        lastSyncError: undefined,
-      },
+  const syncingInspection = await updateInspection(inspection.id, {
+    integration: {
+      ...inspection.integration,
+      syncStatus: "syncing",
+      syncOperationId,
+      syncAttempt,
+      lastSyncError: undefined,
     },
-  );
+  });
 
   if (!syncingInspection) {
     throw new Error(
@@ -290,64 +312,279 @@ export async function syncInspection(
     );
   }
 
-  /*
-   * ==========================================================================
-   * SINCRONIZAR CON KOBO
-   * ==========================================================================
-   */
-
   try {
+    const evidences = getEvidencesByInspectionId(inspection.id);
+
     /*
-     * koboInspectionService se encarga de:
+     * ========================================================================
+     * PASO 1 — SUBMISSION PRINCIPAL
+     * ========================================================================
      *
-     * InspectionResponse[]
-     *          ↓
-     * mapper
-     *          ↓
-     * KoboSubmissionData
-     *          ↓
-     * KoboService.createSubmission()
+     * createSubmission() ya es idempotente mediante syncOperationId.
      */
 
     const exported = await exportKoboSubmission(
       inspection.formId,
-
       inspection.responses,
+      syncOperationId,
+      evidences,
     );
 
     /*
-     * =========================================================================
-     * GUARDAR REFERENCIA KOBO
-     * =========================================================================
+     * Prueba anterior:
+     * fallo justo después de que Kobo acepta la submission.
+     */
+    if (consumeInspectionSyncFailureAfterSubmission()) {
+      console.warn(
+        "FALLO SIMULADO: Kobo aceptó la submission, pero UNIESAP falla antes de guardar el resultado local.",
+        {
+          inspectionId: inspection.id,
+          syncOperationId,
+          syncAttempt,
+          submissionId: exported.submission.submissionId,
+        },
+      );
+
+      throw new Error("Fallo simulado después de crear la submission Kobo.");
+    }
+
+    /*
+     * ========================================================================
+     * PASO 2 — ATTACHMENTS
+     * ========================================================================
+     *
+     * Las evidencias se procesan una por una.
+     *
+     * uploadedAttachmentCount solamente cuenta evidencias
+     * realmente procesadas durante ESTE intento.
      */
 
-    const syncedInspection = await updateInspection(
-      inspection.id,
+    let uploadedAttachmentCount = 0;
 
-      {
+    for (const [
+      attachmentIndex,
+      attachment,
+    ] of exported.attachments.entries()) {
+      const currentEvidence = getEvidenceById(attachment.evidenceId);
+
+      if (!currentEvidence) {
+        throw new Error(
+          `Evidencia no encontrada durante sincronización: ${attachment.evidenceId}`,
+        );
+      }
+
+      /*
+       * Si ya existe attachmentId y la evidencia está synced,
+       * la fotografía ya fue confirmada anteriormente.
+       *
+       * No la volvemos a subir.
+       */
+      if (
+        currentEvidence.status === "synced" &&
+        currentEvidence.integration?.kobo?.attachmentId
+      ) {
+        console.log("Attachment omitido porque ya está sincronizado:", {
+          evidenceId: currentEvidence.id,
+          attachmentId: currentEvidence.integration.kobo.attachmentId,
+        });
+
+        continue;
+      }
+
+      /*
+       * Guardamos uploadOperationId ANTES de la subida.
+       *
+       * Si la app se cierra aquí, el mismo identificador
+       * estará disponible durante el reintento.
+       */
+      await updateEvidence(currentEvidence.id, {
         integration: {
-          syncStatus: "synced",
-
           kobo: {
             provider: "kobo",
+            uploadOperationId: attachment.uploadOperationId,
 
-            assetUid: exported.assetUid,
-
-            submissionId: exported.submission.submissionId,
-
-            ...(exported.submission.uuid
+            ...(currentEvidence.integration?.kobo?.attachmentId
               ? {
-                  uuid: exported.submission.uuid,
+                  attachmentId: currentEvidence.integration.kobo.attachmentId,
                 }
               : {}),
 
-            syncedAt: exported.submission.syncedAt ?? new Date().toISOString(),
-          },
+            ...(currentEvidence.integration?.kobo?.assetUid
+              ? {
+                  assetUid: currentEvidence.integration.kobo.assetUid,
+                }
+              : {}),
 
-          lastSyncError: undefined,
+            ...(currentEvidence.integration?.kobo?.submissionId !== undefined
+              ? {
+                  submissionId: currentEvidence.integration.kobo.submissionId,
+                }
+              : {}),
+
+            ...(currentEvidence.integration?.kobo?.uploadedAt
+              ? {
+                  uploadedAt: currentEvidence.integration.kobo.uploadedAt,
+                }
+              : {}),
+
+            lastUploadError: undefined,
+          },
         },
+      });
+
+      /*
+       * La subida individual tiene su propio try/catch.
+       *
+       * Si solamente una fotografía falla:
+       * - esa evidencia queda pending;
+       * - la inspección queda error;
+       * - las fotos anteriores conservan synced.
+       */
+      try {
+        const uploaded = await uploadKoboAttachment(
+          exported.assetUid,
+          exported.submission.submissionId,
+          attachment,
+        );
+
+        /*
+         * ================================================================
+         * FALLO DESPUÉS DE ACEPTACIÓN REMOTA
+         * ================================================================
+         *
+         * En este punto Mock/Kobo YA aceptó la evidencia y guardó:
+         *
+         * uploadOperationId → attachmentId
+         *
+         * Pero UNIESAP todavía NO ha marcado Evidence como synced.
+         *
+         * Esto reproduce un cierre o fallo justo en la ventana más peligrosa.
+         */
+        if (consumeInspectionSyncFailureAfterAttachmentAccepted()) {
+          console.warn(
+            "FALLO SIMULADO: Kobo aceptó la evidencia, pero UNIESAP falla antes de guardar su estado local.",
+            {
+              inspectionId: inspection.id,
+              evidenceId: attachment.evidenceId,
+              uploadOperationId: attachment.uploadOperationId,
+              attachmentId: uploaded.attachmentId,
+              submissionId: uploaded.submissionId,
+            },
+          );
+
+          throw new Error(
+            `Fallo simulado después de que Kobo aceptó la evidencia ${attachment.evidenceId}.`,
+          );
+        }
+
+        await updateEvidence(attachment.evidenceId, {
+          status: "synced",
+
+          integration: {
+            kobo: {
+              provider: "kobo",
+              uploadOperationId: attachment.uploadOperationId,
+              attachmentId: uploaded.attachmentId,
+              assetUid: uploaded.assetUid,
+              submissionId: uploaded.submissionId,
+              uploadedAt: uploaded.uploadedAt ?? new Date().toISOString(),
+              lastUploadError: undefined,
+            },
+          },
+        });
+      } catch (attachmentError) {
+        const message = getErrorMessage(attachmentError);
+
+        await updateEvidence(attachment.evidenceId, {
+          status: "pending",
+
+          integration: {
+            kobo: {
+              provider: "kobo",
+              uploadOperationId: attachment.uploadOperationId,
+              lastUploadError: message,
+            },
+          },
+        });
+
+        throw new Error(
+          `No fue posible sincronizar la evidencia ${attachment.evidenceId}: ${message}`,
+        );
+      }
+
+      /*
+       * La evidencia ya quedó confirmada y persistida.
+       */
+      uploadedAttachmentCount += 1;
+
+      /*
+       * ======================================================================
+       * FALLO SIMULADO A MITAD DE ATTACHMENTS
+       * ======================================================================
+       *
+       * Se ejecuta FUERA del try/catch de uploadAttachment().
+       *
+       * Esto es importante:
+       * las fotografías ya aceptadas permanecen synced.
+       */
+      if (
+        shouldFailAfterAttachmentUpload(
+          uploadedAttachmentCount,
+          attachmentIndex,
+          exported.attachments.length,
+        )
+      ) {
+        console.warn(
+          "FALLO SIMULADO: UNIESAP se interrumpe después de sincronizar evidencias individuales.",
+          {
+            inspectionId: inspection.id,
+            syncOperationId,
+            syncAttempt,
+            uploadedAttachmentCount,
+            totalAttachments: exported.attachments.length,
+            lastEvidenceId: attachment.evidenceId,
+          },
+        );
+
+        throw new Error(
+          `Fallo simulado después de sincronizar ${uploadedAttachmentCount} evidencia(s).`,
+        );
+      }
+    }
+
+    /*
+     * =========================================================================
+     * PASO 3 — FINALIZAR INSPECCIÓN
+     * =========================================================================
+     *
+     * Solo llegamos aquí cuando todas las evidencias compatibles
+     * quedaron procesadas.
+     */
+
+    const syncedInspection = await updateInspection(inspection.id, {
+      integration: {
+        ...syncingInspection.integration,
+        syncStatus: "synced",
+        syncOperationId,
+        syncAttempt,
+
+        kobo: {
+          provider: "kobo",
+          assetUid: exported.assetUid,
+          submissionId: exported.submission.submissionId,
+
+          ...(exported.submission.uuid
+            ? {
+                uuid: exported.submission.uuid,
+              }
+            : {}),
+
+          syncedAt: exported.submission.syncedAt ?? new Date().toISOString(),
+        },
+
+        lastSyncError: undefined,
       },
-    );
+    });
 
     if (!syncedInspection) {
       throw new Error(
@@ -357,35 +594,22 @@ export async function syncInspection(
 
     console.log("Inspección sincronizada mediante InspectionSyncService:", {
       inspectionId: inspection.id,
-
+      syncOperationId,
+      syncAttempt,
       submission: exported.submission,
+      attachmentCount: exported.attachments.length,
     });
 
     return {
       status: "synced",
-
       inspection: syncedInspection,
     };
   } catch (error) {
     /*
-     * =========================================================================
-     * ERROR KOBO
-     * =========================================================================
-     *
-     * La inspección NO se pierde.
-     *
-     * Se mantiene persistida como:
-     *
-     * completed + error
-     *
-     * y podrá entrar nuevamente a la cola.
+     * Conservamos syncOperationId y syncAttempt
+     * porque usamos syncingInspection.
      */
-
-    return markSyncError(
-      inspection,
-
-      getErrorMessage(error),
-    );
+    return markSyncError(syncingInspection, getErrorMessage(error));
   }
 }
 
@@ -397,22 +621,15 @@ export async function syncInspection(
 
 async function markSyncError(
   inspection: Inspection,
-
   message: string,
 ): Promise<InspectionSyncResult> {
-  const failedInspection = await updateInspection(
-    inspection.id,
-
-    {
-      integration: {
-        ...inspection.integration,
-
-        syncStatus: "error",
-
-        lastSyncError: message,
-      },
+  const failedInspection = await updateInspection(inspection.id, {
+    integration: {
+      ...inspection.integration,
+      syncStatus: "error",
+      lastSyncError: message,
     },
-  );
+  });
 
   if (!failedInspection) {
     throw new Error(
@@ -422,25 +639,28 @@ async function markSyncError(
 
   console.error("Inspección marcada con error de sincronización:", {
     inspectionId: inspection.id,
-
+    syncOperationId: failedInspection.integration?.syncOperationId,
+    syncAttempt: failedInspection.integration?.syncAttempt,
     error: message,
   });
 
   return {
     status: "error",
-
     inspection: failedInspection,
-
     error: message,
   };
 }
 
 /*
- * ============================================================================
- * UTILIDAD
- * ============================================================================
+ * La misma inspección produce siempre la misma clave.
  */
+function createSyncOperationId(inspectionId: string): string {
+  return `sync-${inspectionId}`;
+}
 
+/*
+ * Convierte cualquier error a texto legible.
+ */
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;

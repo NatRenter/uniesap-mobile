@@ -53,6 +53,10 @@ type InspectionRow = {
 
   sync_status: "local" | "pending" | "syncing" | "synced" | "error";
 
+  sync_operation_id: string | null;
+
+  sync_attempt: number | null;
+
   kobo_asset_uid: string | null;
 
   kobo_submission_id: string | null;
@@ -102,6 +106,8 @@ export async function insertInspection(inspection: Inspection) {
           date,
           status,
           sync_status,
+          sync_operation_id,
+          sync_attempt,
           kobo_asset_uid,
           kobo_submission_id,
           kobo_uuid,
@@ -109,7 +115,7 @@ export async function insertInspection(inspection: Inspection) {
           last_sync_error
         )
         VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         );
         `,
       inspection.id,
@@ -120,6 +126,8 @@ export async function insertInspection(inspection: Inspection) {
       inspection.date,
       inspection.status,
       inspection.integration?.syncStatus ?? "local",
+      inspection.integration?.syncOperationId ?? null,
+      inspection.integration?.syncAttempt ?? 0,
       inspection.integration?.kobo?.assetUid ?? null,
       inspection.integration?.kobo?.submissionId != null
         ? String(inspection.integration.kobo.submissionId)
@@ -196,6 +204,8 @@ export async function replaceInspection(inspection: Inspection) {
           date = ?,
           status = ?,
           sync_status = ?,
+          sync_operation_id = ?,
+          sync_attempt = ?,
           kobo_asset_uid = ?,
           kobo_submission_id = ?,
           kobo_uuid = ?,
@@ -210,6 +220,8 @@ export async function replaceInspection(inspection: Inspection) {
       inspection.date,
       inspection.status,
       inspection.integration?.syncStatus ?? "local",
+      inspection.integration?.syncOperationId ?? null,
+      inspection.integration?.syncAttempt ?? 0,
       inspection.integration?.kobo?.assetUid ?? null,
       inspection.integration?.kobo?.submissionId != null
         ? String(inspection.integration.kobo.submissionId)
@@ -439,6 +451,14 @@ async function hydrateInspection(row: InspectionRow): Promise<Inspection> {
 
     integration: {
       syncStatus: row.sync_status,
+
+      ...(row.sync_operation_id
+        ? {
+            syncOperationId: row.sync_operation_id,
+          }
+        : {}),
+
+      syncAttempt: row.sync_attempt ?? 0,
 
       ...(row.kobo_asset_uid && row.kobo_submission_id
         ? {

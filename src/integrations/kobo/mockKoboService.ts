@@ -1,19 +1,16 @@
 import type { KoboService } from "./koboService";
 
+import { mockKoboPersistence } from "./mockKoboPersistence";
+
 import type {
   KoboAssetReference,
+  KoboAttachmentReference,
+  KoboSubmissionAttachment,
   KoboSubmissionData,
   KoboSubmissionId,
+  KoboSubmissionPackage,
   KoboSubmissionReference,
 } from "./types";
-
-/*
- * Datos ficticios de Kobo utilizados
- * únicamente durante el desarrollo.
- *
- * No corresponden todavía a proyectos
- * reales de Kobo.
- */
 
 const mockAssets: Record<string, KoboAssetReference> = {
   "mock-asset-risk": {
@@ -37,37 +34,20 @@ const mockAssets: Record<string, KoboAssetReference> = {
   },
 };
 
-/* -------------------------------------------------------------------------- */
-/*                            SUBMISSIONS MOCK                                */
-/* -------------------------------------------------------------------------- */
-
-/*
- * Ya no utilizamos const porque durante
- * la sesión podremos agregar nuevas capturas.
- */
-const mockSubmissions: Record<string, KoboSubmissionReference[]> = {
+const historicalSubmissions: Record<string, KoboSubmissionReference[]> = {
   "mock-asset-risk": [
     {
       assetUid: "mock-asset-risk",
-
       submissionId: 1001,
-
       uuid: "mock-risk-1001",
-
       submittedAt: "2026-08-10T10:30:00",
-
       syncedAt: "2026-08-18T09:00:00",
     },
-
     {
       assetUid: "mock-asset-risk",
-
       submissionId: 1002,
-
       uuid: "mock-risk-1002",
-
       submittedAt: "2026-08-14T11:00:00",
-
       syncedAt: "2026-08-18T09:00:00",
     },
   ],
@@ -75,19 +55,15 @@ const mockSubmissions: Record<string, KoboSubmissionReference[]> = {
   "mock-asset-extinguishers": [
     {
       assetUid: "mock-asset-extinguishers",
-
       submissionId: 2001,
-
       uuid: "mock-extinguisher-2001",
-
       submittedAt: "2026-08-12T12:00:00",
-
       syncedAt: "2026-08-18T09:00:00",
     },
   ],
 };
 
-const mockSubmissionData: Record<string, KoboSubmissionData> = {
+const historicalSubmissionData: Record<string, KoboSubmissionData> = {
   "mock-asset-risk:1001": {
     "datos_generales/responsable": "Alexis",
 
@@ -118,10 +94,6 @@ const mockSubmissionData: Record<string, KoboSubmissionData> = {
   },
 };
 
-/* -------------------------------------------------------------------------- */
-/*                              MOCK SERVICE                                  */
-/* -------------------------------------------------------------------------- */
-
 export class MockKoboService implements KoboService {
   async getAsset(assetUid: string): Promise<KoboAssetReference> {
     const asset = mockAssets[assetUid];
@@ -132,13 +104,33 @@ export class MockKoboService implements KoboService {
 
     await delay(250);
 
-    return asset;
+    return {
+      ...asset,
+    };
   }
 
   async getSubmissions(assetUid: string): Promise<KoboSubmissionReference[]> {
     await delay(250);
 
-    return mockSubmissions[assetUid] ?? [];
+    const historical = historicalSubmissions[assetUid] ?? [];
+
+    const persisted = await mockKoboPersistence.getAllByAsset(assetUid);
+
+    const unique = new Map<string, KoboSubmissionReference>();
+
+    for (const submission of historical) {
+      unique.set(String(submission.submissionId), {
+        ...submission,
+      });
+    }
+
+    for (const record of persisted) {
+      unique.set(String(record.reference.submissionId), {
+        ...record.reference,
+      });
+    }
+
+    return Array.from(unique.values());
   }
 
   async getSubmission(
@@ -147,29 +139,34 @@ export class MockKoboService implements KoboService {
   ): Promise<KoboSubmissionData> {
     await delay(250);
 
-    const key = `${assetUid}:${submissionId}`;
+    const historicalKey = `${assetUid}:${submissionId}`;
 
-    const submission = mockSubmissionData[key];
+    const historical = historicalSubmissionData[historicalKey];
 
-    if (!submission) {
-      throw new Error(`Kobo submission not found: ${key}`);
+    if (historical) {
+      return {
+        ...historical,
+      };
     }
 
-    return submission;
-  }
+    const persisted = await mockKoboPersistence.getBySubmissionId(
+      assetUid,
+      submissionId,
+    );
 
-  /* -------------------------------------------------------------------- */
-  /*                        CREATE SUBMISSION                              */
-  /* -------------------------------------------------------------------- */
+    if (persisted) {
+      return {
+        ...persisted.submissionPackage.data,
+      };
+    }
+
+    throw new Error(`Kobo submission not found: ${historicalKey}`);
+  }
 
   async createSubmission(
     assetUid: string,
-    data: KoboSubmissionData,
+    submission: KoboSubmissionPackage,
   ): Promise<KoboSubmissionReference> {
-    /*
-     * No permitimos crear capturas
-     * para assets inexistentes.
-     */
     const asset = mockAssets[assetUid];
 
     if (!asset) {
@@ -178,10 +175,25 @@ export class MockKoboService implements KoboService {
 
     await delay(350);
 
-    /*
-     * Generamos un ID ficticio suficientemente
-     * estable para las pruebas actuales.
-     */
+    const existing = await mockKoboPersistence.getByOperation(
+      assetUid,
+      submission.operationId,
+    );
+
+    if (existing) {
+      console.log("Mock Kobo persistent idempotency hit:", {
+        assetUid,
+
+        operationId: submission.operationId,
+
+        submissionId: existing.reference.submissionId,
+      });
+
+      return {
+        ...existing.reference,
+      };
+    }
+
     const submissionId = Date.now();
 
     const now = new Date().toISOString();
@@ -198,40 +210,134 @@ export class MockKoboService implements KoboService {
       syncedAt: now,
     };
 
-    /*
-     * Guardamos los datos en memoria.
-     *
-     * Mientras la app siga abierta,
-     * podremos recuperarlos mediante
-     * getSubmission().
-     */
-    mockSubmissionData[`${assetUid}:${submissionId}`] = {
-      ...data,
+    await mockKoboPersistence.save({
+      assetUid,
+
+      operationId: submission.operationId,
+
+      reference,
+
+      submissionPackage: {
+        operationId: submission.operationId,
+
+        data: {
+          ...submission.data,
+        },
+
+        attachments: submission.attachments.map((attachment) => ({
+          ...attachment,
+        })),
+      },
+    });
+
+    console.log("Mock Kobo persistent submission created:", {
+      operationId: submission.operationId,
+
+      reference,
+
+      attachmentCount: submission.attachments.length,
+    });
+
+    return {
+      ...reference,
+    };
+  }
+
+  /*
+   * ==========================================================================
+   * SUBIR ATTACHMENT
+   * ==========================================================================
+   *
+   * Cada evidencia se registra por:
+   *
+   * assetUid + submissionId + uploadOperationId
+   *
+   * Por eso una foto ya aceptada no se duplica.
+   */
+  async uploadAttachment(
+    assetUid: string,
+    submissionId: KoboSubmissionId,
+    attachment: KoboSubmissionAttachment,
+  ): Promise<KoboAttachmentReference> {
+    await delay(250);
+
+    const existing = await mockKoboPersistence.getAttachmentByOperation(
+      assetUid,
+      submissionId,
+      attachment.uploadOperationId,
+    );
+
+    if (existing) {
+      console.log("Mock Kobo attachment idempotency hit:", {
+        evidenceId: attachment.evidenceId,
+
+        uploadOperationId: attachment.uploadOperationId,
+
+        attachmentId: existing.reference.attachmentId,
+      });
+
+      return {
+        ...existing.reference,
+      };
+    }
+
+    const now = new Date().toISOString();
+
+    const attachmentId = `mock-attachment-${Date.now()}-${attachment.evidenceId}`;
+
+    const reference: KoboAttachmentReference = {
+      assetUid,
+
+      submissionId,
+
+      attachmentId,
+
+      evidenceId: attachment.evidenceId,
+
+      uploadOperationId: attachment.uploadOperationId,
+
+      fileName: attachment.fileName,
+
+      uploadedAt: now,
     };
 
     /*
-     * Añadimos también la referencia
-     * al listado de submissions.
+     * Persistimos antes de devolver éxito.
      */
-    const submissions = mockSubmissions[assetUid] ?? [];
+    await mockKoboPersistence.saveAttachment({
+      assetUid,
 
-    mockSubmissions[assetUid] = [...submissions, reference];
+      submissionId,
 
-    console.log("Mock Kobo submission created:", {
+      uploadOperationId: attachment.uploadOperationId,
+
+      evidenceId: attachment.evidenceId,
+
       reference,
-      data,
+
+      attachment: {
+        ...attachment,
+      },
     });
 
-    return reference;
+    console.log("Mock Kobo attachment uploaded:", {
+      evidenceId: attachment.evidenceId,
+
+      uploadOperationId: attachment.uploadOperationId,
+
+      attachmentId,
+
+      submissionId,
+    });
+
+    return {
+      ...reference,
+    };
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                  DELAY                                     */
-/* -------------------------------------------------------------------------- */
-
-function delay(milliseconds: number) {
-  return new Promise<void>((resolve) => {
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
   });
 }

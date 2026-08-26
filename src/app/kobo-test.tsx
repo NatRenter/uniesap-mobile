@@ -205,7 +205,11 @@ export default function KoboTestScreen() {
        *       ↓
        * MockKoboService.createSubmission()
        */
-      const result = await exportKoboSubmission("form-001", TEST_RESPONSES);
+      const result = await exportKoboSubmission(
+        "form-001",
+        TEST_RESPONSES,
+        "sync-kobo-test-form-001",
+      );
 
       setExportedInspection(result);
 
@@ -342,7 +346,7 @@ export default function KoboTestScreen() {
 
               {asset && (
                 <View style={[styles.column, !isPhone && styles.columnWide]}>
-                  <AppCard style={styles.fullHeightCard}>
+                  <AppCard style={!isPhone ? styles.fullHeightCard : undefined}>
                     <Text
                       style={[
                         styles.cardTitle,
@@ -374,7 +378,7 @@ export default function KoboTestScreen() {
               {/* SUBMISSIONS */}
 
               <View style={[styles.column, !isPhone && styles.columnWide]}>
-                <AppCard style={styles.fullHeightCard}>
+                <AppCard style={!isPhone ? styles.fullHeightCard : undefined}>
                   <Text
                     style={[
                       styles.cardTitle,

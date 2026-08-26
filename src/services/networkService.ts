@@ -1,6 +1,6 @@
 import NetInfo, {
-    type NetInfoState,
-    type NetInfoSubscription,
+  type NetInfoState,
+  type NetInfoSubscription,
 } from "@react-native-community/netinfo";
 
 /*
@@ -8,30 +8,18 @@ import NetInfo, {
  * SERVICIO DE CONECTIVIDAD
  * ============================================================================
  *
- * Esta capa centraliza la interpretación del estado de red.
+ * Centraliza el acceso a NetInfo.
  *
- * El resto de UNIESAP no necesita conocer directamente
- * los detalles de @react-native-community/netinfo.
+ * IMPORTANTE:
+ * Los logs [NetInfo] son temporales y se utilizan para comprobar
+ * exactamente qué información recibe Android/Expo Go cuando cambia
+ * la conectividad.
  */
 
 /* -------------------------------------------------------------------------- */
-/*                         ESTADO UTILIZABLE                                  */
+/*                           ESTADO UTILIZABLE                                 */
 /* -------------------------------------------------------------------------- */
 
-/*
- * NetInfo puede devolver:
- *
- * isConnected = true
- * isInternetReachable = null
- *
- * durante unos instantes mientras determina si realmente
- * existe acceso a Internet.
- *
- * Consideramos que existe conectividad utilizable cuando:
- *
- * - existe conexión de red;
- * - Internet no está confirmado explícitamente como inaccesible.
- */
 export function isNetworkAvailable(state: NetInfoState): boolean {
   if (state.isConnected !== true) {
     return false;
@@ -45,20 +33,32 @@ export function isNetworkAvailable(state: NetInfoState): boolean {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                             CONSULTA                                       */
+/*                              DEBUG                                         */
 /* -------------------------------------------------------------------------- */
 
-/*
- * Obtiene el estado actual de conectividad.
- */
+function logNetworkState(source: "fetch" | "event", state: NetInfoState): void {
+  console.log(`[NetInfo:${source}]`, {
+    type: state.type,
+    isConnected: state.isConnected,
+    isInternetReachable: state.isInternetReachable,
+    available: isNetworkAvailable(state),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              CONSULTA                                      */
+/* -------------------------------------------------------------------------- */
+
 export async function getNetworkAvailability(): Promise<boolean> {
   const state = await NetInfo.fetch();
+
+  logNetworkState("fetch", state);
 
   return isNetworkAvailable(state);
 }
 
 /* -------------------------------------------------------------------------- */
-/*                            SUSCRIPCIÓN                                     */
+/*                             SUSCRIPCIÓN                                    */
 /* -------------------------------------------------------------------------- */
 
 export type NetworkAvailabilityListener = (
@@ -66,15 +66,14 @@ export type NetworkAvailabilityListener = (
   state: NetInfoState,
 ) => void;
 
-/*
- * Escucha cambios de conectividad.
- *
- * Devuelve la función unsubscribe proporcionada por NetInfo.
- */
 export function subscribeToNetworkAvailability(
   listener: NetworkAvailabilityListener,
 ): NetInfoSubscription {
+  console.log("[NetInfo] Registrando listener de conectividad.");
+
   return NetInfo.addEventListener((state) => {
+    logNetworkState("event", state);
+
     listener(isNetworkAvailable(state), state);
   });
 }

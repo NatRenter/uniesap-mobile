@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 
 import {
-    getNetworkAvailability,
-    subscribeToNetworkAvailability,
+  getNetworkAvailability,
+  subscribeToNetworkAvailability,
 } from "@/services/networkService";
 
 import {
-    getInspectionSyncQueueCount,
-    processInspectionSyncQueue,
+  getInspectionSyncQueueCount,
+  processInspectionSyncQueue,
 } from "@/services/inspectionSyncQueueService";
 
 /*
@@ -22,31 +22,47 @@ import {
  * cola de sincronización
  *
  *
- * Su comportamiento actual es deliberadamente conservador:
+ * Comportamiento:
  *
+ * ARRANQUE ONLINE
+ *      ↓
+ * procesa pending una sola vez
+ *
+ *
+ * OFFLINE
+ *      ↓
  * ONLINE
- *   ↓
+ *      ↓
  * procesa pending
- *   ↓
- * recupera syncing interrumpidas
  *
  *
- * ERROR
+ * IMPORTANTE:
  *
- * No se reintenta automáticamente todavía.
- * El usuario conserva el control mediante el botón manual.
+ * Tanto la comprobación inicial como NetInfo pueden informar
+ * prácticamente al mismo tiempo que existe conexión.
+ *
+ * Por eso toda transición de red pasa ahora por:
+ *
+ * handleNetworkState()
+ *
+ * De esta forma solo el primer evento válido puede disparar
+ * el procesamiento.
  */
 
 export type UseInspectionAutoSyncOptions = {
   /*
-   * Permite mantener instalado el hook pero impedir
-   * que actúe hasta que la aplicación esté preparada.
+   * Permite instalar el hook antes de que
+   * los repositorios estén preparados.
    *
-   * En Android será true después de:
+   * Android:
    *
    * SQLite
-   * +
+   *   +
    * hydrateInspectionRepository()
+   *   +
+   * hydrateEvidenceRepository()
+   *          ↓
+   * enabled = true
    */
   enabled?: boolean;
 };
@@ -55,17 +71,33 @@ export function useInspectionAutoSync({
   enabled = true,
 }: UseInspectionAutoSyncOptions = {}) {
   /*
-   * Conservamos el último estado conocido para detectar:
+   * ==========================================================================
+   * ÚLTIMO ESTADO DE RED
+   * ==========================================================================
    *
-   * offline → online
+   * null
+   *   → todavía no conocemos el estado
    *
-   * y no reaccionar innecesariamente varias veces
-   * ante el mismo estado.
+   * false
+   *   → offline
+   *
+   * true
+   *   → online
    */
   const previousOnlineState = useRef<boolean | null>(null);
 
+  /*
+   * ==========================================================================
+   * EFECTO PRINCIPAL
+   * ==========================================================================
+   */
+
   useEffect(() => {
     if (!enabled) {
+      /*
+       * Si los repositorios dejan de estar preparados,
+       * descartamos el estado anterior.
+       */
       previousOnlineState.current = null;
 
       return;
@@ -74,27 +106,22 @@ export function useInspectionAutoSync({
     let active = true;
 
     /*
-     * ================================================================
-     * PROCESAR SI EXISTE TRABAJO PENDIENTE
-     * ================================================================
+     * ========================================================================
+     * PROCESAR TRABAJO PENDIENTE
+     * ========================================================================
      */
+
     async function processPendingInspections() {
       if (!active) {
         return;
       }
 
       /*
-       * Importante:
-       *
-       * includeErrors = false
-       *
        * Los errores anteriores NO se reintentan
        * automáticamente todavía.
        *
-       * includeInterrupted = true
-       *
-       * Una inspección que quedó en "syncing"
-       * por un cierre inesperado sí puede recuperarse.
+       * Las sincronizaciones interrumpidas sí
+       * pueden recuperarse.
        */
       const pendingCount = getInspectionSyncQueueCount({
         includeErrors: false,
@@ -132,11 +159,12 @@ export function useInspectionAutoSync({
         });
       } catch (error) {
         /*
-         * La cola individual maneja normalmente
-         * los errores Kobo.
+         * Los errores individuales de Kobo son
+         * tratados normalmente por la cola.
          *
-         * Este catch protege principalmente contra
-         * fallos inesperados del repositorio o almacenamiento.
+         * Este bloque captura fallos inesperados
+         * relacionados con repositorios,
+         * almacenamiento o infraestructura.
          */
         console.error(
           "Error inesperado durante la sincronización automática:",
@@ -146,28 +174,130 @@ export function useInspectionAutoSync({
     }
 
     /*
-     * ================================================================
-     * COMPROBACIÓN INICIAL
-     * ================================================================
+     * ========================================================================
+     * ESTADO DE CONECTIVIDAD
+     * ========================================================================
      *
-     * Si la aplicación arranca con Internet y existen
-     * inspecciones pending de una sesión anterior,
-     * intentamos procesarlas.
+     * ESTA ES LA PARTE IMPORTANTE DEL CAMBIO.
+     *
+     * Tanto:
+     *
+     * getNetworkAvailability()
+     *
+     * como:
+     *
+     * subscribeToNetworkAvailability()
+     *
+     * utilizan esta misma función.
+     *
+     * Debido a que actualizamos previousOnlineState
+     * ANTES de lanzar cualquier proceso async,
+     * un segundo evento online inmediatamente posterior
+     * ya encontrará:
+     *
+     * previous === true
+     *
+     * y no iniciará otro procesamiento.
      */
+
+    function handleNetworkState(online: boolean) {
+      if (!active) {
+        return;
+      }
+
+      const previous = previousOnlineState.current;
+
+      /*
+       * Actualizamos primero.
+       *
+       * Esto es esencial para evitar la carrera entre:
+       *
+       * comprobación inicial
+       *      +
+       * primer evento NetInfo.
+       */
+      previousOnlineState.current = online;
+
+      /*
+       * ----------------------------------------------------------------------
+       * PRIMER ESTADO CONOCIDO
+       * ----------------------------------------------------------------------
+       */
+
+      if (previous === null) {
+        if (online) {
+          console.log("Conexión disponible.");
+
+          void processPendingInspections();
+        } else {
+          console.log("Sin conexión.");
+        }
+
+        return;
+      }
+
+      /*
+       * ----------------------------------------------------------------------
+       * SIN CAMBIO REAL
+       * ----------------------------------------------------------------------
+       *
+       * true → true
+       *
+       * false → false
+       *
+       * No hacemos nada.
+       */
+
+      if (previous === online) {
+        return;
+      }
+
+      /*
+       * ----------------------------------------------------------------------
+       * OFFLINE → ONLINE
+       * ----------------------------------------------------------------------
+       */
+
+      if (previous === false && online === true) {
+        console.log("Conexión recuperada.");
+
+        void processPendingInspections();
+
+        return;
+      }
+
+      /*
+       * ----------------------------------------------------------------------
+       * ONLINE → OFFLINE
+       * ----------------------------------------------------------------------
+       */
+
+      if (previous === true && online === false) {
+        console.log("Conexión perdida.");
+      }
+    }
+
+    /*
+     * ========================================================================
+     * COMPROBACIÓN INICIAL
+     * ========================================================================
+     */
+
     async function initializeNetworkState() {
       try {
         const online = await getNetworkAvailability();
 
+        /*
+         * Ya no procesamos la cola directamente aquí.
+         *
+         * Todo pasa por handleNetworkState().
+         */
+        handleNetworkState(online);
+      } catch (error) {
         if (!active) {
           return;
         }
 
-        previousOnlineState.current = online;
-
-        if (online) {
-          await processPendingInspections();
-        }
-      } catch (error) {
         console.error(
           "No fue posible obtener el estado inicial de conectividad:",
           error,
@@ -175,46 +305,29 @@ export function useInspectionAutoSync({
       }
     }
 
+    /*
+     * Lanzamos la comprobación inicial.
+     */
     void initializeNetworkState();
 
     /*
-     * ================================================================
+     * ========================================================================
      * CAMBIOS DE CONECTIVIDAD
-     * ================================================================
+     * ========================================================================
+     *
+     * NetInfo también utiliza exactamente
+     * el mismo manejador.
      */
+
     const unsubscribe = subscribeToNetworkAvailability((online) => {
-      if (!active) {
-        return;
-      }
-
-      const previous = previousOnlineState.current;
-
-      previousOnlineState.current = online;
-
-      /*
-       * Solo nos interesa especialmente:
-       *
-       * offline
-       *    ↓
-       * online
-       */
-      const connectionRecovered = previous === false && online === true;
-
-      /*
-       * Si NetInfo emite el primer estado antes de que
-       * fetch() haya terminado también podemos procesar
-       * los pendientes.
-       */
-      const firstOnlineState = previous === null && online === true;
-
-      if (connectionRecovered || firstOnlineState) {
-        console.log(
-          connectionRecovered ? "Conexión recuperada." : "Conexión disponible.",
-        );
-
-        void processPendingInspections();
-      }
+      handleNetworkState(online);
     });
+
+    /*
+     * ========================================================================
+     * CLEANUP
+     * ========================================================================
+     */
 
     return () => {
       active = false;

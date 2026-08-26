@@ -125,24 +125,68 @@ export async function createEvidence(
   input: CreateEvidenceInput,
 ): Promise<Evidence> {
   const adapter = requirePersistenceAdapter();
+
   const now = new Date();
 
   const evidence: Evidence = {
     id: createEvidenceId(),
+
     companyId: input.companyId,
+
     propertyId: input.propertyId,
+
     inspectionId: input.inspectionId,
-    ...(input.questionId ? { questionId: input.questionId } : {}),
+
+    ...(input.questionId
+      ? {
+          questionId: input.questionId,
+        }
+      : {}),
+
     title: input.title,
+
     type: input.type,
+
     status: input.status ?? "pending",
+
     date: input.date ?? now.toISOString().slice(0, 10),
-    ...(input.description ? { description: input.description } : {}),
-    ...(input.localUri ? { localUri: input.localUri } : {}),
-    ...(input.remoteUri ? { remoteUri: input.remoteUri } : {}),
-    ...(input.mimeType ? { mimeType: input.mimeType } : {}),
-    ...(input.fileName ? { fileName: input.fileName } : {}),
-    ...(input.fileSize !== undefined ? { fileSize: input.fileSize } : {}),
+
+    ...(input.description
+      ? {
+          description: input.description,
+        }
+      : {}),
+
+    ...(input.localUri
+      ? {
+          localUri: input.localUri,
+        }
+      : {}),
+
+    ...(input.remoteUri
+      ? {
+          remoteUri: input.remoteUri,
+        }
+      : {}),
+
+    ...(input.mimeType
+      ? {
+          mimeType: input.mimeType,
+        }
+      : {}),
+
+    ...(input.fileName
+      ? {
+          fileName: input.fileName,
+        }
+      : {}),
+
+    ...(input.fileSize !== undefined
+      ? {
+          fileSize: input.fileSize,
+        }
+      : {}),
+
     createdAt: now.toISOString(),
   };
 
@@ -154,6 +198,7 @@ export async function createEvidence(
     return cloneEvidence(evidence);
   } catch (error) {
     removeEvidenceFromMemory(evidence.id);
+
     throw error;
   }
 }
@@ -176,6 +221,30 @@ export async function updateEvidence(
     ...previous,
     ...changes,
     id: previous.id,
+
+    /*
+     * Si integration viene en changes reemplazamos de forma controlada.
+     *
+     * Esto evita perder datos Kobo anteriores cuando solo se actualiza
+     * una parte de la integración.
+     */
+    ...(changes.integration
+      ? {
+          integration: {
+            ...previous.integration,
+            ...changes.integration,
+
+            ...(changes.integration.kobo
+              ? {
+                  kobo: {
+                    ...previous.integration?.kobo,
+                    ...changes.integration.kobo,
+                  },
+                }
+              : {}),
+          },
+        }
+      : {}),
   };
 
   evidences[index] = updated;
@@ -186,6 +255,7 @@ export async function updateEvidence(
     return cloneEvidence(updated);
   } catch (error) {
     evidences[index] = previous;
+
     throw error;
   }
 }
@@ -215,6 +285,7 @@ export async function deleteEvidence(id: string): Promise<boolean> {
     return true;
   } catch (error) {
     evidences.splice(index, 0, previous);
+
     throw error;
   }
 }
@@ -241,8 +312,28 @@ function removeEvidenceFromMemory(id: string): void {
   }
 }
 
+/*
+ * Clonamos también integration para evitar compartir objetos internos
+ * entre el repositorio y las pantallas.
+ */
 function cloneEvidence(evidence: Evidence): Evidence {
   return {
     ...evidence,
+
+    ...(evidence.integration
+      ? {
+          integration: {
+            ...evidence.integration,
+
+            ...(evidence.integration.kobo
+              ? {
+                  kobo: {
+                    ...evidence.integration.kobo,
+                  },
+                }
+              : {}),
+          },
+        }
+      : {}),
   };
 }

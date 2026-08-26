@@ -29,6 +29,18 @@ export type InspectionKoboReference = {
 export type InspectionIntegration = {
   syncStatus: InspectionSyncStatus;
 
+  /*
+   * Identificador estable de la operación de sincronización.
+   *
+   * Se genera una sola vez y se reutiliza en todos los reintentos.
+   */
+  syncOperationId?: string;
+
+  /*
+   * Número de intentos realizados para esta misma operación.
+   */
+  syncAttempt?: number;
+
   kobo?: InspectionKoboReference;
 
   lastSyncError?: string;

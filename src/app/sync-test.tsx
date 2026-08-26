@@ -9,22 +9,36 @@ import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { Screen } from "@/components/ui/Screen";
 
+import { getFormById } from "@/data/forms";
+
+import { getEvidencesByInspectionId } from "@/repositories/evidenceRepository";
+
 import {
-    getInspections,
-    updateInspection,
+  getInspections,
+  updateInspection,
 } from "@/repositories/inspectionRepository";
 
 import {
-    getInspectionSyncQueue,
-    processInspectionSyncQueue,
-    type InspectionSyncQueueResult,
+  getInspectionSyncQueue,
+  processInspectionSyncQueue,
+  type InspectionSyncQueueResult,
 } from "@/services/inspectionSyncQueueService";
+
+import {
+  armInspectionSyncFailureAfterAttachmentAccepted,
+  armInspectionSyncFailureAfterAttachments,
+  armInspectionSyncFailureAfterSubmission,
+  isInspectionSyncFailureAfterAttachmentAcceptedArmed,
+  isInspectionSyncFailureAfterAttachmentsArmed,
+  isInspectionSyncFailureAfterSubmissionArmed,
+} from "@/services/inspectionSyncService";
 
 import { FontSize, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 
-import type { InspectionSyncStatus } from "@/types/inspection";
+import type { Evidence, EvidenceStatus } from "@/types/evidence";
+import type { Inspection, InspectionSyncStatus } from "@/types/inspection";
 
 export default function SyncTestScreen() {
   const { colors } = useAppTheme();
@@ -46,6 +60,20 @@ export default function SyncTestScreen() {
 
   const [error, setError] = useState<string | null>(null);
 
+  const [failureSimulationArmed, setFailureSimulationArmed] = useState(
+    isInspectionSyncFailureAfterSubmissionArmed(),
+  );
+
+  const [
+    attachmentFailureSimulationArmed,
+    setAttachmentFailureSimulationArmed,
+  ] = useState(isInspectionSyncFailureAfterAttachmentsArmed());
+
+  const [
+    attachmentAcceptanceFailureArmed,
+    setAttachmentAcceptanceFailureArmed,
+  ] = useState(isInspectionSyncFailureAfterAttachmentAcceptedArmed());
+
   /*
    * Leemos deliberadamente queueVersion
    * para provocar un nuevo render.
@@ -58,6 +86,39 @@ export default function SyncTestScreen() {
    * del repositorio.
    */
   const queue = getInspectionSyncQueue();
+
+  /*
+   * El diagnóstico utiliza TODAS las inspecciones,
+   * no solamente las que continúan en cola.
+   *
+   * De esta forma también podemos revisar una inspección
+   * después de que haya pasado correctamente a "synced".
+   */
+  const allInspections = getInspections();
+
+  const totalEvidenceCount = allInspections.reduce(
+    (total, inspection) =>
+      total + getEvidencesByInspectionId(inspection.id).length,
+    0,
+  );
+
+  const pendingEvidenceCount = allInspections.reduce(
+    (total, inspection) =>
+      total +
+      getEvidencesByInspectionId(inspection.id).filter(
+        (evidence) => evidence.status === "pending",
+      ).length,
+    0,
+  );
+
+  const syncedEvidenceCount = allInspections.reduce(
+    (total, inspection) =>
+      total +
+      getEvidencesByInspectionId(inspection.id).filter(
+        (evidence) => evidence.status === "synced",
+      ).length,
+    0,
+  );
 
   /* ------------------------------------------------------------------------ */
   /*                     PREPARAR INSPECCIÓN PENDING                          */
@@ -212,6 +273,238 @@ export default function SyncTestScreen() {
     }
   };
 
+  /* ------------------------------------------------------------------------ */
+  /*                 SIMULACIÓN DE FALLO IDEMPOTENTE                          */
+  /* ------------------------------------------------------------------------ */
+
+  const handleProcessQueueWithFailureSimulation = async () => {
+    if (isProcessing || isPreparing) {
+      return;
+    }
+
+    /*
+     * Si todavía no está armada, la armamos automáticamente.
+     *
+     * Así este botón sirve como prueba de un solo paso:
+     *
+     * pending
+     *   ↓
+     * Kobo acepta submission
+     *   ↓
+     * fallo local simulado
+     *   ↓
+     * error
+     */
+    if (!isInspectionSyncFailureAfterSubmissionArmed()) {
+      armInspectionSyncFailureAfterSubmission();
+
+      setFailureSimulationArmed(true);
+    }
+
+    setIsProcessing(true);
+
+    setError(null);
+
+    setResult(null);
+
+    try {
+      const syncResult = await processInspectionSyncQueue();
+
+      setResult(syncResult);
+
+      setQueueVersion((value) => value + 1);
+    } catch (processingError) {
+      const message =
+        processingError instanceof Error
+          ? processingError.message
+          : "Error desconocido procesando la prueba idempotente.";
+
+      console.error(
+        "Error procesando prueba de fallo idempotente:",
+        processingError,
+      );
+
+      setError(message);
+    } finally {
+      setFailureSimulationArmed(isInspectionSyncFailureAfterSubmissionArmed());
+
+      setIsProcessing(false);
+    }
+  };
+
+  /*
+   * --------------------------------------------------------------------------
+   * FALLO DESPUÉS DE QUE KOBO ACEPTA 1 EVIDENCIA
+   * --------------------------------------------------------------------------
+   *
+   * Esta prueba reproduce:
+   *
+   * Kobo acepta foto 1
+   *      ↓
+   * UNIESAP falla antes de guardar Evidence = synced
+   *      ↓
+   * reintento
+   *      ↓
+   * attachment idempotency hit
+   */
+  const handleProcessQueueWithAttachmentAcceptanceFailure = async () => {
+    if (isProcessing || isPreparing) {
+      return;
+    }
+
+    if (!isInspectionSyncFailureAfterAttachmentAcceptedArmed()) {
+      armInspectionSyncFailureAfterAttachmentAccepted();
+
+      setAttachmentAcceptanceFailureArmed(true);
+    }
+
+    setIsProcessing(true);
+
+    setError(null);
+
+    setResult(null);
+
+    try {
+      const syncResult = await processInspectionSyncQueue();
+
+      setResult(syncResult);
+
+      setQueueVersion((value) => value + 1);
+    } catch (processingError) {
+      const message =
+        processingError instanceof Error
+          ? processingError.message
+          : "Error desconocido procesando la prueba de aceptación de evidencia.";
+
+      console.error(
+        "Error procesando fallo después de aceptación de evidencia:",
+        processingError,
+      );
+
+      setError(message);
+    } finally {
+      setAttachmentAcceptanceFailureArmed(
+        isInspectionSyncFailureAfterAttachmentAcceptedArmed(),
+      );
+
+      setIsProcessing(false);
+    }
+  };
+
+  /*
+   * --------------------------------------------------------------------------
+   * FALLO DESPUÉS DE 2 EVIDENCIAS
+   * --------------------------------------------------------------------------
+   *
+   * Esta prueba necesita una inspección NUEVA con al menos 3 fotografías.
+   *
+   * La intención es dejar:
+   *
+   * foto 1 → synced
+   * foto 2 → synced
+   * foto 3 → pending
+   *
+   * para comprobar el reintento después de reiniciar la app.
+   */
+  const handleProcessQueueWithAttachmentFailureSimulation = async () => {
+    if (isProcessing || isPreparing) {
+      return;
+    }
+
+    if (!isInspectionSyncFailureAfterAttachmentsArmed()) {
+      armInspectionSyncFailureAfterAttachments(2);
+
+      setAttachmentFailureSimulationArmed(true);
+    }
+
+    setIsProcessing(true);
+
+    setError(null);
+
+    setResult(null);
+
+    try {
+      const syncResult = await processInspectionSyncQueue();
+
+      setResult(syncResult);
+
+      setQueueVersion((value) => value + 1);
+    } catch (processingError) {
+      const message =
+        processingError instanceof Error
+          ? processingError.message
+          : "Error desconocido procesando la prueba de attachments.";
+
+      console.error(
+        "Error procesando prueba de fallo entre evidencias:",
+        processingError,
+      );
+
+      setError(message);
+    } finally {
+      setAttachmentFailureSimulationArmed(
+        isInspectionSyncFailureAfterAttachmentsArmed(),
+      );
+
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRetryFailedSync = async () => {
+    if (isProcessing || isPreparing) {
+      return;
+    }
+
+    /*
+     * El fallo es one-shot.
+     *
+     * Antes del reintento nos aseguramos de que NO esté armado.
+     */
+    setFailureSimulationArmed(isInspectionSyncFailureAfterSubmissionArmed());
+
+    setIsProcessing(true);
+
+    setError(null);
+
+    setResult(null);
+
+    try {
+      const syncResult = await processInspectionSyncQueue({
+        includeErrors: true,
+
+        includeInterrupted: true,
+      });
+
+      setResult(syncResult);
+
+      setQueueVersion((value) => value + 1);
+    } catch (processingError) {
+      const message =
+        processingError instanceof Error
+          ? processingError.message
+          : "Error desconocido reintentando la sincronización.";
+
+      console.error(
+        "Error reintentando sincronización idempotente:",
+        processingError,
+      );
+
+      setError(message);
+    } finally {
+      setFailureSimulationArmed(isInspectionSyncFailureAfterSubmissionArmed());
+
+      setAttachmentFailureSimulationArmed(
+        isInspectionSyncFailureAfterAttachmentsArmed(),
+      );
+
+      setAttachmentAcceptanceFailureArmed(
+        isInspectionSyncFailureAfterAttachmentAcceptedArmed(),
+      );
+
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <Screen padded={false}>
       <ScrollView
@@ -277,29 +570,96 @@ export default function SyncTestScreen() {
           {/* MÉTRICA                                                       */}
           {/* ============================================================ */}
 
-          <AppCard>
-            <Text
-              style={[
-                styles.metricLabel,
-                {
-                  color: colors.textSecondary,
-                },
-              ]}
-            >
-              Inspecciones en cola
-            </Text>
+          <View style={styles.metricGrid}>
+            <View style={styles.metricCard}>
+              <AppCard>
+                <Text
+                  style={[
+                    styles.metricLabel,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Inspecciones en cola
+                </Text>
 
-            <Text
-              style={[
-                styles.metricValue,
-                {
-                  color: queue.length > 0 ? colors.warning : colors.success,
-                },
-              ]}
-            >
-              {queue.length}
-            </Text>
-          </AppCard>
+                <Text
+                  style={[
+                    styles.metricValue,
+                    {
+                      color: queue.length > 0 ? colors.warning : colors.success,
+                    },
+                  ]}
+                >
+                  {queue.length}
+                </Text>
+              </AppCard>
+            </View>
+
+            <View style={styles.metricCard}>
+              <AppCard>
+                <Text
+                  style={[
+                    styles.metricLabel,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Inspecciones locales
+                </Text>
+
+                <Text
+                  style={[
+                    styles.metricValue,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  {allInspections.length}
+                </Text>
+              </AppCard>
+            </View>
+
+            <View style={styles.metricCard}>
+              <AppCard>
+                <Text
+                  style={[
+                    styles.metricLabel,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Evidencias
+                </Text>
+
+                <Text
+                  style={[
+                    styles.metricValue,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  {totalEvidenceCount}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.metricHelper,
+                    {
+                      color: colors.textMuted,
+                    },
+                  ]}
+                >
+                  {pendingEvidenceCount} pending · {syncedEvidenceCount} synced
+                </Text>
+              </AppCard>
+            </View>
+          </View>
 
           {/* ============================================================ */}
           {/* CANDIDATOS                                                    */}
@@ -345,55 +705,10 @@ export default function SyncTestScreen() {
             ) : (
               <View style={styles.list}>
                 {queue.map((inspection) => (
-                  <AppCard key={inspection.id}>
-                    <Text
-                      style={[
-                        styles.itemTitle,
-                        {
-                          color: colors.text,
-                        },
-                      ]}
-                    >
-                      {inspection.id}
-                    </Text>
-
-                    <Text
-                      style={[
-                        styles.itemMeta,
-                        {
-                          color: colors.textSecondary,
-                        },
-                      ]}
-                    >
-                      Formulario: {inspection.formId}
-                    </Text>
-
-                    <Text
-                      style={[
-                        styles.itemMeta,
-                        {
-                          color: colors.textSecondary,
-                        },
-                      ]}
-                    >
-                      Estado: {inspection.status}
-                    </Text>
-
-                    <Text
-                      style={[
-                        styles.itemStatus,
-                        {
-                          color: getSyncColor(
-                            inspection.integration?.syncStatus ?? "local",
-
-                            colors,
-                          ),
-                        },
-                      ]}
-                    >
-                      ● {inspection.integration?.syncStatus ?? "local"}
-                    </Text>
-                  </AppCard>
+                  <QueueInspectionCard
+                    key={inspection.id}
+                    inspection={inspection}
+                  />
                 ))}
               </View>
             )}
@@ -407,19 +722,153 @@ export default function SyncTestScreen() {
             {/*
              * BOTÓN DE DESARROLLO
              *
-             * Convierte una inspección synced
-             * en pending para probar la cola.
+             * Convierte una inspección terminada en pending
+             * para poder repetir pruebas de cola.
              */}
             <AppButton variant="secondary" onPress={handleCreatePendingTest}>
               {isPreparing ? "Preparando..." : "Preparar inspección pending"}
             </AppButton>
 
             {/*
-             * PROCESAR COLA
+             * PROCESAR COLA NORMALMENTE
              */}
             <AppButton onPress={handleProcessQueue}>
               {isProcessing ? "Procesando..." : "Procesar cola"}
             </AppButton>
+
+            {/*
+             * PRUEBA IDEMPOTENTE
+             *
+             * La próxima sincronización:
+             *
+             * 1. crea/recupera la submission Kobo;
+             * 2. simula un fallo local inmediatamente después;
+             * 3. deja la inspección en error conservando operationId.
+             */}
+            <AppButton
+              variant="secondary"
+              onPress={handleProcessQueueWithFailureSimulation}
+            >
+              {isProcessing
+                ? "Procesando prueba..."
+                : "Simular fallo después de submission"}
+            </AppButton>
+
+            {/*
+             * PRUEBA DE VENTANA CRÍTICA DE UNA EVIDENCIA
+             *
+             * Kobo acepta la primera foto, pero UNIESAP falla
+             * antes de guardar Evidence como synced.
+             *
+             * Al reintentar esperamos:
+             *
+             * Mock Kobo attachment idempotency hit
+             */}
+            <AppButton
+              variant="secondary"
+              onPress={handleProcessQueueWithAttachmentAcceptanceFailure}
+            >
+              {isProcessing
+                ? "Procesando evidencia..."
+                : "Simular fallo después de aceptar 1 evidencia"}
+            </AppButton>
+
+            {/*
+             * PRUEBA DE ATTACHMENTS
+             *
+             * Usar con una inspección NUEVA
+             * que tenga al menos 3 fotografías.
+             *
+             * Después de 2 subidas correctas
+             * se provoca un fallo intencional.
+             */}
+            <AppButton
+              variant="secondary"
+              onPress={handleProcessQueueWithAttachmentFailureSimulation}
+            >
+              {isProcessing
+                ? "Procesando evidencias..."
+                : "Simular fallo después de 2 evidencias"}
+            </AppButton>
+
+            {/*
+             * REINTENTO
+             *
+             * Reprocesa inspecciones en error.
+             *
+             * Las evidencias que ya tengan attachmentId
+             * deben omitirse automáticamente.
+             */}
+            <AppButton variant="secondary" onPress={handleRetryFailedSync}>
+              Reintentar sincronización con error
+            </AppButton>
+
+            {/*
+             * ACCESO A PRUEBAS KOBO
+             */}
+            <AppButton
+              variant="secondary"
+              onPress={() => {
+                router.push("/kobo-test");
+              }}
+            >
+              Abrir prueba Kobo
+            </AppButton>
+
+            <Text
+              style={[
+                styles.failureSimulationState,
+                {
+                  color: failureSimulationArmed
+                    ? colors.warning
+                    : colors.textMuted,
+                },
+              ]}
+            >
+              Fallo después de submission:{" "}
+              {failureSimulationArmed ? "ARMADO" : "desarmado"}
+            </Text>
+
+            <Text
+              style={[
+                styles.failureSimulationState,
+                {
+                  color: attachmentFailureSimulationArmed
+                    ? colors.warning
+                    : colors.textMuted,
+                },
+              ]}
+            >
+              Fallo después de 2 evidencias:{" "}
+              {attachmentFailureSimulationArmed ? "ARMADO" : "desarmado"}
+            </Text>
+
+            <Text
+              style={[
+                styles.failureSimulationState,
+                {
+                  color: attachmentAcceptanceFailureArmed
+                    ? colors.warning
+                    : colors.textMuted,
+                },
+              ]}
+            >
+              Fallo después de aceptar 1 evidencia:{" "}
+              {attachmentAcceptanceFailureArmed ? "ARMADO" : "desarmado"}
+            </Text>
+
+            <Text
+              style={[
+                styles.attachmentTestNotice,
+                {
+                  color: colors.textMuted,
+                },
+              ]}
+            >
+              Para esta prueba usa una inspección nueva con al menos 3
+              fotografías. No reutilices una inspección cuyos attachments ya
+              estén sincronizados.
+            </Text>
           </View>
 
           {/* ============================================================ */}
@@ -486,6 +935,59 @@ export default function SyncTestScreen() {
           )}
 
           {/* ============================================================ */}
+          {/* DIAGNÓSTICO COMPLETO                                           */}
+          {/* ============================================================ */}
+
+          <View style={styles.section}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Diagnóstico de inspecciones
+            </Text>
+
+            <Text
+              style={[
+                styles.sectionDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Muestra todas las inspecciones locales, incluso las que ya fueron
+              sincronizadas y desaparecieron de la cola.
+            </Text>
+
+            {allInspections.length === 0 ? (
+              <AppCard>
+                <Text
+                  style={[
+                    styles.emptyText,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  No existen inspecciones disponibles para diagnóstico.
+                </Text>
+              </AppCard>
+            ) : (
+              <View style={styles.list}>
+                {allInspections.map((inspection) => (
+                  <InspectionDiagnosticCard
+                    key={inspection.id}
+                    inspection={inspection}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* ============================================================ */}
           {/* AVISO                                                         */}
           {/* ============================================================ */}
 
@@ -503,6 +1005,568 @@ export default function SyncTestScreen() {
         </ResponsiveContainer>
       </ScrollView>
     </Screen>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                         QUEUE INSPECTION CARD                              */
+/* -------------------------------------------------------------------------- */
+
+function QueueInspectionCard({ inspection }: { inspection: Inspection }) {
+  const { colors } = useAppTheme();
+
+  const form = getFormById(inspection.formId);
+
+  const inspectionEvidences = getEvidencesByInspectionId(inspection.id);
+
+  const pendingCount = inspectionEvidences.filter(
+    (evidence) => evidence.status === "pending",
+  ).length;
+
+  const syncedCount = inspectionEvidences.filter(
+    (evidence) => evidence.status === "synced",
+  ).length;
+
+  return (
+    <AppCard>
+      <Text
+        style={[
+          styles.itemTitle,
+          {
+            color: colors.text,
+          },
+        ]}
+      >
+        {inspection.id}
+      </Text>
+
+      <Text
+        style={[
+          styles.itemMeta,
+          {
+            color: colors.textSecondary,
+          },
+        ]}
+      >
+        Formulario: {form?.title ?? inspection.formId}
+      </Text>
+
+      <Text
+        style={[
+          styles.itemMeta,
+          {
+            color: colors.textSecondary,
+          },
+        ]}
+      >
+        Estado: {inspection.status}
+      </Text>
+
+      <Text
+        style={[
+          styles.itemMeta,
+          {
+            color: colors.textSecondary,
+          },
+        ]}
+      >
+        Respuestas: {inspection.responses.length}
+      </Text>
+
+      <Text
+        style={[
+          styles.itemMeta,
+          {
+            color: colors.textSecondary,
+          },
+        ]}
+      >
+        Evidencias: {inspectionEvidences.length} · {pendingCount} pending ·{" "}
+        {syncedCount} synced
+      </Text>
+
+      <Text
+        style={[
+          styles.itemStatus,
+          {
+            color: getSyncColor(
+              inspection.integration?.syncStatus ?? "local",
+              colors,
+            ),
+          },
+        ]}
+      >
+        ● {inspection.integration?.syncStatus ?? "local"}
+      </Text>
+
+      {inspection.integration?.lastSyncError && (
+        <Text
+          style={[
+            styles.inlineError,
+            {
+              color: colors.error,
+            },
+          ]}
+        >
+          {inspection.integration.lastSyncError}
+        </Text>
+      )}
+    </AppCard>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                       INSPECTION DIAGNOSTIC CARD                           */
+/* -------------------------------------------------------------------------- */
+
+function InspectionDiagnosticCard({ inspection }: { inspection: Inspection }) {
+  const { colors } = useAppTheme();
+
+  const form = getFormById(inspection.formId);
+
+  const inspectionEvidences = getEvidencesByInspectionId(inspection.id);
+
+  const pendingCount = inspectionEvidences.filter(
+    (evidence) => evidence.status === "pending",
+  ).length;
+
+  const syncedCount = inspectionEvidences.filter(
+    (evidence) => evidence.status === "synced",
+  ).length;
+
+  /*
+   * Comprobamos las dos direcciones de la relación:
+   *
+   * Inspection.evidenceIds
+   *          ↔
+   * Evidence.inspectionId
+   *
+   * Esto nos ayuda a detectar registros huérfanos o IDs faltantes.
+   */
+  const repositoryEvidenceIds = new Set(
+    inspectionEvidences.map((evidence) => evidence.id),
+  );
+
+  const inspectionEvidenceIds = new Set(inspection.evidenceIds);
+
+  const missingFromRepository = inspection.evidenceIds.filter(
+    (evidenceId) => !repositoryEvidenceIds.has(evidenceId),
+  );
+
+  const missingFromInspection = inspectionEvidences.filter(
+    (evidence) => !inspectionEvidenceIds.has(evidence.id),
+  );
+
+  const relationIsConsistent =
+    missingFromRepository.length === 0 && missingFromInspection.length === 0;
+
+  return (
+    <AppCard>
+      <View style={styles.diagnosticHeader}>
+        <View style={styles.diagnosticHeaderContent}>
+          <Text
+            style={[
+              styles.itemTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            {inspection.id}
+          </Text>
+
+          <Text
+            style={[
+              styles.itemMeta,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            {form?.title ?? inspection.formId}
+          </Text>
+        </View>
+
+        <Text
+          style={[
+            styles.diagnosticStatus,
+            {
+              color: getSyncColor(
+                inspection.integration?.syncStatus ?? "local",
+                colors,
+              ),
+            },
+          ]}
+        >
+          ● {inspection.integration?.syncStatus ?? "local"}
+        </Text>
+      </View>
+
+      <View style={styles.diagnosticRows}>
+        <DiagnosticRow label="Estado" value={inspection.status} />
+
+        <DiagnosticRow label="Inspector" value={inspection.inspector} />
+
+        <DiagnosticRow
+          label="Respuestas"
+          value={String(inspection.responses.length)}
+        />
+
+        <DiagnosticRow
+          label="Evidence IDs"
+          value={String(inspection.evidenceIds.length)}
+        />
+
+        <DiagnosticRow
+          label="Evidencias encontradas"
+          value={String(inspectionEvidences.length)}
+        />
+
+        <DiagnosticRow
+          label="Sync operation"
+          value={inspection.integration?.syncOperationId ?? "Sin operación"}
+        />
+
+        <DiagnosticRow
+          label="Sync attempt"
+          value={String(inspection.integration?.syncAttempt ?? 0)}
+        />
+
+        <DiagnosticRow label="Pending" value={String(pendingCount)} />
+
+        <DiagnosticRow label="Synced" value={String(syncedCount)} />
+      </View>
+
+      <View
+        style={[
+          styles.consistencyBox,
+          {
+            backgroundColor: relationIsConsistent
+              ? colors.surfaceSecondary
+              : colors.primarySoft,
+
+            borderColor: relationIsConsistent ? colors.border : colors.warning,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.consistencyTitle,
+            {
+              color: relationIsConsistent ? colors.success : colors.warning,
+            },
+          ]}
+        >
+          {relationIsConsistent
+            ? "✓ Relación Inspection ↔ Evidence consistente"
+            : "⚠ Se detectaron diferencias en evidenceIds"}
+        </Text>
+
+        {missingFromRepository.length > 0 && (
+          <Text
+            style={[
+              styles.consistencyText,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            IDs registrados en la inspección pero no encontrados:{" "}
+            {missingFromRepository.join(", ")}
+          </Text>
+        )}
+
+        {missingFromInspection.length > 0 && (
+          <Text
+            style={[
+              styles.consistencyText,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Evidencias del repositorio no registradas en evidenceIds:{" "}
+            {missingFromInspection.map((evidence) => evidence.id).join(", ")}
+          </Text>
+        )}
+      </View>
+
+      {inspection.integration?.kobo && (
+        <View style={styles.diagnosticSubsection}>
+          <Text
+            style={[
+              styles.diagnosticSubsectionTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Kobo
+          </Text>
+
+          <DiagnosticRow
+            label="Asset"
+            value={inspection.integration.kobo.assetUid}
+          />
+
+          <DiagnosticRow
+            label="Submission"
+            value={String(inspection.integration.kobo.submissionId)}
+          />
+
+          {inspection.integration.kobo.uuid && (
+            <DiagnosticRow
+              label="UUID"
+              value={inspection.integration.kobo.uuid}
+            />
+          )}
+
+          {inspection.integration.kobo.syncedAt && (
+            <DiagnosticRow
+              label="Sincronizado"
+              value={inspection.integration.kobo.syncedAt}
+            />
+          )}
+        </View>
+      )}
+
+      {inspection.integration?.lastSyncError && (
+        <View style={styles.diagnosticSubsection}>
+          <Text
+            style={[
+              styles.diagnosticSubsectionTitle,
+              {
+                color: colors.error,
+              },
+            ]}
+          >
+            Último error
+          </Text>
+
+          <Text
+            style={[
+              styles.errorText,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            {inspection.integration.lastSyncError}
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.diagnosticSubsection}>
+        <Text
+          style={[
+            styles.diagnosticSubsectionTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          Evidencias / attachments
+        </Text>
+
+        {inspectionEvidences.length === 0 ? (
+          <Text
+            style={[
+              styles.emptyText,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Esta inspección no tiene evidencias asociadas.
+          </Text>
+        ) : (
+          <View style={styles.attachmentList}>
+            {inspectionEvidences.map((evidence, index) => (
+              <EvidenceDiagnosticRow
+                key={evidence.id}
+                evidence={evidence}
+                inspection={inspection}
+                index={index}
+              />
+            ))}
+          </View>
+        )}
+      </View>
+    </AppCard>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                       EVIDENCE DIAGNOSTIC ROW                              */
+/* -------------------------------------------------------------------------- */
+
+function EvidenceDiagnosticRow({
+  evidence,
+  inspection,
+  index,
+}: {
+  evidence: Evidence;
+  inspection: Inspection;
+  index: number;
+}) {
+  const { colors } = useAppTheme();
+
+  const form = getFormById(inspection.formId);
+
+  const question = evidence.questionId
+    ? form?.questions.find((item) => item.id === evidence.questionId)
+    : undefined;
+
+  const fieldName = question?.integration?.koboFieldName;
+
+  return (
+    <View
+      style={[
+        styles.attachmentCard,
+        {
+          backgroundColor: colors.surfaceSecondary,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      <View style={styles.attachmentHeader}>
+        <Text
+          style={[
+            styles.attachmentTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          {index + 1}. {evidence.fileName ?? evidence.title}
+        </Text>
+
+        <Text
+          style={[
+            styles.attachmentStatus,
+            {
+              color: getEvidenceStatusColor(evidence.status, colors),
+            },
+          ]}
+        >
+          ● {evidence.status}
+        </Text>
+      </View>
+
+      <Text
+        style={[
+          styles.attachmentMeta,
+          {
+            color: colors.textSecondary,
+          },
+        ]}
+      >
+        Evidence: {evidence.id}
+      </Text>
+
+      <Text
+        style={[
+          styles.attachmentMeta,
+          {
+            color: colors.textSecondary,
+          },
+        ]}
+      >
+        Pregunta: {evidence.questionId ?? "Sin questionId"}
+      </Text>
+
+      <Text
+        style={[
+          styles.attachmentMeta,
+          {
+            color: fieldName ? colors.textSecondary : colors.warning,
+          },
+        ]}
+      >
+        Kobo field: {fieldName ?? "Sin campo Kobo"}
+      </Text>
+
+      {evidence.mimeType && (
+        <Text
+          style={[
+            styles.attachmentMeta,
+            {
+              color: colors.textSecondary,
+            },
+          ]}
+        >
+          MIME: {evidence.mimeType}
+        </Text>
+      )}
+
+      {evidence.fileSize !== undefined && (
+        <Text
+          style={[
+            styles.attachmentMeta,
+            {
+              color: colors.textSecondary,
+            },
+          ]}
+        >
+          Tamaño: {formatFileSize(evidence.fileSize)}
+        </Text>
+      )}
+
+      <Text
+        style={[
+          styles.attachmentMeta,
+          {
+            color:
+              evidence.localUri || evidence.remoteUri
+                ? colors.textMuted
+                : colors.warning,
+          },
+        ]}
+        numberOfLines={2}
+      >
+        Archivo:{" "}
+        {evidence.localUri
+          ? "local"
+          : evidence.remoteUri
+            ? "remoto"
+            : "sin URI"}
+      </Text>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            DIAGNOSTIC ROW                                  */
+/* -------------------------------------------------------------------------- */
+
+function DiagnosticRow({ label, value }: { label: string; value: string }) {
+  const { colors } = useAppTheme();
+
+  return (
+    <View style={styles.diagnosticRow}>
+      <Text
+        style={[
+          styles.diagnosticLabel,
+          {
+            color: colors.textMuted,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={[
+          styles.diagnosticValue,
+          {
+            color: colors.text,
+          },
+        ]}
+        selectable
+      >
+        {value}
+      </Text>
+    </View>
   );
 }
 
@@ -543,6 +1607,37 @@ function ResultRow({ label, value }: { label: string; value: number }) {
 /* -------------------------------------------------------------------------- */
 /*                         COLOR DE SINCRONIZACIÓN                            */
 /* -------------------------------------------------------------------------- */
+
+function getEvidenceStatusColor(
+  status: EvidenceStatus,
+  colors: {
+    warning: string;
+    success: string;
+  },
+) {
+  switch (status) {
+    case "synced":
+      return colors.success;
+
+    case "pending":
+    default:
+      return colors.warning;
+  }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const kilobytes = bytes / 1024;
+
+  if (kilobytes < 1024) {
+    return `${kilobytes.toFixed(1)} KB`;
+  }
+
+  return `${(kilobytes / 1024).toFixed(2)} MB`;
+}
 
 function getSyncColor(
   status: InspectionSyncStatus,
@@ -618,6 +1713,20 @@ const styles = StyleSheet.create({
 
   /* MÉTRICA */
 
+  metricGrid: {
+    flexDirection: "row",
+
+    flexWrap: "wrap",
+
+    gap: Spacing.md,
+  },
+
+  metricCard: {
+    flexGrow: 1,
+
+    minWidth: 210,
+  },
+
   metricLabel: {
     fontSize: FontSize.small,
 
@@ -630,6 +1739,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  metricHelper: {
+    fontSize: FontSize.caption,
+
+    marginTop: Spacing.xs,
+  },
+
   /* SECCIONES */
 
   section: {
@@ -640,6 +1755,14 @@ const styles = StyleSheet.create({
     fontSize: FontSize.cardTitle,
 
     fontWeight: "700",
+
+    marginBottom: Spacing.md,
+  },
+
+  sectionDescription: {
+    fontSize: FontSize.small,
+
+    lineHeight: 20,
 
     marginBottom: Spacing.md,
   },
@@ -672,6 +1795,158 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
 
+  inlineError: {
+    fontSize: FontSize.caption,
+
+    lineHeight: 18,
+
+    marginTop: Spacing.sm,
+  },
+
+  diagnosticHeader: {
+    flexDirection: "row",
+
+    alignItems: "flex-start",
+
+    justifyContent: "space-between",
+
+    gap: Spacing.md,
+
+    marginBottom: Spacing.md,
+  },
+
+  diagnosticHeaderContent: {
+    flex: 1,
+
+    minWidth: 0,
+  },
+
+  diagnosticStatus: {
+    flexShrink: 0,
+
+    fontSize: FontSize.caption,
+
+    fontWeight: "700",
+  },
+
+  diagnosticRows: {
+    gap: Spacing.xs,
+  },
+
+  diagnosticRow: {
+    flexDirection: "row",
+
+    alignItems: "flex-start",
+
+    justifyContent: "space-between",
+
+    gap: Spacing.md,
+
+    paddingVertical: Spacing.xs,
+  },
+
+  diagnosticLabel: {
+    flexShrink: 0,
+
+    fontSize: FontSize.caption,
+  },
+
+  diagnosticValue: {
+    flex: 1,
+
+    fontSize: FontSize.caption,
+
+    fontWeight: "600",
+
+    textAlign: "right",
+  },
+
+  consistencyBox: {
+    padding: Spacing.md,
+
+    borderWidth: 1,
+
+    borderRadius: 10,
+
+    marginTop: Spacing.md,
+  },
+
+  consistencyTitle: {
+    fontSize: FontSize.caption,
+
+    fontWeight: "700",
+  },
+
+  consistencyText: {
+    fontSize: FontSize.caption,
+
+    lineHeight: 18,
+
+    marginTop: Spacing.xs,
+  },
+
+  diagnosticSubsection: {
+    marginTop: Spacing.lg,
+  },
+
+  diagnosticSubsectionTitle: {
+    fontSize: FontSize.small,
+
+    fontWeight: "700",
+
+    marginBottom: Spacing.sm,
+  },
+
+  attachmentList: {
+    gap: Spacing.sm,
+  },
+
+  attachmentCard: {
+    padding: Spacing.md,
+
+    borderWidth: 1,
+
+    borderRadius: 10,
+  },
+
+  attachmentHeader: {
+    flexDirection: "row",
+
+    alignItems: "flex-start",
+
+    justifyContent: "space-between",
+
+    gap: Spacing.md,
+
+    marginBottom: Spacing.sm,
+  },
+
+  attachmentTitle: {
+    flex: 1,
+
+    minWidth: 0,
+
+    fontSize: FontSize.caption,
+
+    fontWeight: "700",
+  },
+
+  attachmentStatus: {
+    flexShrink: 0,
+
+    fontSize: FontSize.caption,
+
+    fontWeight: "700",
+  },
+
+  attachmentMeta: {
+    fontSize: FontSize.caption,
+
+    lineHeight: 18,
+
+    marginBottom: Spacing.xs,
+  },
+
   /* VACÍO */
 
   emptyTitle: {
@@ -694,6 +1969,26 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xl,
 
     gap: Spacing.sm,
+  },
+
+  failureSimulationState: {
+    fontSize: FontSize.caption,
+
+    lineHeight: 18,
+
+    textAlign: "center",
+
+    marginTop: Spacing.xs,
+  },
+
+  attachmentTestNotice: {
+    fontSize: FontSize.caption,
+
+    lineHeight: 18,
+
+    textAlign: "center",
+
+    marginTop: Spacing.sm,
   },
 
   /* RESULTADOS */
