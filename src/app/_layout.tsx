@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 
 import { StyleSheet, Text, View } from "react-native";
 
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+
+import AppTabs from "@/components/app-tabs";
 
 import {
   deleteEvidenceFromDatabase,
@@ -24,7 +26,24 @@ import {
 
 import { hydrateInspectionRepository } from "@/repositories/inspectionRepository";
 
+/*
+ * ============================================================================
+ * ROOT LAYOUT - ANDROID / IOS
+ * ============================================================================
+ *
+ * Responsabilidades:
+ *
+ * 1. Inicializar SQLite.
+ * 2. Hidratar repositorios.
+ * 3. Activar sincronización automática.
+ * 4. Mostrar el Stack de Expo Router.
+ * 5. Mantener la navegación global en la parte inferior.
+ *
+ * No modificamos aquí la lógica de Kobo ni la lógica de evidencias.
+ */
 export default function RootLayout() {
+  const pathname = usePathname();
+
   const { colors, isDark } = useAppTheme();
 
   const [databaseReady, setDatabaseReady] = useState<boolean | null>(null);
@@ -35,6 +54,11 @@ export default function RootLayout() {
     enabled: databaseReady === true,
   });
 
+  /*
+   * Inicialización del almacenamiento nativo.
+   *
+   * Este flujo se conserva respecto de la versión estable anterior.
+   */
   useEffect(() => {
     let active = true;
 
@@ -58,6 +82,7 @@ export default function RootLayout() {
           return;
         }
 
+        setDatabaseError(null);
         setDatabaseReady(true);
       } catch (error) {
         if (!active) {
@@ -157,25 +182,64 @@ export default function RootLayout() {
     );
   }
 
+  /*
+   * Login e index quedan fuera de la navegación principal.
+   *
+   * Todas las demás rutas, incluidas rutas contextuales y herramientas
+   * de desarrollo, conservan un acceso rápido a Inicio/Empresas/Trabajo/Perfil.
+   */
+  const showGlobalNavigation = pathname !== "/" && pathname !== "/login";
+
   return (
-    <>
+    <View
+      style={[
+        styles.app,
+        {
+          backgroundColor: colors.background,
+        },
+      ]}
+    >
       <StatusBar style={isDark ? "light" : "dark"} />
 
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: "slide_from_right",
-        }}
-      />
-    </>
+      <View style={styles.stack}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: "slide_from_right",
+          }}
+        />
+      </View>
+
+      {showGlobalNavigation ? <AppTabs /> : null}
+    </View>
   );
 }
 
+/*
+ * ============================================================================
+ * ESTILOS
+ * ============================================================================
+ *
+ * Stack ocupa el espacio restante.
+ * AppTabs se mantiene como una zona independiente debajo del contenido.
+ *
+ * Así evitamos que la barra tape botones o información de las pantallas.
+ */
 const styles = StyleSheet.create({
+  app: {
+    flex: 1,
+  },
+
+  stack: {
+    flex: 1,
+  },
+
   center: {
     flex: 1,
+
     alignItems: "center",
     justifyContent: "center",
+
     padding: 32,
   },
 
@@ -187,15 +251,19 @@ const styles = StyleSheet.create({
 
   loadingText: {
     maxWidth: 420,
+
     fontSize: 15,
     lineHeight: 22,
+
     textAlign: "center",
   },
 
   errorTitle: {
     fontSize: 20,
     fontWeight: "700",
+
     textAlign: "center",
+
     marginBottom: 12,
   },
 });

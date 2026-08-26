@@ -12,34 +12,25 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 import { useAppTheme } from "@/hooks/useAppTheme";
 
 /*
- * --------------------------------------------------------------------------
- * EMPRESA ACTIVA TEMPORAL
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * DASHBOARD
+ * ============================================================================
  *
- * Por ahora el Dashboard trabaja con AutoZone como empresa activa.
+ * Esta es la pantalla Inicio de la navegación global.
  *
- * Centralizamos aquÃ el ID para evitar repetir "1" en cada navegaciÃ³n.
+ * En esta fase:
  *
- * MÃ¡s adelante este valor serÃ¡ sustituido por algo similar a:
- *
- * const { activeCompany } = useActiveCompany();
- *
- * y entonces todas las rutas utilizarÃ¡n:
- *
- * activeCompany.id
+ * - conectamos el botón de perfil;
+ * - quitamos herramientas técnicas del Dashboard;
+ * - mantenemos la estructura responsive actual;
+ * - dejamos el rediseño avanzado del resumen para la siguiente fase.
  */
+
 const ACTIVE_COMPANY_ID = "1";
 
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
 
-  /*
-   * Color representativo temporal de AutoZone.
-   *
-   * MÃ¡s adelante deberÃ¡ provenir directamente de:
-   *
-   * activeCompany.branding.primaryColor
-   */
   const companyColor = "#F97316";
 
   return (
@@ -90,12 +81,12 @@ export default function DashboardScreen() {
             </View>
 
             {/*
-             * El perfil todavÃa no tiene una pantalla asociada.
-             *
-             * No agregamos navegaciÃ³n falsa por ahora.
-             * Cuando exista /perfil podremos conectar este botÃ³n.
+             * El acceso del encabezado ahora abre el Perfil real.
              */}
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Abrir perfil"
+              onPress={() => router.navigate("/perfil")}
               style={({ pressed }) => [
                 styles.profileButton,
                 {
@@ -134,16 +125,6 @@ export default function DashboardScreen() {
                 Empresa activa
               </Text>
 
-              {/*
-               * Antes "Cambiar" era solamente visual.
-               *
-               * Ahora abre el listado de empresas para que el usuario
-               * pueda consultar otra empresa.
-               *
-               * Cuando implementemos activeCompany, seleccionar una
-               * empresa desde ese listado tambiÃ©n cambiarÃ¡ el contexto
-               * activo del Dashboard.
-               */}
               <Pressable
                 onPress={() => router.navigate("/empresas")}
                 style={({ pressed }) => ({
@@ -163,17 +144,10 @@ export default function DashboardScreen() {
               </Pressable>
             </View>
 
-            {/*
-             * La tarjeta de empresa ya tenÃa navegaciÃ³n correcta.
-             *
-             * La conservamos y solamente reutilizamos
-             * ACTIVE_COMPANY_ID.
-             */}
             <Pressable
               onPress={() =>
                 router.navigate({
                   pathname: "/empresas/[id]",
-
                   params: {
                     id: ACTIVE_COMPANY_ID,
                   },
@@ -234,7 +208,7 @@ export default function DashboardScreen() {
                         },
                       ]}
                     >
-                      San Luis de la Paz, Guanajuato
+                      3 inmuebles registrados
                     </Text>
 
                     <Text
@@ -245,7 +219,7 @@ export default function DashboardScreen() {
                         },
                       ]}
                     >
-                      Última actividad · hace 2 dÃas
+                      Última actividad · hace 2 días
                     </Text>
                   </View>
 
@@ -297,7 +271,7 @@ export default function DashboardScreen() {
           </View>
 
           {/* ============================================================ */}
-          {/* ACCIONES RÃPIDAS                                             */}
+          {/* ACCIONES RÁPIDAS                                             */}
           {/* ============================================================ */}
 
           <View style={styles.section}>
@@ -318,56 +292,24 @@ export default function DashboardScreen() {
               desktopColumns={3}
               gap={Spacing.md}
             >
-              {/* -------------------------------------------------------- */}
-              {/* NUEVA EMPRESA                                            */}
-              {/* -------------------------------------------------------- */}
-
               <QuickAction
                 icon="+"
                 title="Nueva empresa"
                 onPress={() => router.navigate("/empresas/nueva")}
               />
 
-              {/* -------------------------------------------------------- */}
-              {/* NUEVA INSPECCIÓN                                         */}
-              {/* -------------------------------------------------------- */}
-
-              {/*
-               * Desde Dashboard todavÃa no conocemos el inmueble.
-               *
-               * Por eso NO debemos saltar directamente a captura.
-               *
-               * Flujo:
-               *
-               * Dashboard
-               *    ↓
-               * Inmuebles
-               *    ↓
-               * seleccionar inmueble
-               *    ↓
-               * Nueva inspección
-               *    ↓
-               * seleccionar formulario
-               *    ↓
-               * Captura
-               */}
               <QuickAction
                 icon="✓"
                 title="Nueva inspección"
                 onPress={() =>
                   router.navigate({
                     pathname: "/empresas/[id]/inmuebles",
-
                     params: {
                       id: ACTIVE_COMPANY_ID,
                     },
                   })
                 }
               />
-
-              {/* -------------------------------------------------------- */}
-              {/* REPORTES                                                 */}
-              {/* -------------------------------------------------------- */}
 
               <QuickAction
                 icon="▤"
@@ -375,7 +317,6 @@ export default function DashboardScreen() {
                 onPress={() =>
                   router.navigate({
                     pathname: "/empresas/[id]/reportes",
-
                     params: {
                       id: ACTIVE_COMPANY_ID,
                     },
@@ -383,192 +324,6 @@ export default function DashboardScreen() {
                 }
               />
             </ResponsiveGrid>
-          </View>
-
-          {/* ============================================================ */}
-          {/* HERRAMIENTAS DE DESARROLLO                                   */}
-          {/* ============================================================ */}
-
-          <View style={styles.section}>
-            <Text
-              style={[
-                styles.sectionTitle,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Herramientas de desarrollo
-            </Text>
-
-            <Text
-              style={[
-                styles.developmentDescription,
-                {
-                  color: colors.textSecondary,
-                },
-              ]}
-            >
-              Accesos temporales para validar persistencia, sincronización y
-              comportamiento offline durante el desarrollo del prototipo.
-            </Text>
-
-            <Pressable
-              onPress={() => router.navigate("/sync-test")}
-              style={({ pressed }) => [
-                styles.developmentCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.warning,
-                  opacity: pressed ? 0.75 : 1,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.developmentIcon,
-                  {
-                    backgroundColor: colors.primarySoft,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.developmentIconText,
-                    {
-                      color: colors.primary,
-                    },
-                  ]}
-                >
-                  ↻
-                </Text>
-              </View>
-
-              <View style={styles.developmentContent}>
-                <Text
-                  style={[
-                    styles.developmentTitle,
-                    {
-                      color: colors.text,
-                    },
-                  ]}
-                >
-                  Cola de sincronización
-                </Text>
-
-                <Text
-                  style={[
-                    styles.developmentSubtitle,
-                    {
-                      color: colors.textSecondary,
-                    },
-                  ]}
-                >
-                  Abre /sync-test usando el almacenamiento del entorno actual.
-                </Text>
-
-                <Text
-                  style={[
-                    styles.developmentEnvironment,
-                    {
-                      color: colors.warning,
-                    },
-                  ]}
-                >
-                  WEB → localStorage · ANDROID → SQLite
-                </Text>
-              </View>
-
-              <Text
-                style={[
-                  styles.actionArrow,
-                  {
-                    color: colors.textMuted,
-                  },
-                ]}
-              >
-                ›
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.navigate("/evidence-test")}
-              style={({ pressed }) => [
-                styles.developmentCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.primary,
-                  opacity: pressed ? 0.75 : 1,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.developmentIcon,
-                  {
-                    backgroundColor: colors.primarySoft,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.developmentIconText,
-                    {
-                      color: colors.primary,
-                    },
-                  ]}
-                >
-                  ▧
-                </Text>
-              </View>
-
-              <View style={styles.developmentContent}>
-                <Text
-                  style={[
-                    styles.developmentTitle,
-                    {
-                      color: colors.text,
-                    },
-                  ]}
-                >
-                  Prueba de evidencias
-                </Text>
-
-                <Text
-                  style={[
-                    styles.developmentSubtitle,
-                    {
-                      color: colors.textSecondary,
-                    },
-                  ]}
-                >
-                  Abre /evidence-test para validar creación, persistencia y
-                  eliminación de evidencias en el entorno actual.
-                </Text>
-
-                <Text
-                  style={[
-                    styles.developmentEnvironment,
-                    {
-                      color: colors.primary,
-                    },
-                  ]}
-                >
-                  WEB → localStorage · ANDROID → SQLite
-                </Text>
-              </View>
-
-              <Text
-                style={[
-                  styles.actionArrow,
-                  {
-                    color: colors.textMuted,
-                  },
-                ]}
-              >
-                ›
-              </Text>
-            </Pressable>
           </View>
 
           {/* ============================================================ */}
@@ -590,7 +345,7 @@ export default function DashboardScreen() {
             <AppCard>
               <ActivityItem
                 company="AutoZone"
-                action="InspecciÃ³n actualizada"
+                action="Inspección actualizada"
                 time="Hace 2 horas"
                 accentColor="#F97316"
               />
@@ -623,7 +378,7 @@ export default function DashboardScreen() {
               <ActivityItem
                 company="Empresa Demo"
                 action="Empresa registrada"
-                time="Hace 3 dÃas"
+                time="Hace 3 días"
                 accentColor="#3B82F6"
               />
             </AppCard>
@@ -634,15 +389,8 @@ export default function DashboardScreen() {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                              STAT CARD                                     */
-/* -------------------------------------------------------------------------- */
-
 /*
- * Tarjeta utilizada en el resumen del Dashboard.
- *
- * highlighted permite destacar mÃ©tricas que requieren atenciÃ³n,
- * como inspecciones pendientes.
+ * Tarjeta pequeña del resumen.
  */
 function StatCard({
   value,
@@ -682,15 +430,11 @@ function StatCard({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                              QUICK ACTION                                  */
-/* -------------------------------------------------------------------------- */
-
 /*
- * Acción rÃ¡pida reutilizable.
+ * Acción rápida reutilizable.
  *
- * A diferencia de la versiÃ³n anterior, los accesos principales
- * del Dashboard ya reciben una funciÃ³n onPress real.
+ * Los botones ejecutan acciones reales; ya no se utilizan como
+ * sustitutos del botón Atrás.
  */
 function QuickAction({
   icon,
@@ -708,7 +452,6 @@ function QuickAction({
       onPress={onPress}
       style={({ pressed }) => [
         styles.actionCard,
-
         {
           backgroundColor: colors.surface,
           borderColor: colors.border,
@@ -747,9 +490,6 @@ function QuickAction({
         {title}
       </Text>
 
-      {/*
-       * Añadimos una indicaciÃ³n visual de navegaciÃ³n.
-       */}
       <Text
         style={[
           styles.actionArrow,
@@ -764,16 +504,8 @@ function QuickAction({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                              ACTIVITY ITEM                                 */
-/* -------------------------------------------------------------------------- */
-
 /*
- * Elemento visual del historial reciente.
- *
- * Por ahora NO es Pressable porque todavÃa no contamos
- * con IDs suficientes para garantizar que cada actividad
- * pueda abrir correctamente su recurso asociado.
+ * Fila visual del historial reciente.
  */
 function ActivityItem({
   company,
@@ -837,18 +569,18 @@ function ActivityItem({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                   STYLES                                   */
-/* -------------------------------------------------------------------------- */
-
+/*
+ * ============================================================================
+ * ESTILOS
+ * ============================================================================
+ *
+ * ResponsiveContainer y ResponsiveGrid conservan los ajustes ya existentes
+ * para celular, tablet y escritorio.
+ */
 const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
-
-  /* -------------------------------------------------------------------- */
-  /* HEADER                                                               */
-  /* -------------------------------------------------------------------- */
 
   header: {
     flexDirection: "row",
@@ -861,6 +593,7 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
     minWidth: 0,
+
     marginRight: Spacing.md,
   },
 
@@ -900,10 +633,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  /* -------------------------------------------------------------------- */
-  /* SECCIONES                                                            */
-  /* -------------------------------------------------------------------- */
-
   section: {
     marginBottom: Spacing.xl,
   },
@@ -931,10 +660,6 @@ const styles = StyleSheet.create({
 
     marginBottom: Spacing.md,
   },
-
-  /* -------------------------------------------------------------------- */
-  /* EMPRESA ACTIVA                                                       */
-  /* -------------------------------------------------------------------- */
 
   companyCard: {
     overflow: "hidden",
@@ -1000,10 +725,6 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.sm,
   },
 
-  /* -------------------------------------------------------------------- */
-  /* RESUMEN                                                              */
-  /* -------------------------------------------------------------------- */
-
   statCard: {
     width: "100%",
   },
@@ -1018,10 +739,6 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: FontSize.small,
   },
-
-  /* -------------------------------------------------------------------- */
-  /* ACCIONES RÃPIDAS                                                     */
-  /* -------------------------------------------------------------------- */
 
   actionCard: {
     width: "100%",
@@ -1070,77 +787,6 @@ const styles = StyleSheet.create({
 
     marginLeft: Spacing.sm,
   },
-
-  /* -------------------------------------------------------------------- */
-  /* HERRAMIENTAS DE DESARROLLO                                          */
-  /* -------------------------------------------------------------------- */
-
-  developmentDescription: {
-    fontSize: FontSize.small,
-    lineHeight: 20,
-    marginTop: -Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-
-  developmentCard: {
-    width: "100%",
-    minHeight: 88,
-
-    marginBottom: Spacing.md,
-
-    flexDirection: "row",
-    alignItems: "center",
-
-    padding: Spacing.md,
-
-    borderWidth: 1,
-    borderRadius: Radius.lg,
-  },
-
-  developmentIcon: {
-    width: 44,
-    height: 44,
-
-    flexShrink: 0,
-
-    borderRadius: Radius.md,
-
-    alignItems: "center",
-    justifyContent: "center",
-
-    marginRight: Spacing.md,
-  },
-
-  developmentIconText: {
-    fontSize: FontSize.h3,
-    fontWeight: "700",
-  },
-
-  developmentContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  developmentTitle: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
-    marginBottom: Spacing.xs,
-  },
-
-  developmentSubtitle: {
-    fontSize: FontSize.caption,
-    lineHeight: 18,
-    marginBottom: Spacing.xs,
-  },
-
-  developmentEnvironment: {
-    fontSize: FontSize.caption,
-    fontWeight: "700",
-  },
-
-  /* -------------------------------------------------------------------- */
-  /* ACTIVIDAD                                                            */
-  /* -------------------------------------------------------------------- */
 
   activity: {
     minHeight: 64,

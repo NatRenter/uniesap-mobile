@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { Stack } from "expo-router";
+import { StyleSheet, View } from "react-native";
+
+import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+
+import AppTabs from "@/components/app-tabs";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useInspectionAutoSync } from "@/hooks/useInspectionAutoSync";
@@ -25,55 +29,36 @@ import type { Evidence } from "@/types/evidence";
  * ROOT LAYOUT - WEB
  * ============================================================================
  *
- * Persistencia Web:
+ * Web conserva localStorage para evidencias/inspecciones.
  *
- * inspecciones
- *      ↓
- * localStorage
- *
- * evidencias
- *      ↓
- * localStorage
- *
- * Este archivo no importa SQLite.
+ * La navegación global se coloca arriba para aprovechar mejor
+ * el espacio disponible en escritorio.
  */
-
 export default function WebRootLayout() {
-  const { isDark } = useAppTheme();
+  const pathname = usePathname();
+
+  const { colors, isDark } = useAppTheme();
 
   const [repositoryReady, setRepositoryReady] = useState(false);
 
   const [repositoryError, setRepositoryError] = useState<string | null>(null);
 
   /*
-   * ==========================================================================
-   * INICIALIZACIÓN WEB
-   * ==========================================================================
+   * Inicializa la persistencia Web.
+   *
+   * Este flujo conserva el comportamiento estable que ya teníamos.
    */
-
   useEffect(() => {
     let active = true;
 
     async function initialize() {
       try {
-        /*
-         * PASO 1
-         *
-         * Configuramos la persistencia Web
-         * del repositorio de evidencias.
-         */
         configureEvidenceRepositoryPersistence(
           createWebEvidencePersistenceAdapter(),
         );
 
-        /*
-         * PASO 2
-         *
-         * Hidratamos ambos repositorios.
-         */
         await Promise.all([
           hydrateInspectionRepository(),
-
           hydrateEvidenceRepository(),
         ]);
 
@@ -82,7 +67,6 @@ export default function WebRootLayout() {
         }
 
         setRepositoryError(null);
-
         setRepositoryReady(true);
       } catch (error) {
         if (!active) {
@@ -97,7 +81,6 @@ export default function WebRootLayout() {
         console.error("Error inicializando repositorios Web:", error);
 
         setRepositoryError(message);
-
         setRepositoryReady(false);
       }
     }
@@ -110,35 +93,42 @@ export default function WebRootLayout() {
   }, []);
 
   /*
-   * La sincronización automática solamente
-   * se activa cuando los repositorios están
-   * correctamente hidratados.
+   * La sincronización automática solo inicia cuando
+   * los repositorios ya están preparados.
    */
   useInspectionAutoSync({
     enabled: repositoryReady,
   });
 
   /*
-   * Durante desarrollo dejamos visible
-   * cualquier error en consola.
-   *
-   * repositoryError se conserva además
-   * para futuras pantallas de diagnóstico.
+   * repositoryError se conserva para el futuro centro de diagnóstico.
    */
   void repositoryError;
 
+  const showGlobalNavigation = pathname !== "/" && pathname !== "/login";
+
   return (
-    <>
+    <View
+      style={[
+        styles.app,
+        {
+          backgroundColor: colors.background,
+        },
+      ]}
+    >
       <StatusBar style={isDark ? "light" : "dark"} />
 
-      <Stack
-        screenOptions={{
-          headerShown: false,
+      {showGlobalNavigation ? <AppTabs /> : null}
 
-          animation: "slide_from_right",
-        }}
-      />
-    </>
+      <View style={styles.stack}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: "slide_from_right",
+          }}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -147,66 +137,16 @@ export default function WebRootLayout() {
  * ADAPTADOR WEB DE EVIDENCIAS
  * ============================================================================
  *
- * Este adaptador conecta EvidenceRepository
- * con localStorage.
+ * Conecta EvidenceRepository con localStorage.
  *
- *
- * IMPORTANTE:
- *
- * Las operaciones están diseñadas para ser
- * tolerantes a inicializaciones repetidas.
- *
- * Esto es especialmente útil durante:
- *
- * - Fast Refresh
- * - recargas de Expo Web
- * - desarrollo
- * - seeds parciales
+ * insert() continúa siendo idempotente para soportar Fast Refresh
+ * sin crear evidencias duplicadas.
  */
-
-/* -------------------------------------------------------------------------- */
-/*                           CREAR ADAPTADOR                                  */
-/* -------------------------------------------------------------------------- */
-
 function createWebEvidencePersistenceAdapter() {
   return {
-    /*
-     * ------------------------------------------------------------------------
-     * LEER
-     * ------------------------------------------------------------------------
-     */
-
     async loadAll(): Promise<Evidence[] | null> {
       return loadWebEvidences();
     },
-
-    /*
-     * ------------------------------------------------------------------------
-     * INSERTAR
-     * ------------------------------------------------------------------------
-     *
-     * Esta operación es deliberadamente
-     * IDEMPOTENTE.
-     *
-     * Si la evidencia ya existe:
-     *
-     * NO lanzamos error.
-     * NO creamos un duplicado.
-     * Simplemente conservamos el registro.
-     *
-     *
-     * Esto resuelve escenarios como:
-     *
-     * seed comienza
-     *      ↓
-     * evidence-001 guardada
-     *      ↓
-     * Fast Refresh / segunda inicialización
-     *      ↓
-     * seed vuelve a intentar evidence-001
-     *      ↓
-     * ya existe → continuar
-     */
 
     async insert(evidence: Evidence): Promise<void> {
       const current = loadWebEvidences() ?? [];
@@ -215,11 +155,6 @@ function createWebEvidencePersistenceAdapter() {
         (item) => item.id === evidence.id,
       );
 
-      /*
-       * Ya existe.
-       *
-       * Consideramos la operación satisfecha.
-       */
       if (existingIndex !== -1) {
         console.log(
           `Evidencia ${evidence.id} ya persistida en Web. Se omite inserción duplicada.`,
@@ -228,30 +163,14 @@ function createWebEvidencePersistenceAdapter() {
         return;
       }
 
-      /*
-       * Nueva evidencia.
-       */
       saveWebEvidences([evidence, ...current]);
     },
-
-    /*
-     * ------------------------------------------------------------------------
-     * REEMPLAZAR / ACTUALIZAR
-     * ------------------------------------------------------------------------
-     */
 
     async replace(evidence: Evidence): Promise<void> {
       const current = loadWebEvidences() ?? [];
 
       const index = current.findIndex((item) => item.id === evidence.id);
 
-      /*
-       * Si por alguna razón todavía no existe,
-       * hacemos un upsert.
-       *
-       * Esto vuelve el almacenamiento más resistente
-       * frente a estados parciales durante desarrollo.
-       */
       if (index === -1) {
         saveWebEvidences([evidence, ...current]);
 
@@ -265,24 +184,12 @@ function createWebEvidencePersistenceAdapter() {
       saveWebEvidences(updated);
     },
 
-    /*
-     * ------------------------------------------------------------------------
-     * ELIMINAR
-     * ------------------------------------------------------------------------
-     */
-
     async delete(id: string): Promise<boolean> {
       const current = loadWebEvidences() ?? [];
 
       const updated = current.filter((evidence) => evidence.id !== id);
 
       if (updated.length === current.length) {
-        /*
-         * No existe.
-         *
-         * No consideramos esto un error
-         * crítico de almacenamiento.
-         */
         return false;
       }
 
@@ -292,3 +199,18 @@ function createWebEvidencePersistenceAdapter() {
     },
   };
 }
+
+/*
+ * ============================================================================
+ * ESTILOS WEB
+ * ============================================================================
+ */
+const styles = StyleSheet.create({
+  app: {
+    flex: 1,
+  },
+
+  stack: {
+    flex: 1,
+  },
+});

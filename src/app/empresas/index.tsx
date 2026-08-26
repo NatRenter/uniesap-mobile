@@ -12,33 +12,50 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 
+/*
+ * ============================================================================
+ * LISTADO DE EMPRESAS
+ * ============================================================================
+ *
+ * Empresa e inmueble son conceptos distintos.
+ *
+ * Esta tarjeta resume:
+ *
+ * - cantidad de inmuebles registrados;
+ * - inspecciones pendientes;
+ * - inspecciones realizadas.
+ *
+ * Al entrar a una empresa, la siguiente pantalla será responsable
+ * de mostrar sus inmuebles.
+ */
+
 const companies = [
   {
     id: "1",
     name: "AutoZone",
-    location: "San Luis de la Paz, Guanajuato",
     properties: 3,
-    inspections: 12,
+    pendingInspections: 2,
+    completedInspections: 10,
     color: "#F97316",
     initials: "AZ",
   },
 
   {
     id: "2",
-    name: "LALA",
-    location: "La Piedad, Michoacán",
+    name: "CEDIS",
     properties: 1,
-    inspections: 8,
+    pendingInspections: 1,
+    completedInspections: 7,
     color: "#EF4444",
-    initials: "LA",
+    initials: "CE",
   },
 
   {
     id: "3",
     name: "Empresa Demo",
-    location: "León, Guanajuato",
     properties: 2,
-    inspections: 5,
+    pendingInspections: 2,
+    completedInspections: 3,
     color: "#3B82F6",
     initials: "ED",
   },
@@ -54,25 +71,11 @@ export default function CompaniesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ResponsiveContainer>
-          {/* HEADER */}
+          {/* ============================================================ */}
+          {/* HEADER DE MÓDULO                                             */}
+          {/* ============================================================ */}
 
           <View style={styles.header}>
-            <Pressable
-              onPress={() => router.navigate("/dashboard")}
-              style={styles.backButton}
-            >
-              <Text
-                style={[
-                  styles.backText,
-                  {
-                    color: colors.primary,
-                  },
-                ]}
-              >
-                ‹ Dashboard
-              </Text>
-            </Pressable>
-
             <Text
               style={[
                 styles.title,
@@ -92,11 +95,13 @@ export default function CompaniesScreen() {
                 },
               ]}
             >
-              Administra las empresas registradas en UNIESAP.
+              Consulta las empresas registradas y los inmuebles asociados.
             </Text>
           </View>
 
-          {/* ACCIÓN PRINCIPAL */}
+          {/* ============================================================ */}
+          {/* ACCIÓN PRINCIPAL                                             */}
+          {/* ============================================================ */}
 
           <View style={styles.mainAction}>
             <AppButton onPress={() => router.navigate("/empresas/nueva")}>
@@ -104,7 +109,9 @@ export default function CompaniesScreen() {
             </AppButton>
           </View>
 
-          {/* LISTADO RESPONSIVE */}
+          {/* ============================================================ */}
+          {/* LISTADO RESPONSIVE                                           */}
+          {/* ============================================================ */}
 
           <ResponsiveGrid
             phoneColumns={1}
@@ -122,20 +129,26 @@ export default function CompaniesScreen() {
   );
 }
 
+/*
+ * Tarjeta de una empresa.
+ *
+ * No muestra una ubicación única porque una empresa puede tener
+ * varios inmuebles en diferentes ciudades.
+ */
 function CompanyCard({
   id,
   name,
-  location,
   properties,
-  inspections,
+  pendingInspections,
+  completedInspections,
   color,
   initials,
 }: {
   id: string;
   name: string;
-  location: string;
   properties: number;
-  inspections: number;
+  pendingInspections: number;
+  completedInspections: number;
   color: string;
   initials: string;
 }) {
@@ -200,27 +213,22 @@ function CompanyCard({
 
             <Text
               style={[
-                styles.location,
+                styles.propertyCount,
                 {
                   color: colors.textSecondary,
                 },
               ]}
-              numberOfLines={2}
             >
-              {location}
+              {properties} inmueble{properties === 1 ? "" : "s"} registrado
+              {properties === 1 ? "" : "s"}
             </Text>
 
             <View style={styles.companyStats}>
-              <Text
-                style={[
-                  styles.stat,
-                  {
-                    color: colors.textMuted,
-                  },
-                ]}
-              >
-                {properties} inmuebles
-              </Text>
+              <StatusStat
+                value={pendingInspections}
+                label="pendientes"
+                color={colors.warning}
+              />
 
               <View
                 style={[
@@ -231,16 +239,11 @@ function CompanyCard({
                 ]}
               />
 
-              <Text
-                style={[
-                  styles.stat,
-                  {
-                    color: colors.textMuted,
-                  },
-                ]}
-              >
-                {inspections} inspecciones
-              </Text>
+              <StatusStat
+                value={completedInspections}
+                label="realizadas"
+                color={colors.success}
+              />
             </View>
           </View>
 
@@ -260,6 +263,55 @@ function CompanyCard({
   );
 }
 
+/*
+ * Métrica pequeña para diferenciar visualmente
+ * inspecciones pendientes y realizadas.
+ */
+function StatusStat({
+  value,
+  label,
+  color,
+}: {
+  value: number;
+  label: string;
+  color: string;
+}) {
+  return (
+    <View style={styles.statusStat}>
+      <View
+        style={[
+          styles.statusIndicator,
+          {
+            backgroundColor: color,
+          },
+        ]}
+      />
+
+      <Text
+        style={[
+          styles.stat,
+          {
+            color,
+          },
+        ]}
+      >
+        {value} {label}
+      </Text>
+    </View>
+  );
+}
+
+/*
+ * ============================================================================
+ * ESTILOS
+ * ============================================================================
+ *
+ * ResponsiveGrid conserva:
+ *
+ * teléfono  → 1 columna
+ * tablet    → 2 columnas
+ * web       → 3 columnas
+ */
 const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: Spacing.xxxl,
@@ -269,23 +321,16 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
 
-  backButton: {
-    alignSelf: "flex-start",
-    marginBottom: Spacing.lg,
-  },
-
-  backText: {
-    fontSize: FontSize.small,
-    fontWeight: "600",
-  },
-
   title: {
     fontSize: FontSize.h1,
     fontWeight: "700",
+
     marginBottom: Spacing.sm,
   },
 
   subtitle: {
+    maxWidth: 640,
+
     fontSize: FontSize.body,
     lineHeight: 24,
   },
@@ -296,6 +341,7 @@ const styles = StyleSheet.create({
 
   companyCard: {
     width: "100%",
+
     overflow: "hidden",
   },
 
@@ -304,7 +350,7 @@ const styles = StyleSheet.create({
   },
 
   companyContent: {
-    minHeight: 110,
+    minHeight: 118,
 
     flexDirection: "row",
     alignItems: "center",
@@ -315,6 +361,8 @@ const styles = StyleSheet.create({
   companyLogo: {
     width: 52,
     height: 52,
+
+    flexShrink: 0,
 
     borderRadius: Radius.md,
 
@@ -337,12 +385,14 @@ const styles = StyleSheet.create({
   companyName: {
     fontSize: FontSize.cardTitle,
     fontWeight: "700",
+
     marginBottom: Spacing.xs,
   },
 
-  location: {
+  propertyCount: {
     fontSize: FontSize.small,
     lineHeight: 20,
+
     marginBottom: Spacing.sm,
   },
 
@@ -352,8 +402,23 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
 
+  statusStat: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  statusIndicator: {
+    width: 7,
+    height: 7,
+
+    borderRadius: Radius.full,
+
+    marginRight: Spacing.xs,
+  },
+
   stat: {
     fontSize: FontSize.caption,
+    fontWeight: "600",
   },
 
   dot: {
@@ -366,7 +431,10 @@ const styles = StyleSheet.create({
   },
 
   arrow: {
+    flexShrink: 0,
+
     fontSize: 32,
+
     marginLeft: Spacing.sm,
   },
 });

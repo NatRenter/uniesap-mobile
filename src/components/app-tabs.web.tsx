@@ -1,120 +1,206 @@
-import {
-  TabList,
-  TabListProps,
-  Tabs,
-  TabSlot,
-  TabTrigger,
-  TabTriggerSlotProps,
-} from "expo-router/ui";
-import { SymbolView } from "expo-symbols";
-import { Pressable, StyleSheet, useColorScheme, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { ExternalLink } from "./external-link";
-import { ThemedText } from "./themed-text";
-import { ThemedView } from "./themed-view";
+import { router, usePathname } from "expo-router";
 
-import { Colors, MaxContentWidth, Spacing } from "@/constants/theme";
+import { FontSize, Radius, Spacing } from "@/constants/theme";
+
+import { useAppTheme } from "@/hooks/useAppTheme";
+
+/*
+ * ============================================================================
+ * NAVEGACIÓN GLOBAL - WEB
+ * ============================================================================
+ *
+ * Web utiliza la misma arquitectura que móvil:
+ *
+ * Inicio | Empresas | Trabajo | Perfil
+ *
+ * La diferencia es visual:
+ * en escritorio aprovechamos el ancho disponible con una barra superior.
+ */
+
+type GlobalNavigationItem = {
+  label: string;
+  route: "/dashboard" | "/empresas" | "/trabajo" | "/perfil";
+  matches: string[];
+};
+
+const navigationItems: GlobalNavigationItem[] = [
+  {
+    label: "Inicio",
+    route: "/dashboard",
+    matches: ["/dashboard"],
+  },
+  {
+    label: "Empresas",
+    route: "/empresas",
+    matches: ["/empresas"],
+  },
+  {
+    label: "Trabajo",
+    route: "/trabajo",
+    matches: ["/trabajo"],
+  },
+  {
+    label: "Perfil",
+    route: "/perfil",
+    matches: ["/perfil"],
+  },
+];
 
 export default function AppTabs() {
-  return (
-    <Tabs>
-      <TabSlot style={{ height: "100%" }} />
-      <TabList asChild>
-        <CustomTabList>
-          <TabTrigger name="home" href="/" asChild>
-            <TabButton>Home</TabButton>
-          </TabTrigger>
-        </CustomTabList>
-      </TabList>
-    </Tabs>
-  );
-}
+  const pathname = usePathname();
 
-export function TabButton({
-  children,
-  isFocused,
-  ...props
-}: TabTriggerSlotProps) {
+  const { colors } = useAppTheme();
+
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView
-        type={isFocused ? "backgroundSelected" : "backgroundElement"}
-        style={styles.tabButtonView}
-      >
-        <ThemedText
-          type="small"
-          themeColor={isFocused ? "text" : "textSecondary"}
+    <View
+      style={[
+        styles.navigationSurface,
+        {
+          backgroundColor: colors.surface,
+          borderBottomColor: colors.border,
+        },
+      ]}
+    >
+      <View style={styles.navigationContent}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Ir al inicio"
+          onPress={() => router.navigate("/dashboard")}
+          style={({ pressed }) => [
+            styles.brandButton,
+            {
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
         >
-          {children}
-        </ThemedText>
-      </ThemedView>
-    </Pressable>
-  );
-}
+          <Text
+            style={[
+              styles.brand,
+              {
+                color: colors.primary,
+              },
+            ]}
+          >
+            UNIESAP
+          </Text>
+        </Pressable>
 
-export function CustomTabList(props: TabListProps) {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === "unspecified" ? "light" : scheme];
+        <View style={styles.navigationItems}>
+          {navigationItems.map((item) => {
+            const active = isRouteActive(pathname, item.matches);
 
-  return (
-    <View {...props} style={styles.tabListContainer}>
-      <ThemedView type="backgroundElement" style={styles.innerContainer}>
-        <ThemedText type="smallBold" style={styles.brandText}>
-          Expo Starter
-        </ThemedText>
-
-        {props.children}
-
-        <ExternalLink href="https://docs.expo.dev" asChild>
-          <Pressable style={styles.externalPressable}>
-            <ThemedText type="link">Docs</ThemedText>
-            <SymbolView
-              tintColor={colors.text}
-              name={{ ios: "arrow.up.right.square", web: "link" }}
-              size={12}
-            />
-          </Pressable>
-        </ExternalLink>
-      </ThemedView>
+            return (
+              <Pressable
+                key={item.route}
+                accessibilityRole="button"
+                accessibilityState={{
+                  selected: active,
+                }}
+                onPress={() => router.navigate(item.route)}
+                style={({ pressed }) => [
+                  styles.navigationItem,
+                  active && {
+                    backgroundColor: colors.primarySoft,
+                  },
+                  {
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.navigationLabel,
+                    {
+                      color: active ? colors.primary : colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
     </View>
   );
 }
 
+/*
+ * Mantiene seleccionado el módulo principal cuando la ruta es profunda.
+ *
+ * /empresas/1/inmuebles/5
+ *       ↓
+ * Empresas continúa activo.
+ */
+function isRouteActive(pathname: string, matches: string[]): boolean {
+  return matches.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+}
+
+/*
+ * ============================================================================
+ * ESTILOS WEB
+ * ============================================================================
+ *
+ * El contenido se limita a 1180px para no dispersar la navegación
+ * en monitores grandes.
+ */
 const styles = StyleSheet.create({
-  tabListContainer: {
-    position: "absolute",
+  navigationSurface: {
+    flexShrink: 0,
+
+    borderBottomWidth: StyleSheet.hairlineWidth,
+
+    paddingHorizontal: Spacing.lg,
+  },
+
+  navigationContent: {
     width: "100%",
-    padding: Spacing.three,
-    justifyContent: "center",
-    alignItems: "center",
-    flexDirection: "row",
-  },
-  innerContainer: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.five,
-    borderRadius: Spacing.five,
+    maxWidth: 1180,
+
+    minHeight: 68,
+
+    alignSelf: "center",
+
     flexDirection: "row",
     alignItems: "center",
-    flexGrow: 1,
-    gap: Spacing.two,
-    maxWidth: MaxContentWidth,
+    justifyContent: "space-between",
+
+    gap: Spacing.lg,
   },
-  brandText: {
-    marginRight: "auto",
+
+  brandButton: {
+    flexShrink: 0,
+
+    paddingVertical: Spacing.sm,
   },
-  pressed: {
-    opacity: 0.7,
+
+  brand: {
+    fontSize: FontSize.cardTitle,
+    fontWeight: "800",
+    letterSpacing: 0.8,
   },
-  tabButtonView: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
-  },
-  externalPressable: {
+
+  navigationItems: {
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "center",
-    gap: Spacing.one,
-    marginLeft: Spacing.three,
+
+    gap: Spacing.xs,
+  },
+
+  navigationItem: {
+    borderRadius: Radius.md,
+
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+
+  navigationLabel: {
+    fontSize: FontSize.small,
+    fontWeight: "600",
   },
 });
