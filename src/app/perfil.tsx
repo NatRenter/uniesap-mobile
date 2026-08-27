@@ -1,7 +1,17 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { router } from "expo-router";
 
+import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -11,35 +21,43 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 
+import {
+  getUserProfile,
+  subscribeToUserProfile,
+} from "@/repositories/userProfileRepository";
+
+import type { UserProfile } from "@/types/userProfile";
+
 /*
  * ============================================================================
  * PERFIL
  * ============================================================================
  *
- * Primera base visual del módulo de usuario.
+ * Muestra información personal y profesional persistida.
  *
- * Aquí dejamos preparada la estructura para:
+ * La edición se realiza en /perfil/editar para mantener
+ * esta pantalla limpia y fácil de consultar.
  *
- * - fotografía editable;
- * - información personal;
- * - profesión;
- * - cargo;
- * - preferencias;
- * - opciones de desarrollador.
- *
- * Roles y permisos NO se implementan todavía.
+ * Roles y permisos todavía NO forman parte de esta fase.
  */
-
-const temporaryProfile = {
-  initials: "A",
-  name: "Usuario UNIESAP",
-  email: "usuario@uniesap.com",
-  profession: "Sin definir",
-  position: "Sin definir",
-};
-
 export default function ProfileScreen() {
   const { colors } = useAppTheme();
+
+  const [profile, setProfile] = useState<UserProfile>(getUserProfile());
+
+  /*
+   * Escucha cambios del repositorio.
+   *
+   * Cuando Editar perfil guarda información nueva,
+   * esta pantalla se actualiza automáticamente.
+   */
+  useEffect(() => {
+    return subscribeToUserProfile(setProfile);
+  }, []);
+
+  const fullName = `${profile.firstName} ${profile.lastName}`.trim();
+
+  const initials = createInitials(profile.firstName, profile.lastName);
 
   return (
     <Screen padded={false}>
@@ -52,26 +70,36 @@ export default function ProfileScreen() {
           {/* IDENTIDAD                                                    */}
           {/* ============================================================ */}
 
-          <View style={styles.header}>
-            <View
-              style={[
-                styles.avatar,
-                {
-                  backgroundColor: colors.primarySoft,
-                },
-              ]}
-            >
-              <Text
+          <View style={styles.identityCard}>
+            {profile.photoUri ? (
+              <Image
+                source={{
+                  uri: profile.photoUri,
+                }}
+                style={styles.avatar}
+              />
+            ) : (
+              <View
                 style={[
-                  styles.avatarText,
+                  styles.avatar,
+                  styles.avatarFallback,
                   {
-                    color: colors.primary,
+                    backgroundColor: colors.primarySoft,
                   },
                 ]}
               >
-                {temporaryProfile.initials}
-              </Text>
-            </View>
+                <Text
+                  style={[
+                    styles.avatarText,
+                    {
+                      color: colors.primary,
+                    },
+                  ]}
+                >
+                  {initials}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.identity}>
               <Text
@@ -82,31 +110,39 @@ export default function ProfileScreen() {
                   },
                 ]}
               >
-                {temporaryProfile.name}
+                {fullName}
+              </Text>
+
+              <Text
+                style={[
+                  styles.position,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                {profile.position ?? "Cargo sin definir"}
               </Text>
 
               <Text
                 style={[
                   styles.email,
                   {
-                    color: colors.textSecondary,
-                  },
-                ]}
-              >
-                {temporaryProfile.email}
-              </Text>
-
-              <Text
-                style={[
-                  styles.photoNotice,
-                  {
                     color: colors.textMuted,
                   },
                 ]}
               >
-                La edición de fotografía se conectará en la siguiente fase del
-                perfil.
+                {profile.email}
               </Text>
+            </View>
+
+            <View style={styles.editButton}>
+              <AppButton
+                variant="secondary"
+                onPress={() => router.navigate("/perfil/editar")}
+              >
+                Editar perfil
+              </AppButton>
             </View>
           </View>
 
@@ -125,11 +161,19 @@ export default function ProfileScreen() {
               rows={[
                 {
                   label: "Nombre",
-                  value: temporaryProfile.name,
+                  value: profile.firstName,
+                },
+                {
+                  label: "Apellidos",
+                  value: profile.lastName,
                 },
                 {
                   label: "Correo",
-                  value: temporaryProfile.email,
+                  value: profile.email,
+                },
+                {
+                  label: "Teléfono",
+                  value: profile.phone ?? "Sin definir",
                 },
               ]}
             />
@@ -139,18 +183,18 @@ export default function ProfileScreen() {
               rows={[
                 {
                   label: "Profesión",
-                  value: temporaryProfile.profession,
+                  value: profile.profession ?? "Sin definir",
                 },
                 {
                   label: "Cargo",
-                  value: temporaryProfile.position,
+                  value: profile.position ?? "Sin definir",
                 },
               ]}
             />
           </ResponsiveGrid>
 
           {/* ============================================================ */}
-          {/* PREFERENCIAS Y APLICACIÓN                                    */}
+          {/* APLICACIÓN                                                   */}
           {/* ============================================================ */}
 
           <View style={styles.section}>
@@ -175,7 +219,7 @@ export default function ProfileScreen() {
 
               <SettingsRow
                 title="Sincronización"
-                subtitle="Estado simple de carga y errores"
+                subtitle="Estado general de carga"
                 status="Sin errores"
                 statusColor={colors.success}
               />
@@ -201,6 +245,7 @@ export default function ProfileScreen() {
                 styles.logoutButton,
                 {
                   borderColor: colors.error,
+
                   opacity: pressed ? 0.7 : 1,
                 },
               ]}
@@ -224,13 +269,14 @@ export default function ProfileScreen() {
 }
 
 /*
- * Tarjeta con información del perfil.
+ * Tarjeta reutilizable de información.
  */
 function ProfileSection({
   title,
   rows,
 }: {
   title: string;
+
   rows: {
     label: string;
     value: string;
@@ -282,8 +328,6 @@ function ProfileSection({
 
 /*
  * Fila reutilizable para preferencias.
- *
- * Si onPress no existe se muestra únicamente como información.
  */
 function SettingsRow({
   title,
@@ -368,9 +412,6 @@ function SettingsRow({
   );
 }
 
-/*
- * Separador interno de la tarjeta.
- */
 function Divider() {
   const { colors } = useAppTheme();
 
@@ -387,34 +428,56 @@ function Divider() {
 }
 
 /*
+ * Genera iniciales simples para el avatar
+ * cuando todavía no existe una fotografía.
+ */
+function createInitials(firstName: string, lastName: string): string {
+  const first = firstName.trim().charAt(0);
+
+  const last = lastName.trim().charAt(0);
+
+  return `${first}${last}`.toUpperCase() || "U";
+}
+
+/*
  * ============================================================================
  * ESTILOS
  * ============================================================================
+ *
+ * La identidad usa flexWrap para adaptarse:
+ *
+ * teléfono → foto + información + botón debajo
+ * tablet/web → foto + información + botón lateral cuando haya espacio
  */
 const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
 
-  header: {
+  identityCard: {
+    width: "100%",
+
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+
+    gap: Spacing.lg,
 
     marginBottom: Spacing.xl,
   },
 
   avatar: {
-    width: 82,
-    height: 82,
+    width: 96,
+    height: 96,
 
     flexShrink: 0,
 
     borderRadius: Radius.full,
+  },
 
+  avatarFallback: {
     alignItems: "center",
     justifyContent: "center",
-
-    marginRight: Spacing.lg,
   },
 
   avatarText: {
@@ -424,7 +487,7 @@ const styles = StyleSheet.create({
 
   identity: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 220,
   },
 
   name: {
@@ -434,17 +497,18 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
 
-  email: {
-    fontSize: FontSize.small,
+  position: {
+    fontSize: FontSize.body,
 
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
 
-  photoNotice: {
-    maxWidth: 520,
+  email: {
+    fontSize: FontSize.small,
+  },
 
-    fontSize: FontSize.caption,
-    lineHeight: 18,
+  editButton: {
+    minWidth: 150,
   },
 
   section: {

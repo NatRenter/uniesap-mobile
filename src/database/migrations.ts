@@ -13,6 +13,36 @@ export async function runDatabaseMigrations() {
 
   /*
    * ==========================================================================
+   * PERFIL DE USUARIO
+   * ==========================================================================
+   *
+   * Guardamos un único perfil local identificado
+   * por id = "current-user".
+   *
+   * Roles y permisos se agregarán en otra fase.
+   */
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS user_profile (
+      id TEXT PRIMARY KEY NOT NULL,
+
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+
+      email TEXT NOT NULL,
+      phone TEXT,
+
+      profession TEXT,
+      position TEXT,
+
+      photo_uri TEXT,
+
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  /*
+   * ==========================================================================
    * INSPECCIONES
    * ==========================================================================
    */
@@ -97,11 +127,6 @@ export async function runDatabaseMigrations() {
     );
   `);
 
-  /*
-   * Bases actuales ya tienen evidences.
-   *
-   * Agregamos los campos nuevos sin borrar fotografías existentes.
-   */
   await addColumnIfMissing("evidences", "kobo_upload_operation_id", "TEXT");
 
   await addColumnIfMissing("evidences", "kobo_attachment_id", "TEXT");
@@ -145,8 +170,6 @@ export async function runDatabaseMigrations() {
    * ==========================================================================
    * MOCK KOBO - ATTACHMENTS
    * ==========================================================================
-   *
-   * Cada evidencia aceptada tiene su propia clave idempotente.
    */
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS mock_kobo_attachments (
@@ -240,7 +263,12 @@ export async function runDatabaseMigrations() {
 }
 
 /*
- * Agrega una columna solamente cuando todavía no existe.
+ * ============================================================================
+ * AGREGAR COLUMNA SI NO EXISTE
+ * ============================================================================
+ *
+ * Esta utilidad protege instalaciones anteriores
+ * cuando agregamos nuevas columnas sin borrar información.
  */
 async function addColumnIfMissing(
   tableName: string,

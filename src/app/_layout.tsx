@@ -16,6 +16,11 @@ import {
 
 import { initializeDatabase } from "@/database/initializeDatabase.native";
 
+import {
+  saveUserProfileToDatabase,
+  selectUserProfile,
+} from "@/database/userProfileDatabase";
+
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useInspectionAutoSync } from "@/hooks/useInspectionAutoSync";
 
@@ -26,6 +31,11 @@ import {
 
 import { hydrateInspectionRepository } from "@/repositories/inspectionRepository";
 
+import {
+  configureUserProfileRepositoryPersistence,
+  hydrateUserProfileRepository,
+} from "@/repositories/userProfileRepository";
+
 /*
  * ============================================================================
  * ROOT LAYOUT - ANDROID / IOS
@@ -34,12 +44,13 @@ import { hydrateInspectionRepository } from "@/repositories/inspectionRepository
  * Responsabilidades:
  *
  * 1. Inicializar SQLite.
- * 2. Hidratar repositorios.
- * 3. Activar sincronización automática.
- * 4. Mostrar el Stack de Expo Router.
- * 5. Mantener la navegación global en la parte inferior.
+ * 2. Configurar persistencia de evidencias.
+ * 3. Configurar persistencia del perfil.
+ * 4. Hidratar repositorios.
+ * 5. Activar sincronización automática.
+ * 6. Mostrar navegación global.
  *
- * No modificamos aquí la lógica de Kobo ni la lógica de evidencias.
+ * Kobo y la lógica de sincronización permanecen intactos.
  */
 export default function RootLayout() {
   const pathname = usePathname();
@@ -55,9 +66,10 @@ export default function RootLayout() {
   });
 
   /*
-   * Inicialización del almacenamiento nativo.
+   * Inicializa todos los repositorios Native.
    *
-   * Este flujo se conserva respecto de la versión estable anterior.
+   * Cada repositorio mantiene su propia responsabilidad,
+   * pero RootLayout coordina el arranque.
    */
   useEffect(() => {
     let active = true;
@@ -68,14 +80,26 @@ export default function RootLayout() {
 
         configureEvidenceRepositoryPersistence({
           loadAll: selectAllEvidences,
+
           insert: insertEvidence,
+
           replace: replaceEvidence,
+
           delete: deleteEvidenceFromDatabase,
+        });
+
+        configureUserProfileRepositoryPersistence({
+          load: selectUserProfile,
+
+          save: saveUserProfileToDatabase,
         });
 
         await Promise.all([
           hydrateInspectionRepository(),
+
           hydrateEvidenceRepository(),
+
+          hydrateUserProfileRepository(),
         ]);
 
         if (!active) {
@@ -83,6 +107,7 @@ export default function RootLayout() {
         }
 
         setDatabaseError(null);
+
         setDatabaseReady(true);
       } catch (error) {
         if (!active) {
@@ -97,6 +122,7 @@ export default function RootLayout() {
         console.error("Error inicializando almacenamiento local:", error);
 
         setDatabaseError(message);
+
         setDatabaseReady(false);
       }
     }
@@ -182,12 +208,6 @@ export default function RootLayout() {
     );
   }
 
-  /*
-   * Login e index quedan fuera de la navegación principal.
-   *
-   * Todas las demás rutas, incluidas rutas contextuales y herramientas
-   * de desarrollo, conservan un acceso rápido a Inicio/Empresas/Trabajo/Perfil.
-   */
   const showGlobalNavigation = pathname !== "/" && pathname !== "/login";
 
   return (
@@ -219,11 +239,6 @@ export default function RootLayout() {
  * ============================================================================
  * ESTILOS
  * ============================================================================
- *
- * Stack ocupa el espacio restante.
- * AppTabs se mantiene como una zona independiente debajo del contenido.
- *
- * Así evitamos que la barra tape botones o información de las pantallas.
  */
 const styles = StyleSheet.create({
   app: {
@@ -246,6 +261,7 @@ const styles = StyleSheet.create({
   loadingTitle: {
     fontSize: 28,
     fontWeight: "700",
+
     marginBottom: 8,
   },
 

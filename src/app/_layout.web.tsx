@@ -18,9 +18,19 @@ import {
 import { hydrateInspectionRepository } from "@/repositories/inspectionRepository";
 
 import {
+  configureUserProfileRepositoryPersistence,
+  hydrateUserProfileRepository,
+} from "@/repositories/userProfileRepository";
+
+import {
   loadWebEvidences,
   saveWebEvidences,
 } from "@/repositories/evidenceWebStorage";
+
+import {
+  loadWebUserProfile,
+  saveWebUserProfile,
+} from "@/repositories/userProfileWebStorage";
 
 import type { Evidence } from "@/types/evidence";
 
@@ -29,10 +39,10 @@ import type { Evidence } from "@/types/evidence";
  * ROOT LAYOUT - WEB
  * ============================================================================
  *
- * Web conserva localStorage para evidencias/inspecciones.
+ * Web conserva localStorage.
  *
- * La navegación global se coloca arriba para aprovechar mejor
- * el espacio disponible en escritorio.
+ * Evidencias y perfil utilizan adaptadores independientes
+ * para mantener los repositorios desacoplados de la plataforma.
  */
 export default function WebRootLayout() {
   const pathname = usePathname();
@@ -44,9 +54,7 @@ export default function WebRootLayout() {
   const [repositoryError, setRepositoryError] = useState<string | null>(null);
 
   /*
-   * Inicializa la persistencia Web.
-   *
-   * Este flujo conserva el comportamiento estable que ya teníamos.
+   * Inicializa persistencia Web.
    */
   useEffect(() => {
     let active = true;
@@ -57,9 +65,22 @@ export default function WebRootLayout() {
           createWebEvidencePersistenceAdapter(),
         );
 
+        configureUserProfileRepositoryPersistence({
+          async load() {
+            return loadWebUserProfile();
+          },
+
+          async save(profile) {
+            saveWebUserProfile(profile);
+          },
+        });
+
         await Promise.all([
           hydrateInspectionRepository(),
+
           hydrateEvidenceRepository(),
+
+          hydrateUserProfileRepository(),
         ]);
 
         if (!active) {
@@ -67,6 +88,7 @@ export default function WebRootLayout() {
         }
 
         setRepositoryError(null);
+
         setRepositoryReady(true);
       } catch (error) {
         if (!active) {
@@ -81,6 +103,7 @@ export default function WebRootLayout() {
         console.error("Error inicializando repositorios Web:", error);
 
         setRepositoryError(message);
+
         setRepositoryReady(false);
       }
     }
@@ -92,16 +115,12 @@ export default function WebRootLayout() {
     };
   }, []);
 
-  /*
-   * La sincronización automática solo inicia cuando
-   * los repositorios ya están preparados.
-   */
   useInspectionAutoSync({
     enabled: repositoryReady,
   });
 
   /*
-   * repositoryError se conserva para el futuro centro de diagnóstico.
+   * Lo conservamos para el futuro diagnóstico Web.
    */
   void repositoryError;
 
@@ -137,10 +156,7 @@ export default function WebRootLayout() {
  * ADAPTADOR WEB DE EVIDENCIAS
  * ============================================================================
  *
- * Conecta EvidenceRepository con localStorage.
- *
- * insert() continúa siendo idempotente para soportar Fast Refresh
- * sin crear evidencias duplicadas.
+ * Conserva exactamente la lógica existente.
  */
 function createWebEvidencePersistenceAdapter() {
   return {
