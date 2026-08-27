@@ -1,6 +1,15 @@
 import type { Property } from "@/types/property";
 
-export const properties: Property[] = [
+/*
+ * ============================================================================
+ * SEED DE INMUEBLES
+ * ============================================================================
+ *
+ * Se utiliza solamente cuando la persistencia todavía está vacía.
+ *
+ * Property.companyId será la relación principal con Company.
+ */
+export const initialProperties: Property[] = [
   {
     id: "property-001",
     companyId: "company-001",
@@ -16,6 +25,9 @@ export const properties: Property[] = [
     formIds: ["form-001", "form-002", "form-003"],
 
     status: "active",
+
+    createdAt: "2026-08-01T09:10:00.000Z",
+    updatedAt: "2026-08-01T09:10:00.000Z",
   },
 
   {
@@ -33,6 +45,9 @@ export const properties: Property[] = [
     formIds: ["form-001", "form-002"],
 
     status: "active",
+
+    createdAt: "2026-08-01T09:15:00.000Z",
+    updatedAt: "2026-08-01T09:15:00.000Z",
   },
 
   {
@@ -50,6 +65,9 @@ export const properties: Property[] = [
     formIds: ["form-001", "form-003"],
 
     status: "active",
+
+    createdAt: "2026-08-01T09:20:00.000Z",
+    updatedAt: "2026-08-01T09:20:00.000Z",
   },
 
   {
@@ -67,26 +85,8 @@ export const properties: Property[] = [
     formIds: ["form-001"],
 
     status: "active",
+
+    createdAt: "2026-08-01T09:25:00.000Z",
+    updatedAt: "2026-08-01T09:25:00.000Z",
   },
 ];
-
-export function getPropertiesByCompanyId(companyId: string) {
-  return properties.filter((property) => property.companyId === companyId);
-}
-
-export function getPropertyById(id: string) {
-  const resolvedId = resolvePropertyId(id);
-
-  return properties.find((property) => property.id === resolvedId);
-}
-
-const legacyPropertyIds: Record<string, string> = {
-  "1": "property-001",
-  "2": "property-002",
-  "3": "property-003",
-  "4": "property-004",
-};
-
-export function resolvePropertyId(id: string) {
-  return legacyPropertyIds[id] ?? id;
-}

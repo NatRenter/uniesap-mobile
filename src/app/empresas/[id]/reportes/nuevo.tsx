@@ -17,14 +17,14 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getCompanyById } from "@/data/companies";
+import { getCompanyById } from "@/repositories/companyRepository";
 import { getEvidencesByInspectionId } from "@/data/evidences";
 import { getFormById } from "@/data/forms";
 import {
   getInspectionById,
   getInspectionsByCompanyId,
 } from "@/data/inspections";
-import { getPropertyById } from "@/data/properties";
+import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
@@ -37,21 +37,21 @@ export default function NewReportScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * useResponsive nos permite modificar únicamente
+   * useResponsive nos permite modificar Ãºnicamente
    * aquellas zonas donde un grid normal no es suficiente.
    *
-   * Aquí lo utilizaremos principalmente para construir
-   * el layout principal de configuración + resumen.
+   * AquÃ­ lo utilizaremos principalmente para construir
+   * el layout principal de configuraciÃ³n + resumen.
    */
   const { isPhone } = useResponsive();
 
   /*
-   * Parámetros recibidos desde Expo Router.
+   * ParÃ¡metros recibidos desde Expo Router.
    *
    * inspectionId es opcional porque esta pantalla puede abrirse:
    *
    * 1. Desde Reportes.
-   * 2. Directamente desde una inspección.
+   * 2. Directamente desde una inspecciÃ³n.
    */
   const { id, inspectionId: routeInspectionId } = useLocalSearchParams<{
     id: string;
@@ -62,7 +62,7 @@ export default function NewReportScreen() {
    * Recuperamos la empresa.
    *
    * IMPORTANTE:
-   * todavía NO hacemos return porque todos los Hooks
+   * todavÃ­a NO hacemos return porque todos los Hooks
    * deben ejecutarse siempre en el mismo orden.
    */
   const company = getCompanyById(id);
@@ -71,15 +71,15 @@ export default function NewReportScreen() {
    * Recuperamos las inspecciones de la empresa.
    *
    * Si la empresa no existe utilizamos temporalmente
-   * un arreglo vacío.
+   * un arreglo vacÃ­o.
    */
   const companyInspections = company
     ? getInspectionsByCompanyId(company.id)
     : [];
 
   /*
-   * Si la pantalla recibió inspectionId y esa inspección
-   * existe, la seleccionamos automáticamente.
+   * Si la pantalla recibiÃ³ inspectionId y esa inspecciÃ³n
+   * existe, la seleccionamos automÃ¡ticamente.
    *
    * De lo contrario utilizamos la primera disponible.
    */
@@ -93,7 +93,7 @@ export default function NewReportScreen() {
   /* ---------------------------------------------------------------------- */
 
   /*
-   * Inspección que alimentará el reporte.
+   * InspecciÃ³n que alimentarÃ¡ el reporte.
    */
   const [selectedInspectionId, setSelectedInspectionId] = useState<
     string | undefined
@@ -103,14 +103,14 @@ export default function NewReportScreen() {
    * Formato de salida.
    *
    * En esta etapa mantenemos Excel y PDF preparados
-   * aunque todavía no generemos físicamente el archivo.
+   * aunque todavÃ­a no generemos fÃ­sicamente el archivo.
    */
   const [selectedFormat, setSelectedFormat] =
     useState<ReportFormatOption>("excel");
 
   /*
-   * Determina si las evidencias asociadas a la inspección
-   * deberán incorporarse al reporte.
+   * Determina si las evidencias asociadas a la inspecciÃ³n
+   * deberÃ¡n incorporarse al reporte.
    */
   const [includeEvidence, setIncludeEvidence] = useState(true);
 
@@ -119,7 +119,7 @@ export default function NewReportScreen() {
   /* ---------------------------------------------------------------------- */
 
   /*
-   * Resolvemos la inspección seleccionada.
+   * Resolvemos la inspecciÃ³n seleccionada.
    */
   const selectedInspection = selectedInspectionId
     ? getInspectionById(selectedInspectionId)
@@ -127,7 +127,7 @@ export default function NewReportScreen() {
 
   /*
    * Inspection
-   *     ↓
+   *     â†“
    * Property
    */
   const selectedProperty = selectedInspection
@@ -136,7 +136,7 @@ export default function NewReportScreen() {
 
   /*
    * Inspection
-   *     ↓
+   *     â†“
    * Form
    */
   const selectedForm = selectedInspection
@@ -145,7 +145,7 @@ export default function NewReportScreen() {
 
   /*
    * Inspection
-   *     ↓
+   *     â†“
    * Evidences
    */
   const selectedEvidences = selectedInspection
@@ -153,10 +153,10 @@ export default function NewReportScreen() {
     : [];
 
   /*
-   * El título se deriva del formulario.
+   * El tÃ­tulo se deriva del formulario.
    *
-   * No necesitamos useMemo aquí porque la operación
-   * es pequeña y evita el problema de memoización
+   * No necesitamos useMemo aquÃ­ porque la operaciÃ³n
+   * es pequeÃ±a y evita el problema de memoizaciÃ³n
    * que encontramos anteriormente con React Compiler.
    */
   const reportTitle = selectedForm
@@ -166,7 +166,7 @@ export default function NewReportScreen() {
   /*
    * Todos los Hooks ya fueron ejecutados.
    *
-   * Ahora sí podemos realizar un return condicional
+   * Ahora sÃ­ podemos realizar un return condicional
    * de forma segura.
    */
   if (!company) {
@@ -179,7 +179,7 @@ export default function NewReportScreen() {
               fontWeight: "600",
             }}
           >
-            ‹ Empresas
+            â€¹ Empresas
           </Text>
         </Pressable>
 
@@ -200,24 +200,24 @@ export default function NewReportScreen() {
   }
 
   /* ---------------------------------------------------------------------- */
-  /*                         GENERACIÓN DEL REPORTE                          */
+  /*                         GENERACIÃ“N DEL REPORTE                          */
   /* ---------------------------------------------------------------------- */
 
   /*
-   * GENERACIÓN SIMULADA
+   * GENERACIÃ“N SIMULADA
    *
-   * Por ahora solamente validamos que exista una inspección
+   * Por ahora solamente validamos que exista una inspecciÃ³n
    * y regresamos al historial.
    *
-   * Más adelante este será el punto de entrada para:
+   * MÃ¡s adelante este serÃ¡ el punto de entrada para:
    *
    * ReportRequest
-   *      ↓
+   *      â†“
    * ReportService
-   *      ├── ExcelGenerator
-   *      └── PdfGenerator
+   *      â”œâ”€â”€ ExcelGenerator
+   *      â””â”€â”€ PdfGenerator
    *
-   * De esta forma Kobo NO quedará acoplado directamente
+   * De esta forma Kobo NO quedarÃ¡ acoplado directamente
    * al generador de archivos.
    */
   const handleGenerate = () => {
@@ -242,7 +242,7 @@ export default function NewReportScreen() {
       >
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÓN                                                   */}
+          {/* NAVEGACIÃ“N                                                   */}
           {/* ============================================================ */}
 
           <Pressable
@@ -264,7 +264,7 @@ export default function NewReportScreen() {
                 },
               ]}
             >
-              ‹ Reportes
+              â€¹ Reportes
             </Text>
           </Pressable>
 
@@ -306,11 +306,11 @@ export default function NewReportScreen() {
               },
             ]}
           >
-            Selecciona la inspección y configura el contenido del reporte.
+            Selecciona la inspecciÃ³n y configura el contenido del reporte.
           </Text>
 
           {/* ============================================================ */}
-          {/* SELECCIÓN DE INSPECCIÓN                                      */}
+          {/* SELECCIÃ“N DE INSPECCIÃ“N                                      */}
           {/* ============================================================ */}
 
           <View style={styles.section}>
@@ -322,7 +322,7 @@ export default function NewReportScreen() {
                 },
               ]}
             >
-              1. Seleccionar inspección
+              1. Seleccionar inspecciÃ³n
             </Text>
 
             <Text
@@ -333,19 +333,19 @@ export default function NewReportScreen() {
                 },
               ]}
             >
-              El reporte se construirá a partir de la información capturada en
-              una inspección.
+              El reporte se construirÃ¡ a partir de la informaciÃ³n capturada en
+              una inspecciÃ³n.
             </Text>
 
             {/*
              * ResponsiveGrid permite aprovechar mejor tablets y web:
              *
-             * Móvil   → 1 inspección por fila
-             * Tablet  → 2 inspecciones por fila
-             * Desktop → 2 inspecciones por fila
+             * MÃ³vil   â†’ 1 inspecciÃ³n por fila
+             * Tablet  â†’ 2 inspecciones por fila
+             * Desktop â†’ 2 inspecciones por fila
              *
              * Utilizamos 2 y no 3 en escritorio porque estas tarjetas
-             * contienen bastante información.
+             * contienen bastante informaciÃ³n.
              */}
             <ResponsiveGrid
               phoneColumns={1}
@@ -395,14 +395,14 @@ export default function NewReportScreen() {
                     },
                   ]}
                 >
-                  Esta empresa todavía no tiene inspecciones registradas.
+                  Esta empresa todavÃ­a no tiene inspecciones registradas.
                 </Text>
               </AppCard>
             )}
           </View>
 
           {/* ============================================================ */}
-          {/* CONFIGURACIÓN DEL REPORTE                                    */}
+          {/* CONFIGURACIÃ“N DEL REPORTE                                    */}
           {/* ============================================================ */}
 
           {selectedInspection && (
@@ -419,17 +419,17 @@ export default function NewReportScreen() {
               </Text>
 
               {/*
-               * MÓVIL:
+               * MÃ“VIL:
                *
-               * Configuración
+               * ConfiguraciÃ³n
                * Resumen
                *
                * TABLET / DESKTOP:
                *
-               * Configuración | Resumen
+               * ConfiguraciÃ³n | Resumen
                *
                * No utilizamos dos layouts completamente diferentes.
-               * Simplemente cambiamos flexDirection según el dispositivo.
+               * Simplemente cambiamos flexDirection segÃºn el dispositivo.
                */}
               <View
                 style={[
@@ -438,7 +438,7 @@ export default function NewReportScreen() {
                 ]}
               >
                 {/* ====================================================== */}
-                {/* COLUMNA DE CONFIGURACIÓN                               */}
+                {/* COLUMNA DE CONFIGURACIÃ“N                               */}
                 {/* ====================================================== */}
 
                 <View
@@ -464,7 +464,7 @@ export default function NewReportScreen() {
                     <View style={styles.formatRow}>
                       <FormatOption
                         label="Excel"
-                        description="Hoja de cálculo"
+                        description="Hoja de cÃ¡lculo"
                         selected={selectedFormat === "excel"}
                         onPress={() => setSelectedFormat("excel")}
                       />
@@ -514,8 +514,8 @@ export default function NewReportScreen() {
                               },
                             ]}
                           >
-                            Agrega las fotografías y documentos relacionados con
-                            la inspección.
+                            Agrega las fotografÃ­as y documentos relacionados con
+                            la inspecciÃ³n.
                           </Text>
 
                           <Text
@@ -576,7 +576,7 @@ export default function NewReportScreen() {
                     <Divider />
 
                     <InfoRow
-                      label="Inspección"
+                      label="InspecciÃ³n"
                       value={selectedForm?.title ?? "No disponible"}
                     />
 
@@ -602,7 +602,7 @@ export default function NewReportScreen() {
 
                     <InfoRow
                       label="Incluir evidencias"
-                      value={includeEvidence ? "Sí" : "No"}
+                      value={includeEvidence ? "SÃ­" : "No"}
                     />
                   </AppCard>
                 </View>
@@ -651,7 +651,7 @@ export default function NewReportScreen() {
               },
             ]}
           >
-            Prototipo visual: la generación del archivo todavía no está
+            Prototipo visual: la generaciÃ³n del archivo todavÃ­a no estÃ¡
             conectada al servicio real.
           </Text>
         </ResponsiveContainer>
@@ -665,10 +665,10 @@ export default function NewReportScreen() {
 /* -------------------------------------------------------------------------- */
 
 /*
- * Tarjeta seleccionable que representa una inspección.
+ * Tarjeta seleccionable que representa una inspecciÃ³n.
  *
- * No contiene lógica de datos propia.
- * Recibe toda la información preparada desde la pantalla principal.
+ * No contiene lÃ³gica de datos propia.
+ * Recibe toda la informaciÃ³n preparada desde la pantalla principal.
  */
 function InspectionOption({
   title,
@@ -691,7 +691,7 @@ function InspectionOption({
   const { colors } = useAppTheme();
 
   /*
-   * Convertimos el estado técnico de la inspección
+   * Convertimos el estado tÃ©cnico de la inspecciÃ³n
    * a una etiqueta visible para el usuario.
    */
   const statusLabel =
@@ -723,7 +723,7 @@ function InspectionOption({
         },
       ]}
     >
-      {/* RADIO DE SELECCIÓN */}
+      {/* RADIO DE SELECCIÃ“N */}
 
       <View
         style={[
@@ -747,7 +747,7 @@ function InspectionOption({
         )}
       </View>
 
-      {/* INFORMACIÓN */}
+      {/* INFORMACIÃ“N */}
 
       <View style={styles.inspectionInfo}>
         <Text
@@ -811,8 +811,8 @@ function InspectionOption({
 /* -------------------------------------------------------------------------- */
 
 /*
- * Opción reutilizable para elegir el formato
- * del archivo que se generará.
+ * OpciÃ³n reutilizable para elegir el formato
+ * del archivo que se generarÃ¡.
  */
 function FormatOption({
   label,
@@ -875,7 +875,7 @@ function FormatOption({
           },
         ]}
       >
-        {selected ? "● Seleccionado" : "○ Seleccionar"}
+        {selected ? "â— Seleccionado" : "â—‹ Seleccionar"}
       </Text>
     </Pressable>
   );
@@ -1037,7 +1037,7 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * Cada opción ocupa todo el ancho que
+   * Cada opciÃ³n ocupa todo el ancho que
    * ResponsiveGrid le asigne.
    */
   inspectionOption: {
@@ -1084,7 +1084,7 @@ const styles = StyleSheet.create({
     flex: 1,
 
     /*
-     * Evita que textos largos rompan la distribución
+     * Evita que textos largos rompan la distribuciÃ³n
      * horizontal de la tarjeta.
      */
     minWidth: 0,
@@ -1129,9 +1129,9 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * En móvil:
+   * En mÃ³vil:
    *
-   * configuración
+   * configuraciÃ³n
    * resumen
    */
   configurationLayout: {
@@ -1143,7 +1143,7 @@ const styles = StyleSheet.create({
   /*
    * Tablet y desktop:
    *
-   * configuración | resumen
+   * configuraciÃ³n | resumen
    */
   configurationLayoutWide: {
     flexDirection: "row",
@@ -1181,8 +1181,8 @@ const styles = StyleSheet.create({
 
   /*
    * Excel y PDF permanecen uno al lado del otro.
-   * El contenido de cada tarjeta está preparado
-   * para espacios más pequeños.
+   * El contenido de cada tarjeta estÃ¡ preparado
+   * para espacios mÃ¡s pequeÃ±os.
    */
   formatRow: {
     flexDirection: "row",
@@ -1260,7 +1260,7 @@ const styles = StyleSheet.create({
 
   /*
    * En escritorio esta tarjeta forma la columna
-   * derecha de la configuración.
+   * derecha de la configuraciÃ³n.
    */
   summaryCard: {
     width: "100%",
@@ -1285,7 +1285,7 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * Móvil:
+   * MÃ³vil:
    * botones verticales.
    */
   actions: {
@@ -1344,3 +1344,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+

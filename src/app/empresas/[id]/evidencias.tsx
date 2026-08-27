@@ -9,11 +9,11 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getCompanyById } from "@/data/companies";
+import { getCompanyById } from "@/repositories/companyRepository";
 import { getEvidencesByCompanyId } from "@/data/evidences";
 import { getFormById } from "@/data/forms";
 import { getInspectionById } from "@/data/inspections";
-import { getPropertyById } from "@/data/properties";
+import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
@@ -22,13 +22,13 @@ import { useAppTheme } from "@/hooks/useAppTheme";
 export default function CompanyEvidencesScreen() {
   /*
    * Recupera los colores correspondientes al tema actual.
-   * De esta manera la pantalla continúa funcionando
+   * De esta manera la pantalla continÃºa funcionando
    * correctamente en modo claro y oscuro.
    */
   const { colors } = useAppTheme();
 
   /*
-   * Obtiene el ID dinámico de la empresa desde:
+   * Obtiene el ID dinÃ¡mico de la empresa desde:
    *
    * /empresas/[id]/evidencias
    */
@@ -56,7 +56,7 @@ export default function CompanyEvidencesScreen() {
               fontWeight: "600",
             }}
           >
-            ‹ Empresas
+            â€¹ Empresas
           </Text>
         </Pressable>
 
@@ -86,7 +86,7 @@ export default function CompanyEvidencesScreen() {
    * Calculamos los contadores directamente
    * desde los datos.
    *
-   * Esto evita tener números escritos
+   * Esto evita tener nÃºmeros escritos
    * manualmente en la interfaz.
    */
   const photoCount = companyEvidences.filter(
@@ -108,15 +108,15 @@ export default function CompanyEvidencesScreen() {
          *
          * - padding horizontal
          * - espacio superior
-         * - ancho máximo
+         * - ancho mÃ¡ximo
          * - centrado del contenido
          *
-         * Así la pantalla no necesita calcular
-         * manualmente sus márgenes según dispositivo.
+         * AsÃ­ la pantalla no necesita calcular
+         * manualmente sus mÃ¡rgenes segÃºn dispositivo.
          */}
         <ResponsiveContainer>
           {/* ====================================================== */}
-          {/* NAVEGACIÓN CONTEXTUAL */}
+          {/* NAVEGACIÃ“N CONTEXTUAL */}
           {/* ====================================================== */}
 
           <ContextHeader
@@ -136,7 +136,7 @@ export default function CompanyEvidencesScreen() {
             contextLabel={company.name}
             contextColor={company.branding.primaryColor}
             title="Evidencias"
-            subtitle="Fotografías y documentos recopilados durante las inspecciones."
+            subtitle="FotografÃ­as y documentos recopilados durante las inspecciones."
           />
 
           {/* ====================================================== */}
@@ -145,9 +145,9 @@ export default function CompanyEvidencesScreen() {
 
           {/*
            * Como tenemos exactamente tres indicadores,
-           * conservamos tres columnas en todos los tamaños.
+           * conservamos tres columnas en todos los tamaÃ±os.
            *
-           * Total | Fotografías | Documentos
+           * Total | FotografÃ­as | Documentos
            */}
           <ResponsiveGrid
             phoneColumns={3}
@@ -160,7 +160,7 @@ export default function CompanyEvidencesScreen() {
               label="Total"
             />
 
-            <SummaryCard value={photoCount.toString()} label="Fotografías" />
+            <SummaryCard value={photoCount.toString()} label="FotografÃ­as" />
 
             <SummaryCard value={documentCount.toString()} label="Documentos" />
           </ResponsiveGrid>
@@ -184,9 +184,9 @@ export default function CompanyEvidencesScreen() {
            * El listado ahora utiliza nuestro sistema
            * responsive global:
            *
-           * Móvil   → 1 evidencia por fila
-           * Tablet  → 2 evidencias por fila
-           * Desktop → 3 evidencias por fila
+           * MÃ³vil   â†’ 1 evidencia por fila
+           * Tablet  â†’ 2 evidencias por fila
+           * Desktop â†’ 3 evidencias por fila
            */}
           <ResponsiveGrid
             phoneColumns={1}
@@ -196,16 +196,16 @@ export default function CompanyEvidencesScreen() {
           >
             {companyEvidences.map((evidence) => {
               /*
-               * Una evidencia pertenece a una inspección.
+               * Una evidencia pertenece a una inspecciÃ³n.
                *
-               * Primero resolvemos la inspección para
-               * después conocer inmueble y formulario.
+               * Primero resolvemos la inspecciÃ³n para
+               * despuÃ©s conocer inmueble y formulario.
                *
                * Evidence
-               *    ↓
+               *    â†“
                * Inspection
-               *    ├── Property
-               *    └── Form
+               *    â”œâ”€â”€ Property
+               *    â””â”€â”€ Form
                */
               const inspection = getInspectionById(evidence.inspectionId);
 
@@ -233,7 +233,7 @@ export default function CompanyEvidencesScreen() {
           </ResponsiveGrid>
 
           {/* ====================================================== */}
-          {/* ESTADO VACÍO */}
+          {/* ESTADO VACÃO */}
           {/* ====================================================== */}
 
           {companyEvidences.length === 0 && (
@@ -257,7 +257,7 @@ export default function CompanyEvidencesScreen() {
                   },
                 ]}
               >
-                Todavía no existen fotografías o documentos asociados a las
+                TodavÃ­a no existen fotografÃ­as o documentos asociados a las
                 inspecciones de esta empresa.
               </Text>
             </AppCard>
@@ -380,7 +380,7 @@ function EvidenceCard({
                 },
               ]}
             >
-              {type === "photo" ? "▧" : "▤"}
+              {type === "photo" ? "â–§" : "â–¤"}
             </Text>
           </View>
 
@@ -417,7 +417,7 @@ function EvidenceCard({
               },
             ]}
           >
-            ›
+            â€º
           </Text>
         </View>
 
@@ -432,7 +432,7 @@ function EvidenceCard({
           ]}
         />
 
-        {/* INFORMACIÓN RELACIONADA */}
+        {/* INFORMACIÃ“N RELACIONADA */}
 
         <View style={styles.metadata}>
           <MetadataRow label="Inmueble" value={property} />
@@ -501,7 +501,7 @@ function MetadataRow({ label, value }: { label: string; value: string }) {
  *
  * 2026-08-20T12:30:00
  *
- * Primero normalizamos el valor y después
+ * Primero normalizamos el valor y despuÃ©s
  * lo convertimos a DD/MM/YYYY.
  */
 function formatDate(date: string) {
@@ -599,8 +599,8 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * Altura mínima para mantener una apariencia
-   * más uniforme cuando aparecen varias
+   * Altura mÃ­nima para mantener una apariencia
+   * mÃ¡s uniforme cuando aparecen varias
    * evidencias en la misma fila.
    */
   evidenceCard: {
@@ -730,3 +730,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+

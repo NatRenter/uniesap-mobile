@@ -7,9 +7,9 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getCompanyById } from "@/data/companies";
+import { getCompanyById } from "@/repositories/companyRepository";
 import { getFormsByIds } from "@/data/forms";
-import { getPropertyById } from "@/data/properties";
+import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
@@ -19,12 +19,12 @@ export default function NewInspectionScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * Para iniciar una inspección necesitamos conocer:
+   * Para iniciar una inspecciÃ³n necesitamos conocer:
    *
    * - empresa
    * - inmueble
    *
-   * El formulario se seleccionará dentro de esta pantalla.
+   * El formulario se seleccionarÃ¡ dentro de esta pantalla.
    */
   const { id, propertyId } = useLocalSearchParams<{
     id: string;
@@ -37,7 +37,7 @@ export default function NewInspectionScreen() {
 
   /*
    * Estado controlado en caso de recibir
-   * parámetros incorrectos desde la navegación.
+   * parÃ¡metros incorrectos desde la navegaciÃ³n.
    */
   if (!company || !property) {
     return (
@@ -49,7 +49,7 @@ export default function NewInspectionScreen() {
               fontWeight: "600",
             }}
           >
-            ‹ Volver
+            â€¹ Volver
           </Text>
         </Pressable>
 
@@ -73,7 +73,7 @@ export default function NewInspectionScreen() {
               },
             ]}
           >
-            No fue posible preparar una nueva inspección.
+            No fue posible preparar una nueva inspecciÃ³n.
           </Text>
         </View>
       </Screen>
@@ -94,14 +94,14 @@ export default function NewInspectionScreen() {
       >
         <ResponsiveContainer>
           {/* ---------------------------------------------------------------------- */}
-          {/* NAVEGACIÓN CONTEXTUAL                                                   */}
+          {/* NAVEGACIÃ“N CONTEXTUAL                                                   */}
           {/* ---------------------------------------------------------------------- */}
           {/*
-           * Regresa explícitamente al inmueble actual.
+           * Regresa explÃ­citamente al inmueble actual.
            *
-           * No utilizamos router.back() porque queremos que la navegación
+           * No utilizamos router.back() porque queremos que la navegaciÃ³n
            * sea predecible aunque el usuario haya llegado a esta pantalla
-           * desde otro punto de la aplicación.
+           * desde otro punto de la aplicaciÃ³n.
            */}
           <Pressable
             onPress={() =>
@@ -124,7 +124,7 @@ export default function NewInspectionScreen() {
               ]}
               numberOfLines={1}
             >
-              ‹ {property.name}
+              â€¹ {property.name}
             </Text>
           </Pressable>
 
@@ -151,7 +151,7 @@ export default function NewInspectionScreen() {
               },
             ]}
           >
-            Nueva inspección
+            Nueva inspecciÃ³n
           </Text>
 
           <Text
@@ -232,7 +232,7 @@ export default function NewInspectionScreen() {
 
                     /*
                      * Captura recibe los tres IDs
-                     * necesarios para construir la inspección.
+                     * necesarios para construir la inspecciÃ³n.
                      */
                     params: {
                       id,
@@ -263,7 +263,7 @@ export default function NewInspectionScreen() {
                           },
                         ]}
                       >
-                        ≡
+                        â‰¡
                       </Text>
                     </View>
 
@@ -301,7 +301,7 @@ export default function NewInspectionScreen() {
                         },
                       ]}
                     >
-                      ›
+                      â€º
                     </Text>
                   </View>
 
@@ -337,7 +337,7 @@ export default function NewInspectionScreen() {
                         },
                       ]}
                     >
-                      ● {form.status === "active" ? "Disponible" : "Inactivo"}
+                      â— {form.status === "active" ? "Disponible" : "Inactivo"}
                     </Text>
                   </View>
                 </AppCard>
@@ -368,7 +368,7 @@ export default function NewInspectionScreen() {
                   },
                 ]}
               >
-                Este inmueble todavía no tiene formularios asignados.
+                Este inmueble todavÃ­a no tiene formularios asignados.
               </Text>
             </AppCard>
           )}
@@ -575,3 +575,4 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 });
+

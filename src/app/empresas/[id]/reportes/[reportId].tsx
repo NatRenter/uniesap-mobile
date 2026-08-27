@@ -7,11 +7,11 @@ import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { Screen } from "@/components/ui/Screen";
 
-import { getCompanyById } from "@/data/companies";
+import { getCompanyById } from "@/repositories/companyRepository";
 import { getEvidencesByInspectionId } from "@/data/evidences";
 import { getFormById } from "@/data/forms";
 import { getInspectionById } from "@/data/inspections";
-import { getPropertyById } from "@/data/properties";
+import { getPropertyById } from "@/repositories/propertyRepository";
 import { getReportById } from "@/data/reports";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
@@ -29,11 +29,11 @@ export default function ReportDetailsScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * Para esta pantalla únicamente necesitamos saber
-   * cuándo estamos en teléfono.
+   * Para esta pantalla Ãºnicamente necesitamos saber
+   * cuÃ¡ndo estamos en telÃ©fono.
    *
-   * Teléfono:
-   *   distribución vertical.
+   * TelÃ©fono:
+   *   distribuciÃ³n vertical.
    *
    * Tablet / Desktop:
    *   aprovechamos el espacio horizontal.
@@ -41,7 +41,7 @@ export default function ReportDetailsScreen() {
   const { isPhone } = useResponsive();
 
   /*
-   * Parámetros dinámicos provenientes de:
+   * ParÃ¡metros dinÃ¡micos provenientes de:
    *
    * /empresas/[id]/reportes/[reportId]
    */
@@ -72,7 +72,7 @@ export default function ReportDetailsScreen() {
               fontWeight: "600",
             }}
           >
-            ‹ Volver
+            â€¹ Volver
           </Text>
         </Pressable>
 
@@ -96,7 +96,7 @@ export default function ReportDetailsScreen() {
               },
             ]}
           >
-            No fue posible encontrar la información de este reporte.
+            No fue posible encontrar la informaciÃ³n de este reporte.
           </Text>
         </View>
       </Screen>
@@ -109,28 +109,28 @@ export default function ReportDetailsScreen() {
 
   /*
    * Report
-   *    ↓ inspectionId
+   *    â†“ inspectionId
    * Inspection
    */
   const inspection = getInspectionById(report.inspectionId);
 
   /*
    * Report
-   *    ↓ propertyId
+   *    â†“ propertyId
    * Property
    */
   const property = getPropertyById(report.propertyId);
 
   /*
    * Inspection
-   *    ↓ formId
+   *    â†“ formId
    * Form
    */
   const form = inspection ? getFormById(inspection.formId) : undefined;
 
   /*
    * Recuperamos las evidencias correspondientes
-   * a la inspección utilizada para generar el reporte.
+   * a la inspecciÃ³n utilizada para generar el reporte.
    */
   const evidences = getEvidencesByInspectionId(report.inspectionId);
 
@@ -149,7 +149,7 @@ export default function ReportDetailsScreen() {
    * Texto utilizado en la tarjeta de archivo.
    *
    * Cuando conectemos el generador real,
-   * fileUri será uno de los puntos importantes
+   * fileUri serÃ¡ uno de los puntos importantes
    * para localizar el archivo generado.
    */
   const fileAvailabilityLabel = report.fileUri
@@ -172,13 +172,13 @@ export default function ReportDetailsScreen() {
          * ResponsiveContainer se encarga de:
          *
          * - padding horizontal
-         * - separación superior
-         * - ancho máximo
+         * - separaciÃ³n superior
+         * - ancho mÃ¡ximo
          * - centrado del contenido
          */}
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÓN                                                   */}
+          {/* NAVEGACIÃ“N                                                   */}
           {/* ============================================================ */}
 
           <Pressable
@@ -200,7 +200,7 @@ export default function ReportDetailsScreen() {
                 },
               ]}
             >
-              ‹ Reportes
+              â€¹ Reportes
             </Text>
           </Pressable>
 
@@ -267,7 +267,7 @@ export default function ReportDetailsScreen() {
                 },
               ]}
             >
-              ● {statusLabel}
+              â— {statusLabel}
             </Text>
           </View>
 
@@ -276,15 +276,15 @@ export default function ReportDetailsScreen() {
           {/* ============================================================ */}
 
           {/*
-           * TELÉFONO
+           * TELÃ‰FONO
            *
            * Archivo
-           * ↓
-           * Información
+           * â†“
+           * InformaciÃ³n
            *
            * TABLET / DESKTOP
            *
-           * Archivo | Información
+           * Archivo | InformaciÃ³n
            */}
           <View style={[styles.mainLayout, !isPhone && styles.mainLayoutWide]}>
             {/* ========================================================== */}
@@ -337,7 +337,7 @@ export default function ReportDetailsScreen() {
                       },
                     ]}
                   >
-                    {report.format === "excel" ? "▦" : "▤"}
+                    {report.format === "excel" ? "â–¦" : "â–¤"}
                   </Text>
                 </View>
 
@@ -379,8 +379,8 @@ export default function ReportDetailsScreen() {
                   ]}
                 >
                   {report.fileUri
-                    ? "El archivo generado está disponible."
-                    : "La vista previa del archivo generado se mostrará en este espacio."}
+                    ? "El archivo generado estÃ¡ disponible."
+                    : "La vista previa del archivo generado se mostrarÃ¡ en este espacio."}
                 </Text>
 
                 <View
@@ -401,14 +401,14 @@ export default function ReportDetailsScreen() {
                       },
                     ]}
                   >
-                    ● {fileAvailabilityLabel}
+                    â— {fileAvailabilityLabel}
                   </Text>
                 </View>
               </View>
             </View>
 
             {/* ========================================================== */}
-            {/* INFORMACIÓN                                                */}
+            {/* INFORMACIÃ“N                                                */}
             {/* ========================================================== */}
 
             <View
@@ -426,7 +426,7 @@ export default function ReportDetailsScreen() {
                   },
                 ]}
               >
-                Información
+                InformaciÃ³n
               </Text>
 
               <AppCard style={styles.informationCard}>
@@ -442,7 +442,7 @@ export default function ReportDetailsScreen() {
                 <Divider />
 
                 <InfoRow
-                  label="Inspección"
+                  label="InspecciÃ³n"
                   value={form?.title ?? "No disponible"}
                 />
 
@@ -453,7 +453,7 @@ export default function ReportDetailsScreen() {
                 <Divider />
 
                 <InfoRow
-                  label="Fecha de generación"
+                  label="Fecha de generaciÃ³n"
                   value={formatDate(report.createdAt)}
                 />
 
@@ -473,7 +473,7 @@ export default function ReportDetailsScreen() {
           </View>
 
           {/* ============================================================ */}
-          {/* INFORMACIÓN RELACIONADA                                      */}
+          {/* INFORMACIÃ“N RELACIONADA                                      */}
           {/* ============================================================ */}
 
           <View style={styles.relatedArea}>
@@ -485,7 +485,7 @@ export default function ReportDetailsScreen() {
                 },
               ]}
             >
-              Información relacionada
+              InformaciÃ³n relacionada
             </Text>
 
             <View
@@ -496,7 +496,7 @@ export default function ReportDetailsScreen() {
               ]}
             >
               {/* ======================================================== */}
-              {/* INSPECCIÓN RELACIONADA                                   */}
+              {/* INSPECCIÃ“N RELACIONADA                                   */}
               {/* ======================================================== */}
 
               {inspection && (
@@ -515,7 +515,7 @@ export default function ReportDetailsScreen() {
                       },
                     ]}
                   >
-                    Inspección relacionada
+                    InspecciÃ³n relacionada
                   </Text>
 
                   <Pressable
@@ -552,7 +552,7 @@ export default function ReportDetailsScreen() {
                               },
                             ]}
                           >
-                            ✓
+                            âœ“
                           </Text>
                         </View>
 
@@ -566,7 +566,7 @@ export default function ReportDetailsScreen() {
                             ]}
                             numberOfLines={2}
                           >
-                            {form?.title ?? "Inspección"}
+                            {form?.title ?? "InspecciÃ³n"}
                           </Text>
 
                           <Text
@@ -601,7 +601,7 @@ export default function ReportDetailsScreen() {
                             },
                           ]}
                         >
-                          ›
+                          â€º
                         </Text>
                       </View>
                     </AppCard>
@@ -663,7 +663,7 @@ export default function ReportDetailsScreen() {
                             },
                           ]}
                         >
-                          ◫
+                          â—«
                         </Text>
                       </View>
 
@@ -716,7 +716,7 @@ export default function ReportDetailsScreen() {
                           },
                         ]}
                       >
-                        ›
+                        â€º
                       </Text>
                     </View>
                   </AppCard>
@@ -730,12 +730,12 @@ export default function ReportDetailsScreen() {
           {/* ============================================================ */}
 
           {/*
-           * Todavía son acciones visuales.
+           * TodavÃ­a son acciones visuales.
            *
            * Cuando exista fileUri real podremos conectar:
            *
-           * Abrir reporte → visor/archivo
-           * Compartir     → Share API
+           * Abrir reporte â†’ visor/archivo
+           * Compartir     â†’ Share API
            */}
           <View style={[styles.actions, !isPhone && styles.actionsWide]}>
             <View style={styles.actionButton}>
@@ -759,7 +759,7 @@ export default function ReportDetailsScreen() {
               },
             ]}
           >
-            La generación y apertura del archivo real se implementarán en una
+            La generaciÃ³n y apertura del archivo real se implementarÃ¡n en una
             etapa posterior.
           </Text>
         </ResponsiveContainer>
@@ -946,7 +946,7 @@ const styles = StyleSheet.create({
   /*
    * Tablet y escritorio:
    *
-   * Archivo | Información
+   * Archivo | InformaciÃ³n
    */
   mainLayoutWide: {
     flexDirection: "row",
@@ -1073,7 +1073,7 @@ const styles = StyleSheet.create({
   },
 
   /* -------------------------------------------------------------------- */
-  /*                              INFORMACIÓN                              */
+  /*                              INFORMACIÃ“N                              */
   /* -------------------------------------------------------------------- */
 
   informationCard: {
@@ -1099,7 +1099,7 @@ const styles = StyleSheet.create({
   },
 
   /* -------------------------------------------------------------------- */
-  /*                         INFORMACIÓN RELACIONADA                        */
+  /*                         INFORMACIÃ“N RELACIONADA                        */
   /* -------------------------------------------------------------------- */
 
   relatedArea: {
@@ -1123,7 +1123,7 @@ const styles = StyleSheet.create({
   /*
    * Tablet y escritorio:
    *
-   * Inspección | Evidencias
+   * InspecciÃ³n | Evidencias
    */
   relatedLayoutWide: {
     flexDirection: "row",
@@ -1214,7 +1214,7 @@ const styles = StyleSheet.create({
   /* -------------------------------------------------------------------- */
 
   /*
-   * Móvil:
+   * MÃ³vil:
    *
    * [ Abrir reporte ]
    * [ Compartir     ]
@@ -1272,3 +1272,4 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 });
+

@@ -12,11 +12,11 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getCompanyById } from "@/data/companies";
+import { getCompanyById } from "@/repositories/companyRepository";
 import { getEvidencesByInspectionId } from "@/data/evidences";
 import { getFormById } from "@/data/forms";
 import { getInspectionById } from "@/data/inspections";
-import { getPropertyById } from "@/data/properties";
+import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { syncInspection } from "@/services/inspectionSyncService";
 
@@ -48,7 +48,7 @@ export default function InspectionDetailsScreen() {
   }>();
 
   /*
-   * Estado del reintento de sincronización.
+   * Estado del reintento de sincronizaciÃ³n.
    */
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -56,11 +56,11 @@ export default function InspectionDetailsScreen() {
 
   /*
    * Utilizamos este contador solamente para
-   * forzar una nueva lectura visual después
+   * forzar una nueva lectura visual despuÃ©s
    * de modificar el repositorio en memoria.
    *
    * Cuando migremos a una base reactiva/SQLite
-   * esta técnica dejará de ser necesaria.
+   * esta tÃ©cnica dejarÃ¡ de ser necesaria.
    */
   const [refreshVersion, setRefreshVersion] = useState(0);
 
@@ -90,7 +90,7 @@ export default function InspectionDetailsScreen() {
               fontWeight: "600",
             }}
           >
-            ‹ Volver
+            â€¹ Volver
           </Text>
         </Pressable>
 
@@ -103,7 +103,7 @@ export default function InspectionDetailsScreen() {
               },
             ]}
           >
-            Inspección no encontrada
+            InspecciÃ³n no encontrada
           </Text>
 
           <Text
@@ -114,7 +114,7 @@ export default function InspectionDetailsScreen() {
               },
             ]}
           >
-            No fue posible encontrar la información de esta inspección.
+            No fue posible encontrar la informaciÃ³n de esta inspecciÃ³n.
           </Text>
         </View>
       </Screen>
@@ -128,7 +128,7 @@ export default function InspectionDetailsScreen() {
   const inspectionEvidences = getEvidencesByInspectionId(inspection.id);
 
   /* ---------------------------------------------------------------------- */
-  /*                        ESTADO DE INSPECCIÓN                             */
+  /*                        ESTADO DE INSPECCIÃ“N                             */
   /* ---------------------------------------------------------------------- */
 
   const statusLabel =
@@ -146,7 +146,7 @@ export default function InspectionDetailsScreen() {
         : colors.textMuted;
 
   /* ---------------------------------------------------------------------- */
-  /*                       ESTADO DE SINCRONIZACIÓN                          */
+  /*                       ESTADO DE SINCRONIZACIÃ“N                          */
   /* ---------------------------------------------------------------------- */
 
   const syncStatus = inspection.integration?.syncStatus ?? "local";
@@ -156,9 +156,9 @@ export default function InspectionDetailsScreen() {
   /*
    * Solamente permitimos reintento cuando:
    *
-   * - ocurrió un error
+   * - ocurriÃ³ un error
    * - existe formulario
-   * - el formulario está integrado con Kobo
+   * - el formulario estÃ¡ integrado con Kobo
    */
   const canRetrySync =
     syncStatus === "error" && form?.integration?.provider === "kobo";
@@ -181,10 +181,10 @@ export default function InspectionDetailsScreen() {
 
     try {
       /*
-       * Toda la lógica de sincronización vive ahora
+       * Toda la lÃ³gica de sincronizaciÃ³n vive ahora
        * dentro de InspectionSyncService.
        *
-       * Esta pantalla únicamente solicita el reintento.
+       * Esta pantalla Ãºnicamente solicita el reintento.
        */
       const result =
         await syncInspection(
@@ -200,15 +200,15 @@ export default function InspectionDetailsScreen() {
         );
       } else {
         console.log(
-          "Reintento de sincronización procesado:",
+          "Reintento de sincronizaciÃ³n procesado:",
           result,
         );
       }
 
       /*
        * El repositorio mantiene una copia hidratada en memoria.
-       * Forzamos un render para volver a leer la inspección
-       * y mostrar synced/error/syncing según corresponda.
+       * Forzamos un render para volver a leer la inspecciÃ³n
+       * y mostrar synced/error/syncing segÃºn corresponda.
        */
       setRefreshVersion(
         (value) =>
@@ -241,13 +241,13 @@ export default function InspectionDetailsScreen() {
       >
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÓN CONTEXTUAL                                        */}
+          {/* NAVEGACIÃ“N CONTEXTUAL                                        */}
           {/* ============================================================ */}
 
           <ContextHeader
             /*
-             * Una inspección se abre desde el listado de inspecciones.
-             * El destino anterior es explícito para no depender del historial.
+             * Una inspecciÃ³n se abre desde el listado de inspecciones.
+             * El destino anterior es explÃ­cito para no depender del historial.
              */
             backLabel="Inspecciones"
             onBack={() =>
@@ -267,8 +267,8 @@ export default function InspectionDetailsScreen() {
             contextColor={company.branding.primaryColor}
 
             /*
-             * El formulario identifica la inspección actual
-             * y el inmueble aparece como descripción.
+             * El formulario identifica la inspecciÃ³n actual
+             * y el inmueble aparece como descripciÃ³n.
              */
             title={form?.title ?? "Formulario no disponible"}
             subtitle={property?.name ?? "Inmueble no disponible"}
@@ -295,7 +295,7 @@ export default function InspectionDetailsScreen() {
                   },
                 ]}
               >
-                ● {statusLabel}
+                â— {statusLabel}
               </Text>
             </View>
 
@@ -315,19 +315,19 @@ export default function InspectionDetailsScreen() {
                   },
                 ]}
               >
-                ● {syncInfo.label}
+                â— {syncInfo.label}
               </Text>
             </View>
           </View>
 
           {/* ============================================================ */}
-          {/* INFORMACIÓN / EVIDENCIAS                                     */}
+          {/* INFORMACIÃ“N / EVIDENCIAS                                     */}
           {/* ============================================================ */}
 
           <View
             style={[styles.topContent, isDesktop && styles.topContentDesktop]}
           >
-            {/* INFORMACIÓN */}
+            {/* INFORMACIÃ“N */}
 
             <View
               style={[
@@ -344,7 +344,7 @@ export default function InspectionDetailsScreen() {
                   },
                 ]}
               >
-                Información
+                InformaciÃ³n
               </Text>
 
               <AppCard>
@@ -367,7 +367,7 @@ export default function InspectionDetailsScreen() {
                 <Divider />
 
                 <InfoRow
-                  label="Versión"
+                  label="VersiÃ³n"
                   value={form ? `v${form.version}` : "No disponible"}
                 />
 
@@ -441,7 +441,7 @@ export default function InspectionDetailsScreen() {
                           },
                         ]}
                       >
-                        ◫
+                        â—«
                       </Text>
                     </View>
 
@@ -478,7 +478,7 @@ export default function InspectionDetailsScreen() {
                         },
                       ]}
                     >
-                      ›
+                      â€º
                     </Text>
                   </View>
                 </AppCard>
@@ -487,7 +487,7 @@ export default function InspectionDetailsScreen() {
           </View>
 
           {/* ============================================================ */}
-          {/* SINCRONIZACIÓN KOBO                                          */}
+          {/* SINCRONIZACIÃ“N KOBO                                          */}
           {/* ============================================================ */}
 
           <View style={styles.section}>
@@ -499,7 +499,7 @@ export default function InspectionDetailsScreen() {
                 },
               ]}
             >
-              Sincronización
+              SincronizaciÃ³n
             </Text>
 
             <AppCard>
@@ -579,7 +579,7 @@ export default function InspectionDetailsScreen() {
                       <Divider />
 
                       <InfoRow
-                        label="Última sincronización"
+                        label="Ãšltima sincronizaciÃ³n"
                         value={formatDateTime(
                           inspection.integration.kobo.syncedAt,
                         )}
@@ -601,7 +601,7 @@ export default function InspectionDetailsScreen() {
                       },
                     ]}
                   >
-                    Último error
+                    Ãšltimo error
                   </Text>
 
                   <Text
@@ -635,7 +635,7 @@ export default function InspectionDetailsScreen() {
                   <AppButton onPress={handleRetrySync}>
                     {isRetrying
                       ? "Sincronizando..."
-                      : "Reintentar sincronización"}
+                      : "Reintentar sincronizaciÃ³n"}
                   </AppButton>
                 </View>
               )}
@@ -757,7 +757,7 @@ export default function InspectionDetailsScreen() {
                     },
                   ]}
                 >
-                  Esta inspección todavía no contiene respuestas registradas.
+                  Esta inspecciÃ³n todavÃ­a no contiene respuestas registradas.
                 </Text>
               </AppCard>
             )}
@@ -771,11 +771,11 @@ export default function InspectionDetailsScreen() {
             {inspection.status !== "completed" && (
               <View style={styles.actionButton}>
                 {/*
-                 * Continuamos la inspección existente.
+                 * Continuamos la inspecciÃ³n existente.
                  *
                  * CaptureScreen recibe inspectionId, reconstruye
                  * las respuestas guardadas y actualiza esa misma
-                 * inspección en lugar de crear un duplicado.
+                 * inspecciÃ³n en lugar de crear un duplicado.
                  */}
                 <AppButton
                   onPress={() =>
@@ -793,8 +793,8 @@ export default function InspectionDetailsScreen() {
                           inspection.formId,
 
                         /*
-                         * Este parámetro indica a CaptureScreen que
-                         * debe cargar y actualizar la inspección existente,
+                         * Este parÃ¡metro indica a CaptureScreen que
+                         * debe cargar y actualizar la inspecciÃ³n existente,
                          * no crear una nueva.
                          */
                         inspectionId:
@@ -836,8 +836,8 @@ export default function InspectionDetailsScreen() {
               },
             ]}
           >
-            La inspección utiliza el modelo centralizado de UNIESAP y conserva
-            su estado de sincronización con Kobo.
+            La inspecciÃ³n utiliza el modelo centralizado de UNIESAP y conserva
+            su estado de sincronizaciÃ³n con Kobo.
           </Text>
         </ResponsiveContainer>
       </ScrollView>
@@ -926,7 +926,7 @@ function getSyncStatusInfo(
         label: "Sincronizada con Kobo",
 
         description:
-          "La inspección fue enviada correctamente y tiene una referencia Kobo asociada.",
+          "La inspecciÃ³n fue enviada correctamente y tiene una referencia Kobo asociada.",
 
         color: colors.success,
       };
@@ -936,27 +936,27 @@ function getSyncStatusInfo(
         label: "Sincronizando con Kobo",
 
         description:
-          "UNIESAP está enviando actualmente esta inspección al servicio Kobo.",
+          "UNIESAP estÃ¡ enviando actualmente esta inspecciÃ³n al servicio Kobo.",
 
         color: colors.primary,
       };
 
     case "pending":
       return {
-        label: "Pendiente de sincronización",
+        label: "Pendiente de sincronizaciÃ³n",
 
         description:
-          "La inspección está guardada en UNIESAP y espera completar su sincronización.",
+          "La inspecciÃ³n estÃ¡ guardada en UNIESAP y espera completar su sincronizaciÃ³n.",
 
         color: colors.warning,
       };
 
     case "error":
       return {
-        label: "Error de sincronización",
+        label: "Error de sincronizaciÃ³n",
 
         description:
-          "La inspección permanece guardada en UNIESAP y puede volver a intentarse.",
+          "La inspecciÃ³n permanece guardada en UNIESAP y puede volver a intentarse.",
 
         color: colors.error,
       };
@@ -967,7 +967,7 @@ function getSyncStatusInfo(
         label: "Guardada localmente",
 
         description:
-          "La inspección está almacenada en UNIESAP y todavía no tiene una submission Kobo.",
+          "La inspecciÃ³n estÃ¡ almacenada en UNIESAP y todavÃ­a no tiene una submission Kobo.",
 
         color: colors.textMuted,
       };
@@ -980,7 +980,7 @@ function formatResponseValue(value: string | number | boolean | null) {
   }
 
   if (typeof value === "boolean") {
-    return value ? "Sí" : "No";
+    return value ? "SÃ­" : "No";
   }
 
   return String(value);
@@ -997,16 +997,16 @@ function getQuestionTypeLabel(
       return "Texto largo";
 
     case "number":
-      return "Número";
+      return "NÃºmero";
 
     case "boolean":
-      return "Sí / No";
+      return "SÃ­ / No";
 
     case "select":
-      return "Selección";
+      return "SelecciÃ³n";
 
     case "photo":
-      return "Fotografía";
+      return "FotografÃ­a";
 
     default:
       return type;
@@ -1063,7 +1063,7 @@ function getErrorMessage(error: unknown) {
     return error;
   }
 
-  return "Ocurrió un error desconocido.";
+  return "OcurriÃ³ un error desconocido.";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1459,3 +1459,4 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 });
+

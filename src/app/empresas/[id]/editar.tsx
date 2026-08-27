@@ -16,43 +16,25 @@ import { CompanyColors, FontSize, Radius, Spacing } from "@/constants/theme";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useResponsive } from "@/hooks/useResponsive";
 
+import {
+  getCompanyById,
+  updateCompany,
+} from "@/repositories/companyRepository";
+
 /*
- * DATOS TEMPORALES
+ * ============================================================================
+ * EDICIÓN PERSISTENTE DE EMPRESA
+ * ============================================================================
  *
- * Por ahora esta pantalla continúa utilizando datos locales.
+ * Esta pantalla trabaja directamente con CompanyRepository.
  *
- * Más adelante, cuando conectemos la persistencia real,
- * este bloque será reemplazado por nuestra capa centralizada:
+ * Los cambios se guardan en:
  *
- * CompanyRepository / CompanyService
- *                ↓
- *           Empresa real
+ * Android / iOS → SQLite
+ * Web           → localStorage
+ *
+ * Ya no existe una copia local hardcodeada de AutoZone/LALA.
  */
-const companies = {
-  "1": {
-    name: "AutoZone",
-    legalName: "AutoZone de México S. de R.L. de C.V.",
-    state: "Guanajuato",
-    city: "San Luis de la Paz",
-    color: "#F97316",
-  },
-
-  "2": {
-    name: "LALA",
-    legalName: "Empresa LALA",
-    state: "Michoacán",
-    city: "La Piedad",
-    color: "#EF4444",
-  },
-
-  "3": {
-    name: "Empresa Demo",
-    legalName: "Empresa Demo S.A. de C.V.",
-    state: "Guanajuato",
-    city: "León",
-    color: "#3B82F6",
-  },
-} as const;
 
 export default function EditCompanyScreen() {
   const { colors } = useAppTheme();
@@ -75,33 +57,38 @@ export default function EditCompanyScreen() {
   }>();
 
   /*
-   * Recuperamos temporalmente la empresa desde el objeto local.
+   * Recuperamos la empresa desde CompanyRepository.
    *
-   * Conservamos el comportamiento que ya tenía tu archivo:
-   * si no existe el ID utiliza AutoZone como fallback.
+   * RootLayout hidrata el repositorio antes de mostrar la aplicación,
+   * por lo que los datos persistidos ya están disponibles al entrar aquí.
    */
-  const company = companies[id as keyof typeof companies] ?? companies["1"];
+  const company = id ? getCompanyById(id) : undefined;
 
   /* ---------------------------------------------------------------------- */
   /*                         ESTADO DEL FORMULARIO                           */
   /* ---------------------------------------------------------------------- */
 
   /*
-   * Cada estado se inicializa con los datos existentes
-   * de la empresa.
+   * Los estados se inicializan con la empresa persistida.
    *
-   * Esto diferencia esta pantalla de nueva.tsx:
-   *
-   * nueva.tsx  → valores vacíos
-   * editar.tsx → valores existentes
+   * Si por una ruta inválida no existe la empresa, utilizamos valores
+   * vacíos y más abajo mostramos un estado "no encontrada".
    */
-  const [commercialName, setCommercialName] = useState<string>(company.name);
+  const [commercialName, setCommercialName] = useState<string>(
+    company?.name ?? "",
+  );
 
-  const [legalName, setLegalName] = useState<string>(company.legalName);
+  const [legalName, setLegalName] = useState<string>(company?.legalName ?? "");
 
-  const [state, setState] = useState<string>(company.state);
+  const [rfc, setRfc] = useState<string>(company?.rfc ?? "");
 
-  const [city, setCity] = useState<string>(company.city);
+  const [state, setState] = useState<string>(company?.state ?? "");
+
+  const [city, setCity] = useState<string>(company?.city ?? "");
+
+  const [phone, setPhone] = useState<string>(company?.phone ?? "");
+
+  const [email, setEmail] = useState<string>(company?.email ?? "");
 
   /*
    * companyColor:
@@ -110,9 +97,18 @@ export default function EditCompanyScreen() {
    * customColor:
    * valor escrito en el campo hexadecimal.
    */
-  const [companyColor, setCompanyColor] = useState<string>(company.color);
+  const initialColor = company?.branding.primaryColor ?? "#F97316";
 
-  const [customColor, setCustomColor] = useState<string>(company.color);
+  const [companyColor, setCompanyColor] = useState<string>(initialColor);
+
+  const [customColor, setCustomColor] = useState<string>(initialColor);
+
+  /*
+   * Estado del guardado real.
+   */
+  const [saving, setSaving] = useState(false);
+
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   /* ---------------------------------------------------------------------- */
   /*                            VISTA PREVIA                                */
@@ -162,26 +158,123 @@ export default function EditCompanyScreen() {
   /*                               GUARDADO                                 */
   /* ---------------------------------------------------------------------- */
 
-  const handleSave = () => {
-    /*
-     * PROTOTIPO
-     *
-     * Todavía no modificamos realmente los datos.
-     *
-     * Cuando implementemos persistencia, aquí llamaremos
-     * al servicio encargado de actualizar la empresa.
-     *
-     * Por ahora conservamos el comportamiento original:
-     * regresar al detalle de la empresa.
-     */
-    router.replace({
-      pathname: "/empresas/[id]",
+  const handleSave = async () => {
+    if (!company) {
+      setSaveError("La empresa que intentas editar no existe.");
 
-      params: {
-        id,
-      },
-    });
+      return;
+    }
+
+    /*
+     * Validamos los mismos campos principales utilizados
+     * al registrar una empresa.
+     */
+    const normalizedName = commercialName.trim();
+    const normalizedState = state.trim();
+    const normalizedCity = city.trim();
+
+    if (!normalizedName || !normalizedState || !normalizedCity) {
+      setSaveError("Completa el nombre comercial, el estado y el municipio.");
+
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      /*
+       * updateCompany conserva automáticamente:
+       *
+       * - id;
+       * - createdAt;
+       * - propertyIds actuales;
+       *
+       * y actualiza updatedAt.
+       */
+      const updatedCompany = await updateCompany(company.id, {
+        name: normalizedName,
+
+        legalName: legalName.trim() || normalizedName,
+
+        rfc: rfc.trim() ? rfc.trim().toUpperCase() : undefined,
+
+        state: normalizedState,
+        city: normalizedCity,
+
+        phone: phone.trim() ? phone.trim() : undefined,
+
+        email: email.trim() ? email.trim().toLowerCase() : undefined,
+
+        branding: {
+          ...company.branding,
+          primaryColor: companyColor,
+        },
+      });
+
+      if (!updatedCompany) {
+        throw new Error(`No fue posible actualizar la empresa ${company.id}.`);
+      }
+
+      router.replace({
+        pathname: "/empresas/[id]",
+
+        params: {
+          id: updatedCompany.id,
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No fue posible guardar los cambios.";
+
+      console.error("Error actualizando empresa:", error);
+
+      setSaveError(message);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  /*
+   * Ruta inválida o empresa inexistente.
+   */
+  if (!company) {
+    return (
+      <Screen padded={false}>
+        <ResponsiveContainer>
+          <View style={styles.notFoundContainer}>
+            <Text
+              style={[
+                styles.notFoundTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Empresa no encontrada
+            </Text>
+
+            <Text
+              style={[
+                styles.notFoundDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              El registro solicitado no existe o ya no está disponible.
+            </Text>
+
+            <AppButton onPress={() => router.replace("/empresas")}>
+              Volver a Empresas
+            </AppButton>
+          </View>
+        </ResponsiveContainer>
+      </Screen>
+    );
+  }
 
   return (
     <Screen padded={false}>
@@ -290,9 +383,31 @@ export default function EditCompanyScreen() {
                   onChangeText={setLegalName}
                 />
 
+                <Field
+                  label="RFC"
+                  value={rfc}
+                  onChangeText={setRfc}
+                  autoCapitalize="characters"
+                />
+
                 <Field label="Estado" value={state} onChangeText={setState} />
 
                 <Field label="Municipio" value={city} onChangeText={setCity} />
+
+                <Field
+                  label="Teléfono"
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                />
+
+                <Field
+                  label="Correo electrónico"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
               </ResponsiveGrid>
             </View>
 
@@ -496,7 +611,14 @@ export default function EditCompanyScreen() {
 
           <View style={[styles.actions, !isPhone && styles.actionsWide]}>
             <View style={styles.actionButton}>
-              <AppButton onPress={handleSave}>Guardar cambios</AppButton>
+              <AppButton
+                onPress={() => {
+                  void handleSave();
+                }}
+                disabled={saving}
+              >
+                {saving ? "Guardando..." : "Guardar cambios"}
+              </AppButton>
             </View>
 
             <View style={styles.actionButton}>
@@ -507,8 +629,21 @@ export default function EditCompanyScreen() {
           </View>
 
           {/* ============================================================ */}
-          {/* AVISO DEL PROTOTIPO                                          */}
+          {/* ESTADO DEL GUARDADO                                           */}
           {/* ============================================================ */}
+
+          {saveError ? (
+            <Text
+              style={[
+                styles.saveError,
+                {
+                  color: colors.error,
+                },
+              ]}
+            >
+              {saveError}
+            </Text>
+          ) : null}
 
           <Text
             style={[
@@ -518,7 +653,8 @@ export default function EditCompanyScreen() {
               },
             ]}
           >
-            Prototipo visual: los cambios todavía no se almacenan.
+            Los cambios se guardan localmente y permanecen disponibles después
+            de reiniciar UNIESAP.
           </Text>
         </ResponsiveContainer>
       </ScrollView>
@@ -540,10 +676,14 @@ function Field({
   label,
   value,
   onChangeText,
+  keyboardType,
+  autoCapitalize,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
+  keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
 }) {
   const { colors } = useAppTheme();
 
@@ -560,7 +700,12 @@ function Field({
         {label}
       </Text>
 
-      <AppTextInput value={value} onChangeText={onChangeText} />
+      <AppTextInput
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+      />
     </View>
   );
 }
@@ -935,6 +1080,32 @@ const styles = StyleSheet.create({
 
   actionButton: {
     minWidth: 200,
+  },
+
+  notFoundContainer: {
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+    paddingTop: Spacing.xxxl,
+  },
+
+  notFoundTitle: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+  },
+
+  notFoundDescription: {
+    fontSize: FontSize.body,
+    lineHeight: 24,
+    marginBottom: Spacing.lg,
+  },
+
+  saveError: {
+    textAlign: "center",
+    fontSize: FontSize.small,
+    lineHeight: 20,
+    marginTop: Spacing.lg,
   },
 
   prototypeNotice: {

@@ -14,10 +14,10 @@ import { AppTextInput } from "@/components/ui/AppTextInput";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { Screen } from "@/components/ui/Screen";
 
-import { getCompanyById } from "@/data/companies";
+import { getCompanyById } from "@/repositories/companyRepository";
 import { getFormById } from "@/data/forms";
 import { getInspectionById } from "@/data/inspections";
-import { getPropertyById } from "@/data/properties";
+import { getPropertyById } from "@/repositories/propertyRepository";
 
 import {
   createEvidence,
@@ -75,7 +75,7 @@ export default function CaptureScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * Móvil:
+   * MÃ³vil:
    * una sola columna.
    *
    * Tablet / escritorio:
@@ -84,13 +84,13 @@ export default function CaptureScreen() {
   const { isPhone } = useResponsive();
 
   /*
-   * Parámetros necesarios para identificar
-   * completamente la inspección.
+   * ParÃ¡metros necesarios para identificar
+   * completamente la inspecciÃ³n.
    *
    * Empresa
-   *    ↓
+   *    â†“
    * Inmueble
-   *    ↓
+   *    â†“
    * Formulario
    */
   const { id, propertyId, formId, inspectionId } = useLocalSearchParams<{
@@ -117,7 +117,7 @@ export default function CaptureScreen() {
 
   /*
    * Cuando continuamos un borrador podemos recuperar el formulario
-   * directamente desde la inspección guardada.
+   * directamente desde la inspecciÃ³n guardada.
    */
   const resolvedFormId = formId ?? existingInspection?.formId;
 
@@ -126,9 +126,9 @@ export default function CaptureScreen() {
   /*
    * Respuestas actuales del formulario.
    *
-   * Si estamos continuando una inspección, reconstruimos CaptureAnswers
+   * Si estamos continuando una inspecciÃ³n, reconstruimos CaptureAnswers
    * desde InspectionResponse[] para mostrar inmediatamente los valores
-   * que el usuario había guardado.
+   * que el usuario habÃ­a guardado.
    */
   const [answers, setAnswers] = useState<CaptureAnswers>(() => {
     if (!existingInspection) {
@@ -146,12 +146,12 @@ export default function CaptureScreen() {
   });
 
   /*
-   * Acción que se encuentra actualmente
+   * AcciÃ³n que se encuentra actualmente
    * en proceso.
    *
-   * null     → sin procesamiento
-   * draft    → guardando borrador
-   * finish   → guardando/sincronizando
+   * null     â†’ sin procesamiento
+   * draft    â†’ guardando borrador
+   * finish   â†’ guardando/sincronizando
    */
   const [processingAction, setProcessingAction] =
     useState<ProcessingAction>(null);
@@ -161,8 +161,8 @@ export default function CaptureScreen() {
    *
    * Mantenerlo separado evita mezclar:
    *
-   * - guardado/finalización de inspecciones;
-   * - cámara/galería/eliminación de fotografías.
+   * - guardado/finalizaciÃ³n de inspecciones;
+   * - cÃ¡mara/galerÃ­a/eliminaciÃ³n de fotografÃ­as.
    */
   const [photoProcessingAction, setPhotoProcessingAction] =
     useState<PhotoProcessingAction>(null);
@@ -172,9 +172,9 @@ export default function CaptureScreen() {
   >(null);
 
   /*
-   * EvidenceRepository no es reactivo todavía.
+   * EvidenceRepository no es reactivo todavÃ­a.
    *
-   * Este contador fuerza una nueva lectura visual después de
+   * Este contador fuerza una nueva lectura visual despuÃ©s de
    * crear o eliminar una evidencia.
    */
   const [evidenceVersion, setEvidenceVersion] = useState(0);
@@ -182,11 +182,11 @@ export default function CaptureScreen() {
   void evidenceVersion;
 
   /*
-   * Si una sincronización falla mantenemos
-   * la inspección creada y guardamos su ID.
+   * Si una sincronizaciÃ³n falla mantenemos
+   * la inspecciÃ³n creada y guardamos su ID.
    *
    * De esta manera un reintento NO crea
-   * una segunda inspección local.
+   * una segunda inspecciÃ³n local.
    */
   const [createdInspectionId, setCreatedInspectionId] = useState<string | null>(
     existingInspection?.id ?? null,
@@ -224,7 +224,7 @@ export default function CaptureScreen() {
               fontWeight: "600",
             }}
           >
-            ‹ Volver
+            â€¹ Volver
           </Text>
         </Pressable>
 
@@ -259,12 +259,12 @@ export default function CaptureScreen() {
     processingAction !== null || photoProcessingAction !== null;
 
   /* ---------------------------------------------------------------------- */
-  /*                     ACTUALIZACIÓN DE RESPUESTAS                        */
+  /*                     ACTUALIZACIÃ“N DE RESPUESTAS                        */
   /* ---------------------------------------------------------------------- */
 
   /*
-   * Todas las preguntas dinámicas utilizan
-   * esta misma función.
+   * Todas las preguntas dinÃ¡micas utilizan
+   * esta misma funciÃ³n.
    */
   const updateAnswer = (questionId: string, value: InspectionResponseValue) => {
     setAnswers((currentAnswers) => ({
@@ -276,7 +276,7 @@ export default function CaptureScreen() {
     /*
      * Si el usuario corrige una respuesta,
      * ocultamos cualquier mensaje anterior
-     * relacionado con validación.
+     * relacionado con validaciÃ³n.
      */
     if (actionError) {
       setActionError(null);
@@ -332,17 +332,17 @@ export default function CaptureScreen() {
    *
    * InspectionResponse[]
    *
-   * Este último es el modelo oficial utilizado
-   * por UNIESAP y por la integración Kobo.
+   * Este Ãºltimo es el modelo oficial utilizado
+   * por UNIESAP y por la integraciÃ³n Kobo.
    */
   const buildResponses = (): InspectionResponse[] => {
     return (
       form.questions
         /*
-         * Las fotografías ya no se guardan como valores simulados
+         * Las fotografÃ­as ya no se guardan como valores simulados
          * dentro de InspectionResponse.
          *
-         * Cada fotografía vive como Evidence independiente.
+         * Cada fotografÃ­a vive como Evidence independiente.
          */
         .filter(
           (question) =>
@@ -357,7 +357,7 @@ export default function CaptureScreen() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /*                     EVIDENCIAS FOTOGRÁFICAS                            */
+  /*                     EVIDENCIAS FOTOGRÃFICAS                            */
   /* ---------------------------------------------------------------------- */
 
   const refreshEvidences = () => {
@@ -365,10 +365,10 @@ export default function CaptureScreen() {
   };
 
   /*
-   * Una Evidence necesita inspectionId desde el momento de su creación.
+   * Una Evidence necesita inspectionId desde el momento de su creaciÃ³n.
    *
-   * Por eso, si el usuario toma una fotografía antes de guardar manualmente,
-   * creamos automáticamente el borrador local de la inspección.
+   * Por eso, si el usuario toma una fotografÃ­a antes de guardar manualmente,
+   * creamos automÃ¡ticamente el borrador local de la inspecciÃ³n.
    *
    * Si el borrador ya existe, lo actualizamos con las respuestas actuales.
    */
@@ -402,7 +402,7 @@ export default function CaptureScreen() {
 
       if (!updatedInspection) {
         throw new Error(
-          "No fue posible preparar la inspección para asociar evidencias.",
+          "No fue posible preparar la inspecciÃ³n para asociar evidencias.",
         );
       }
 
@@ -457,14 +457,14 @@ export default function CaptureScreen() {
 
         questionId: question.id,
 
-        title: `${question.label} - fotografía`,
+        title: `${question.label} - fotografÃ­a`,
 
         type: "photo",
 
         status: "pending",
 
         description:
-          "Evidencia fotográfica capturada durante una inspección UNIESAP.",
+          "Evidencia fotogrÃ¡fica capturada durante una inspecciÃ³n UNIESAP.",
 
         localUri: media.localUri,
 
@@ -487,7 +487,7 @@ export default function CaptureScreen() {
 
       if (!currentInspection) {
         throw new Error(
-          "La evidencia fue creada, pero no fue posible recuperar la inspección asociada.",
+          "La evidencia fue creada, pero no fue posible recuperar la inspecciÃ³n asociada.",
         );
       }
 
@@ -504,11 +504,11 @@ export default function CaptureScreen() {
 
       if (!updatedInspection) {
         throw new Error(
-          "La fotografía fue guardada, pero no fue posible asociarla a la inspección.",
+          "La fotografÃ­a fue guardada, pero no fue posible asociarla a la inspecciÃ³n.",
         );
       }
 
-      console.log("Evidencia fotográfica agregada a la inspección:", {
+      console.log("Evidencia fotogrÃ¡fica agregada a la inspecciÃ³n:", {
         inspectionId: inspectionForEvidenceId,
         questionId: question.id,
         evidenceId: evidence.id,
@@ -516,7 +516,7 @@ export default function CaptureScreen() {
 
       refreshEvidences();
     } catch (error) {
-      console.error("Error capturando evidencia fotográfica:", error);
+      console.error("Error capturando evidencia fotogrÃ¡fica:", error);
 
       setActionError(getErrorMessage(error));
     } finally {
@@ -552,14 +552,14 @@ export default function CaptureScreen() {
 
         questionId: question.id,
 
-        title: `${question.label} - fotografía`,
+        title: `${question.label} - fotografÃ­a`,
 
         type: "photo",
 
         status: "pending",
 
         description:
-          "Evidencia fotográfica seleccionada durante una inspección UNIESAP.",
+          "Evidencia fotogrÃ¡fica seleccionada durante una inspecciÃ³n UNIESAP.",
 
         localUri: media.localUri,
 
@@ -582,7 +582,7 @@ export default function CaptureScreen() {
 
       if (!currentInspection) {
         throw new Error(
-          "La evidencia fue creada, pero no fue posible recuperar la inspección asociada.",
+          "La evidencia fue creada, pero no fue posible recuperar la inspecciÃ³n asociada.",
         );
       }
 
@@ -599,11 +599,11 @@ export default function CaptureScreen() {
 
       if (!updatedInspection) {
         throw new Error(
-          "La fotografía fue guardada, pero no fue posible asociarla a la inspección.",
+          "La fotografÃ­a fue guardada, pero no fue posible asociarla a la inspecciÃ³n.",
         );
       }
 
-      console.log("Evidencia fotográfica seleccionada para la inspección:", {
+      console.log("Evidencia fotogrÃ¡fica seleccionada para la inspecciÃ³n:", {
         inspectionId: inspectionForEvidenceId,
         questionId: question.id,
         evidenceId: evidence.id,
@@ -611,7 +611,7 @@ export default function CaptureScreen() {
 
       refreshEvidences();
     } catch (error) {
-      console.error("Error seleccionando evidencia fotográfica:", error);
+      console.error("Error seleccionando evidencia fotogrÃ¡fica:", error);
 
       setActionError(getErrorMessage(error));
     } finally {
@@ -647,7 +647,7 @@ export default function CaptureScreen() {
 
         if (!updatedInspection) {
           console.warn(
-            "La evidencia fue eliminada, pero no fue posible actualizar evidenceIds de la inspección.",
+            "La evidencia fue eliminada, pero no fue posible actualizar evidenceIds de la inspecciÃ³n.",
             {
               inspectionId: currentInspection.id,
               evidenceId: evidence.id,
@@ -660,14 +660,14 @@ export default function CaptureScreen() {
         await deleteEvidenceMedia(evidence.localUri);
       } catch (mediaError) {
         console.error(
-          "La evidencia fue eliminada, pero falló la limpieza del archivo local:",
+          "La evidencia fue eliminada, pero fallÃ³ la limpieza del archivo local:",
           mediaError,
         );
       }
 
       refreshEvidences();
     } catch (error) {
-      console.error("Error eliminando evidencia fotográfica:", error);
+      console.error("Error eliminando evidencia fotogrÃ¡fica:", error);
 
       setActionError(getErrorMessage(error));
     } finally {
@@ -683,7 +683,7 @@ export default function CaptureScreen() {
   const handleSaveDraft = async () => {
     /*
      * Evita crear dos borradores
-     * mediante pulsaciones rápidas.
+     * mediante pulsaciones rÃ¡pidas.
      */
     if (isProcessing) {
       return;
@@ -702,11 +702,11 @@ export default function CaptureScreen() {
        * Un borrador se almacena solamente
        * dentro de UNIESAP.
        *
-       * Kobo todavía NO participa.
+       * Kobo todavÃ­a NO participa.
        */
       /*
-       * Si la captura ya corresponde a una inspección existente,
-       * actualizamos esa misma inspección.
+       * Si la captura ya corresponde a una inspecciÃ³n existente,
+       * actualizamos esa misma inspecciÃ³n.
        *
        * Esto evita crear un segundo borrador cada vez que el usuario
        * entra, modifica algo y vuelve a guardar.
@@ -728,7 +728,7 @@ export default function CaptureScreen() {
 
         if (!updatedInspection) {
           throw new Error(
-            "No fue posible encontrar el borrador que se intentó actualizar.",
+            "No fue posible encontrar el borrador que se intentÃ³ actualizar.",
           );
         }
 
@@ -766,12 +766,12 @@ export default function CaptureScreen() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /*                         FINALIZAR INSPECCIÓN                            */
+  /*                         FINALIZAR INSPECCIÃ“N                            */
   /* ---------------------------------------------------------------------- */
 
   const handleFinish = async () => {
     /*
-     * Protección contra doble pulsación.
+     * ProtecciÃ³n contra doble pulsaciÃ³n.
      */
     if (isProcessing) {
       return;
@@ -783,7 +783,7 @@ export default function CaptureScreen() {
      */
     if (!requiredCompleted) {
       setActionError(
-        "Completa las preguntas obligatorias antes de finalizar la inspección.",
+        "Completa las preguntas obligatorias antes de finalizar la inspecciÃ³n.",
       );
 
       return;
@@ -817,7 +817,7 @@ export default function CaptureScreen() {
        * Formularios internos:
        * completed + local
        *
-       * Después, InspectionSyncQueueService será responsable
+       * DespuÃ©s, InspectionSyncQueueService serÃ¡ responsable
        * de procesar las inspecciones pending.
        */
 
@@ -842,7 +842,7 @@ export default function CaptureScreen() {
         });
 
         if (!updatedInspection) {
-          throw new Error("No fue posible recuperar la inspección guardada.");
+          throw new Error("No fue posible recuperar la inspecciÃ³n guardada.");
         }
       } else {
         const inspection = await createInspection({
@@ -869,7 +869,7 @@ export default function CaptureScreen() {
 
       if (!currentInspectionId) {
         throw new Error(
-          "No fue posible obtener el ID de la inspección finalizada.",
+          "No fue posible obtener el ID de la inspecciÃ³n finalizada.",
         );
       }
 
@@ -881,13 +881,13 @@ export default function CaptureScreen() {
        *
        * En este punto:
        *
-       * ✓ la inspección está persistida;
-       * ✓ está marcada como completed;
-       * ✓ si utiliza Kobo está marcada como pending.
+       * âœ“ la inspecciÃ³n estÃ¡ persistida;
+       * âœ“ estÃ¡ marcada como completed;
+       * âœ“ si utiliza Kobo estÃ¡ marcada como pending.
        *
        * No esperamos a Kobo y no bloqueamos al usuario.
        */
-      console.log("Inspección finalizada y preparada para sincronización:", {
+      console.log("InspecciÃ³n finalizada y preparada para sincronizaciÃ³n:", {
         inspectionId: currentInspectionId,
 
         syncStatus: form.integration?.provider === "kobo" ? "pending" : "local",
@@ -897,19 +897,19 @@ export default function CaptureScreen() {
     } catch (error) {
       const message = getErrorMessage(error);
 
-      console.error("No fue posible finalizar la inspección:", error);
+      console.error("No fue posible finalizar la inspecciÃ³n:", error);
 
       setActionError(
         currentInspectionId
-          ? `La inspección permanece guardada en UNIESAP, pero ocurrió un error al finalizarla: ${message}`
-          : `No fue posible guardar la inspección: ${message}`,
+          ? `La inspecciÃ³n permanece guardada en UNIESAP, pero ocurriÃ³ un error al finalizarla: ${message}`
+          : `No fue posible guardar la inspecciÃ³n: ${message}`,
       );
     } finally {
       setProcessingAction(null);
     }
   };
   /* ---------------------------------------------------------------------- */
-  /*                              NAVEGACIÓN                                */
+  /*                              NAVEGACIÃ“N                                */
   /* ---------------------------------------------------------------------- */
 
   const navigateToProperty = () => {
@@ -929,12 +929,12 @@ export default function CaptureScreen() {
 
   const statusLabel =
     processingAction === "draft"
-      ? "● Guardando..."
+      ? "â— Guardando..."
       : processingAction === "finish"
-        ? "● Finalizando..."
+        ? "â— Finalizando..."
         : createdInspectionId
-          ? "● Guardada localmente"
-          : "● Borrador";
+          ? "â— Guardada localmente"
+          : "â— Borrador";
 
   return (
     <Screen padded={false}>
@@ -945,7 +945,7 @@ export default function CaptureScreen() {
       >
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÓN CONTEXTUAL                                        */}
+          {/* NAVEGACIÃ“N CONTEXTUAL                                        */}
           {/* ============================================================ */}
 
           <ContextHeader
@@ -960,18 +960,18 @@ export default function CaptureScreen() {
               }
             }}
             /*
-             * La empresa continúa visible como contexto.
+             * La empresa continÃºa visible como contexto.
              */
             contextLabel={company.name}
             contextColor={company.branding.primaryColor}
             /*
-             * Distinguimos entre una inspección nueva
-             * y la continuación de un borrador existente.
+             * Distinguimos entre una inspecciÃ³n nueva
+             * y la continuaciÃ³n de un borrador existente.
              */
             title={
-              existingInspection ? "Continuar inspección" : "Nueva inspección"
+              existingInspection ? "Continuar inspecciÃ³n" : "Nueva inspecciÃ³n"
             }
-            subtitle={`${form.title} · ${property.name}`}
+            subtitle={`${form.title} Â· ${property.name}`}
           />
 
           {/* ============================================================ */}
@@ -1017,7 +1017,7 @@ export default function CaptureScreen() {
           {/* ============================================================ */}
 
           <View style={[styles.mainLayout, !isPhone && styles.mainLayoutWide]}>
-            {/* CONTEXTO EN MÓVIL */}
+            {/* CONTEXTO EN MÃ“VIL */}
 
             {isPhone && (
               <ContextPanel
@@ -1029,7 +1029,7 @@ export default function CaptureScreen() {
             )}
 
             {/* ========================================================== */}
-            {/* PREGUNTAS DINÁMICAS                                       */}
+            {/* PREGUNTAS DINÃMICAS                                       */}
             {/* ========================================================== */}
 
             <View
@@ -1134,7 +1134,7 @@ export default function CaptureScreen() {
                   </Text>
                 </AppCard>
 
-                {/* INTEGRACIÓN */}
+                {/* INTEGRACIÃ“N */}
 
                 <AppCard>
                   <Text
@@ -1145,7 +1145,7 @@ export default function CaptureScreen() {
                       },
                     ]}
                   >
-                    Integración
+                    IntegraciÃ³n
                   </Text>
 
                   <Text
@@ -1157,7 +1157,7 @@ export default function CaptureScreen() {
                     ]}
                   >
                     {form.integration?.provider === "kobo"
-                      ? "Formulario preparado para sincronización con Kobo."
+                      ? "Formulario preparado para sincronizaciÃ³n con Kobo."
                       : "Formulario interno de UNIESAP."}
                   </Text>
 
@@ -1179,7 +1179,7 @@ export default function CaptureScreen() {
           </View>
 
           {/* ============================================================ */}
-          {/* VALIDACIÓN                                                   */}
+          {/* VALIDACIÃ“N                                                   */}
           {/* ============================================================ */}
 
           {!requiredCompleted && (
@@ -1192,7 +1192,7 @@ export default function CaptureScreen() {
               ]}
             >
               Completa las preguntas obligatorias antes de finalizar la
-              inspección.
+              inspecciÃ³n.
             </Text>
           )}
 
@@ -1210,7 +1210,7 @@ export default function CaptureScreen() {
                   },
                 ]}
               >
-                No fue posible completar la operación
+                No fue posible completar la operaciÃ³n
               </Text>
 
               <Text
@@ -1233,7 +1233,7 @@ export default function CaptureScreen() {
                     },
                   ]}
                 >
-                  ✓ La inspección permanece guardada en UNIESAP.
+                  âœ“ La inspecciÃ³n permanece guardada en UNIESAP.
                 </Text>
               )}
             </AppCard>
@@ -1249,8 +1249,8 @@ export default function CaptureScreen() {
                 {processingAction === "finish"
                   ? "Finalizando..."
                   : createdInspectionId
-                    ? "Reintentar sincronización"
-                    : "Finalizar inspección"}
+                    ? "Reintentar sincronizaciÃ³n"
+                    : "Finalizar inspecciÃ³n"}
               </AppButton>
             </View>
 
@@ -1272,7 +1272,7 @@ export default function CaptureScreen() {
             ]}
           >
             Las inspecciones se almacenan primero en UNIESAP. Los formularios
-            vinculados con Kobo se sincronizan automáticamente al finalizar.
+            vinculados con Kobo se sincronizan automÃ¡ticamente al finalizar.
           </Text>
         </ResponsiveContainer>
       </ScrollView>
@@ -1285,10 +1285,10 @@ export default function CaptureScreen() {
 /* -------------------------------------------------------------------------- */
 
 /*
- * El componente no conoce preguntas específicas.
+ * El componente no conoce preguntas especÃ­ficas.
  *
- * Recibe un FormQuestion y selecciona automáticamente
- * el control adecuado según question.type.
+ * Recibe un FormQuestion y selecciona automÃ¡ticamente
+ * el control adecuado segÃºn question.type.
  */
 function QuestionCard({
   number,
@@ -1432,7 +1432,7 @@ function QuestionCard({
       {question.type === "boolean" && (
         <View style={styles.booleanOptions}>
           <SelectionButton
-            label="Sí"
+            label="SÃ­"
             selected={value === true}
             onPress={() => onChange(true)}
           />
@@ -1516,7 +1516,7 @@ function SelectQuestion({
           },
         ]}
       >
-        Esta pregunta todavía no tiene opciones configuradas.
+        Esta pregunta todavÃ­a no tiene opciones configuradas.
       </Text>
     );
   }
@@ -1630,7 +1630,7 @@ function PhotoQuestion({
               },
             ]}
           >
-            {evidences.length > 0 ? "✓" : "+"}
+            {evidences.length > 0 ? "âœ“" : "+"}
           </Text>
         </View>
 
@@ -1644,10 +1644,10 @@ function PhotoQuestion({
             ]}
           >
             {evidences.length > 0
-              ? `${evidences.length} fotografía${
+              ? `${evidences.length} fotografÃ­a${
                   evidences.length === 1 ? "" : "s"
                 }`
-              : "Sin fotografías"}
+              : "Sin fotografÃ­as"}
           </Text>
 
           <Text
@@ -1659,7 +1659,7 @@ function PhotoQuestion({
             ]}
           >
             Agrega todas las evidencias necesarias. UNIESAP no establece un
-            límite fijo de fotografías para esta pregunta.
+            lÃ­mite fijo de fotografÃ­as para esta pregunta.
           </Text>
         </View>
       </View>
@@ -1668,16 +1668,16 @@ function PhotoQuestion({
         <View style={styles.photoActionButton}>
           <AppButton onPress={onCapturePhoto}>
             {processingAction === "camera"
-              ? "Abriendo cámara..."
-              : "Tomar fotografía"}
+              ? "Abriendo cÃ¡mara..."
+              : "Tomar fotografÃ­a"}
           </AppButton>
         </View>
 
         <View style={styles.photoActionButton}>
           <AppButton variant="secondary" onPress={onPickPhoto}>
             {processingAction === "gallery"
-              ? "Abriendo galería..."
-              : "Seleccionar fotografía"}
+              ? "Abriendo galerÃ­a..."
+              : "Seleccionar fotografÃ­a"}
           </AppButton>
         </View>
       </View>
@@ -1898,7 +1898,7 @@ function ProgressSection({
               },
             ]}
           >
-            Las respuestas se calculan automáticamente.
+            Las respuestas se calculan automÃ¡ticamente.
           </Text>
         </View>
 
@@ -1964,7 +1964,7 @@ function ContextPanel({
           },
         ]}
       >
-        Contexto de la inspección
+        Contexto de la inspecciÃ³n
       </Text>
 
       <Text
@@ -1975,7 +1975,7 @@ function ContextPanel({
           },
         ]}
       >
-        Información asociada a esta captura.
+        InformaciÃ³n asociada a esta captura.
       </Text>
 
       <ContextRow label="Empresa" value={companyName} />
@@ -1990,7 +1990,7 @@ function ContextPanel({
 
       <Divider />
 
-      <ContextRow label="Versión" value={`v${formVersion}`} />
+      <ContextRow label="VersiÃ³n" value={`v${formVersion}`} />
     </AppCard>
   );
 }
@@ -2062,18 +2062,18 @@ function isAnswered(value: InspectionResponseValue | undefined) {
   }
 
   /*
-   * false cuenta como respuesta válida.
+   * false cuenta como respuesta vÃ¡lida.
    */
   return true;
 }
 
 /*
- * Mientras todavía no existe autenticación real,
+ * Mientras todavÃ­a no existe autenticaciÃ³n real,
  * intentamos obtener el responsable desde las
  * respuestas del propio formulario.
  *
  * Si el formulario no tiene ese campo utilizamos
- * un valor temporal genérico.
+ * un valor temporal genÃ©rico.
  */
 function resolveInspectorName(
   questions: FormQuestion[],
@@ -2112,7 +2112,7 @@ function getErrorMessage(error: unknown): string {
     return error;
   }
 
-  return "Ocurrió un error desconocido.";
+  return "OcurriÃ³ un error desconocido.";
 }
 
 function formatEvidenceFileSize(bytes: number): string {
@@ -2138,16 +2138,16 @@ function getQuestionTypeLabel(type: FormQuestion["type"]) {
       return "Texto largo";
 
     case "number":
-      return "Número";
+      return "NÃºmero";
 
     case "boolean":
-      return "Sí / No";
+      return "SÃ­ / No";
 
     case "select":
-      return "Selección";
+      return "SelecciÃ³n";
 
     case "photo":
-      return "Fotografía";
+      return "FotografÃ­a";
 
     default:
       return type;
@@ -2164,7 +2164,7 @@ const styles = StyleSheet.create({
   },
 
   /* -------------------------------------------------------------------- */
-  /* NAVEGACIÓN                                                           */
+  /* NAVEGACIÃ“N                                                           */
   /* -------------------------------------------------------------------- */
 
   topNavigation: {
@@ -2773,7 +2773,7 @@ const styles = StyleSheet.create({
   },
 
   /* -------------------------------------------------------------------- */
-  /* VALIDACIÓN                                                           */
+  /* VALIDACIÃ“N                                                           */
   /* -------------------------------------------------------------------- */
 
   validationMessage: {
@@ -2872,3 +2872,4 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 });
+

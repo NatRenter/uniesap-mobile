@@ -9,10 +9,10 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getCompanyById } from "@/data/companies";
+import { getCompanyById } from "@/repositories/companyRepository";
 import { getFormById } from "@/data/forms";
 import { getInspectionsByCompanyId } from "@/data/inspections";
-import { getPropertyById } from "@/data/properties";
+import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
@@ -22,13 +22,13 @@ export default function CompanyInspectionsScreen() {
   /*
    * Obtiene los colores del tema actual.
    *
-   * Esto mantiene automáticamente compatibilidad
+   * Esto mantiene automÃ¡ticamente compatibilidad
    * con modo claro y oscuro.
    */
   const { colors } = useAppTheme();
 
   /*
-   * Recupera el ID dinámico de la empresa:
+   * Recupera el ID dinÃ¡mico de la empresa:
    *
    * /empresas/[id]/inspecciones
    */
@@ -56,7 +56,7 @@ export default function CompanyInspectionsScreen() {
               fontWeight: "600",
             }}
           >
-            ‹ Empresas
+            â€¹ Empresas
           </Text>
         </Pressable>
 
@@ -77,7 +77,7 @@ export default function CompanyInspectionsScreen() {
   }
 
   /*
-   * Recuperamos únicamente las inspecciones
+   * Recuperamos Ãºnicamente las inspecciones
    * que pertenecen a la empresa actual.
    */
   const companyInspections = getInspectionsByCompanyId(company.id);
@@ -86,7 +86,7 @@ export default function CompanyInspectionsScreen() {
    * Calculamos los contadores del resumen
    * directamente desde los datos.
    *
-   * Así evitamos mantener números escritos
+   * AsÃ­ evitamos mantener nÃºmeros escritos
    * manualmente dentro de la interfaz.
    */
   const completed = companyInspections.filter(
@@ -112,12 +112,12 @@ export default function CompanyInspectionsScreen() {
          *
          * - espacio superior
          * - padding horizontal
-         * - ancho máximo
+         * - ancho mÃ¡ximo
          * - centrado en tablet y web
          */}
         <ResponsiveContainer>
           {/* ====================================================== */}
-          {/* NAVEGACIÓN CONTEXTUAL */}
+          {/* NAVEGACIÃ“N CONTEXTUAL */}
           {/* ====================================================== */}
 
           <ContextHeader
@@ -150,7 +150,7 @@ export default function CompanyInspectionsScreen() {
           {/*
            * Tenemos exactamente tres estados principales,
            * por lo que mantenemos tres tarjetas en todos
-           * los tamaños.
+           * los tamaÃ±os.
            */}
           <ResponsiveGrid
             phoneColumns={3}
@@ -187,9 +187,9 @@ export default function CompanyInspectionsScreen() {
           {/*
            * ResponsiveGrid reemplaza la lista vertical fija.
            *
-           * Móvil   → 1 inspección por fila
-           * Tablet  → 2 inspecciones por fila
-           * Desktop → 3 inspecciones por fila
+           * MÃ³vil   â†’ 1 inspecciÃ³n por fila
+           * Tablet  â†’ 2 inspecciones por fila
+           * Desktop â†’ 3 inspecciones por fila
            */}
           <ResponsiveGrid
             phoneColumns={1}
@@ -199,12 +199,12 @@ export default function CompanyInspectionsScreen() {
           >
             {companyInspections.map((inspection) => {
               /*
-               * Cada inspección solamente almacena IDs.
+               * Cada inspecciÃ³n solamente almacena IDs.
                *
-               * Aquí resolvemos:
+               * AquÃ­ resolvemos:
                *
-               * propertyId → nombre del inmueble
-               * formId     → nombre del formulario
+               * propertyId â†’ nombre del inmueble
+               * formId     â†’ nombre del formulario
                */
               const property = getPropertyById(inspection.propertyId);
 
@@ -226,7 +226,7 @@ export default function CompanyInspectionsScreen() {
           </ResponsiveGrid>
 
           {/* ====================================================== */}
-          {/* ESTADO VACÍO */}
+          {/* ESTADO VACÃO */}
           {/* ====================================================== */}
 
           {companyInspections.length === 0 && (
@@ -250,7 +250,7 @@ export default function CompanyInspectionsScreen() {
                   },
                 ]}
               >
-                Todavía no existen inspecciones registradas para esta empresa.
+                TodavÃ­a no existen inspecciones registradas para esta empresa.
               </Text>
             </AppCard>
           )}
@@ -265,11 +265,11 @@ export default function CompanyInspectionsScreen() {
 /* -------------------------------------------------------------------------- */
 
 /*
- * Tarjeta pequeña utilizada para mostrar
+ * Tarjeta pequeÃ±a utilizada para mostrar
  * los contadores principales.
  *
  * warning permite resaltar valores
- * que requieren atención.
+ * que requieren atenciÃ³n.
  */
 function SummaryCard({
   value,
@@ -315,9 +315,9 @@ function SummaryCard({
 /* -------------------------------------------------------------------------- */
 
 /*
- * Tarjeta que representa una inspección.
+ * Tarjeta que representa una inspecciÃ³n.
  *
- * Recibe la información ya resuelta para que
+ * Recibe la informaciÃ³n ya resuelta para que
  * el componente no tenga que consultar
  * directamente la capa de datos.
  */
@@ -353,11 +353,11 @@ function InspectionCard({
         : "Borrador";
 
   /*
-   * El color también depende del estado:
+   * El color tambiÃ©n depende del estado:
    *
-   * completed   → verde
-   * in_progress → advertencia
-   * draft       → neutro
+   * completed   â†’ verde
+   * in_progress â†’ advertencia
+   * draft       â†’ neutro
    */
   const statusColor =
     status === "completed"
@@ -374,7 +374,7 @@ function InspectionCard({
 
           /*
            * Para abrir el detalle necesitamos
-           * conservar empresa + inspección.
+           * conservar empresa + inspecciÃ³n.
            */
           params: {
             id: companyRouteId,
@@ -409,7 +409,7 @@ function InspectionCard({
                 },
               ]}
             >
-              ✓
+              âœ“
             </Text>
           </View>
 
@@ -447,7 +447,7 @@ function InspectionCard({
               },
             ]}
           >
-            ›
+            â€º
           </Text>
         </View>
 
@@ -498,7 +498,7 @@ function InspectionCard({
               },
             ]}
           >
-            ● {statusLabel}
+            â— {statusLabel}
           </Text>
         </View>
       </AppCard>
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
    * ResponsiveContainer ya controla
    * padding horizontal y superior.
    *
-   * Aquí solamente necesitamos espacio
+   * AquÃ­ solamente necesitamos espacio
    * inferior para el ScrollView.
    */
   scrollContent: {
@@ -624,8 +624,8 @@ const styles = StyleSheet.create({
     width: "100%",
 
     /*
-     * Mantiene una altura mínima razonable.
-     * Esto ayuda a que las filas se vean más
+     * Mantiene una altura mÃ­nima razonable.
+     * Esto ayuda a que las filas se vean mÃ¡s
      * uniformes en tablet y escritorio.
      */
     minHeight: 190,
@@ -660,7 +660,7 @@ const styles = StyleSheet.create({
    * minWidth: 0 es importante dentro de
    * layouts flex porque permite que Text
    * se reduzca correctamente en tarjetas
-   * más estrechas.
+   * mÃ¡s estrechas.
    */
   cardInfo: {
     flex: 1,
@@ -756,3 +756,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+

@@ -4,9 +4,34 @@ type TableInfoRow = {
   name: string;
 };
 
+/*
+ * ============================================================================
+ * MIGRACIONES SQLITE
+ * ============================================================================
+ *
+ * Este archivo centraliza la estructura persistente de UNIESAP.
+ *
+ * Actualmente administra:
+ *
+ * - perfil de usuario;
+ * - empresas;
+ * - inmuebles;
+ * - inspecciones;
+ * - respuestas;
+ * - evidencias;
+ * - Mock Kobo submissions;
+ * - Mock Kobo attachments.
+ *
+ * Las migraciones son acumulativas.
+ *
+ * No eliminamos tablas ni información existente.
+ */
 export async function runDatabaseMigrations() {
   const database = await getDatabase();
 
+  /*
+   * Habilita relaciones FOREIGN KEY en SQLite.
+   */
   await database.execAsync(`
     PRAGMA foreign_keys = ON;
   `);
@@ -16,10 +41,9 @@ export async function runDatabaseMigrations() {
    * PERFIL DE USUARIO
    * ==========================================================================
    *
-   * Guardamos un único perfil local identificado
-   * por id = "current-user".
+   * Actualmente UNIESAP trabaja con un único perfil local.
    *
-   * Roles y permisos se agregarán en otra fase.
+   * Los usuarios múltiples y roles se implementarán posteriormente.
    */
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS user_profile (
@@ -43,40 +67,137 @@ export async function runDatabaseMigrations() {
 
   /*
    * ==========================================================================
+   * EMPRESAS
+   * ==========================================================================
+   *
+   * Fuente persistente principal para Company.
+   *
+   * IMPORTANTE:
+   *
+   * propertyIds NO se almacena en esta tabla.
+   *
+   * La relación real entre empresa e inmueble se obtiene mediante:
+   *
+   * properties.company_id
+   */
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS companies (
+      id TEXT PRIMARY KEY NOT NULL,
+
+      name TEXT NOT NULL,
+      legal_name TEXT NOT NULL,
+
+      rfc TEXT,
+
+      state TEXT NOT NULL,
+      city TEXT NOT NULL,
+
+      phone TEXT,
+      email TEXT,
+
+      primary_color TEXT NOT NULL,
+      secondary_color TEXT,
+
+      logo TEXT,
+
+      status TEXT NOT NULL,
+
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  /*
+   * ==========================================================================
+   * INMUEBLES
+   * ==========================================================================
+   *
+   * Cada inmueble pertenece a una empresa.
+   *
+   * Property.companyId es la relación principal.
+   *
+   * form_ids_json se mantiene temporalmente porque todavía
+   * no existe una tabla relacional Property ↔ Form.
+   */
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS properties (
+      id TEXT PRIMARY KEY NOT NULL,
+
+      company_id TEXT NOT NULL,
+
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+
+      state TEXT NOT NULL,
+      city TEXT NOT NULL,
+
+      address TEXT,
+
+      workers INTEGER NOT NULL DEFAULT 0,
+
+      form_ids_json TEXT NOT NULL DEFAULT '[]',
+
+      status TEXT NOT NULL,
+
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+
+      FOREIGN KEY (company_id)
+      REFERENCES companies(id)
+      ON DELETE RESTRICT
+      ON UPDATE CASCADE
+    );
+  `);
+
+  /*
+   * ==========================================================================
    * INSPECCIONES
    * ==========================================================================
    *
-   * created_at:
-   *   momento en que nació la inspección.
+   * Por ahora company_id y property_id continúan como campos simples.
    *
-   * updated_at:
-   *   última modificación real del registro.
+   * NO agregamos todavía FOREIGN KEY hacia companies/properties.
    *
-   * Estos campos permiten que Dashboard y Trabajo
-   * ordenen por actividad reciente y no solo por fecha.
+   * Esto evita romper inspecciones existentes durante
+   * la migración progresiva desde src/data.
    */
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS inspections (
       id TEXT PRIMARY KEY NOT NULL,
+
       company_id TEXT NOT NULL,
       property_id TEXT NOT NULL,
+
       form_id TEXT NOT NULL,
+
       inspector TEXT NOT NULL,
+
       date TEXT NOT NULL,
+
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
+
       status TEXT NOT NULL,
+
       sync_status TEXT NOT NULL,
+
       sync_operation_id TEXT,
+
       sync_attempt INTEGER NOT NULL DEFAULT 0,
+
       kobo_asset_uid TEXT,
       kobo_submission_id TEXT,
       kobo_uuid TEXT,
       kobo_synced_at TEXT,
+
       last_sync_error TEXT
     );
   `);
 
+  /*
+   * Instalaciones antiguas pueden no tener todavía
+   * las columnas temporales.
+   */
   await addColumnIfMissing("inspections", "created_at", "TEXT");
 
   await addColumnIfMissing("inspections", "updated_at", "TEXT");
@@ -94,21 +215,19 @@ export async function runDatabaseMigrations() {
    * BACKFILL DE FECHAS DE INSPECCIONES ANTIGUAS
    * ==========================================================================
    *
-   * Instalaciones existentes no tenían created_at ni updated_at.
+   * Si una inspección fue creada antes de incorporar:
    *
-   * Utilizamos `date` como base para no perder compatibilidad:
+   * created_at
+   * updated_at
    *
-   * 2026-08-20
-   *      ↓
-   * 2026-08-20T00:00:00.000Z
-   *
-   * Si date ya contiene hora, se conserva.
+   * utilizamos date como referencia inicial.
    */
   await database.execAsync(`
     UPDATE inspections
     SET created_at =
       CASE
-        WHEN created_at IS NOT NULL AND TRIM(created_at) <> ''
+        WHEN created_at IS NOT NULL
+          AND TRIM(created_at) <> ''
           THEN created_at
 
         WHEN INSTR(date, 'T') > 0
@@ -122,10 +241,12 @@ export async function runDatabaseMigrations() {
     UPDATE inspections
     SET updated_at =
       CASE
-        WHEN updated_at IS NOT NULL AND TRIM(updated_at) <> ''
+        WHEN updated_at IS NOT NULL
+          AND TRIM(updated_at) <> ''
           THEN updated_at
 
-        WHEN created_at IS NOT NULL AND TRIM(created_at) <> ''
+        WHEN created_at IS NOT NULL
+          AND TRIM(created_at) <> ''
           THEN created_at
 
         WHEN INSTR(date, 'T') > 0
@@ -137,16 +258,21 @@ export async function runDatabaseMigrations() {
 
   /*
    * ==========================================================================
-   * RESPUESTAS
+   * RESPUESTAS DE INSPECCIÓN
    * ==========================================================================
    */
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS inspection_responses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+
       inspection_id TEXT NOT NULL,
+
       question_id TEXT NOT NULL,
+
       value TEXT,
+
       value_type TEXT NOT NULL,
+
       FOREIGN KEY (inspection_id)
       REFERENCES inspections(id)
       ON DELETE CASCADE
@@ -161,33 +287,52 @@ export async function runDatabaseMigrations() {
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS evidences (
       id TEXT PRIMARY KEY NOT NULL,
+
       company_id TEXT NOT NULL,
       property_id TEXT NOT NULL,
       inspection_id TEXT NOT NULL,
+
       question_id TEXT,
+
       title TEXT NOT NULL,
+
       type TEXT NOT NULL,
+
       status TEXT NOT NULL,
+
       date TEXT NOT NULL,
+
       description TEXT,
+
       local_uri TEXT,
       remote_uri TEXT,
+
       mime_type TEXT,
       file_name TEXT,
       file_size INTEGER,
+
       created_at TEXT,
+
       kobo_upload_operation_id TEXT,
       kobo_attachment_id TEXT,
+
       kobo_asset_uid TEXT,
       kobo_submission_id TEXT,
+
       kobo_uploaded_at TEXT,
+
       last_upload_error TEXT,
+
       FOREIGN KEY (inspection_id)
       REFERENCES inspections(id)
       ON DELETE CASCADE
     );
   `);
 
+  /*
+   * Bases anteriores pueden tener evidences
+   * sin las columnas de sincronización Kobo.
+   */
   await addColumnIfMissing("evidences", "kobo_upload_operation_id", "TEXT");
 
   await addColumnIfMissing("evidences", "kobo_attachment_id", "TEXT");
@@ -200,11 +345,22 @@ export async function runDatabaseMigrations() {
 
   await addColumnIfMissing("evidences", "last_upload_error", "TEXT");
 
+  /*
+   * ==========================================================================
+   * RELACIÓN INSPECCIÓN ↔ EVIDENCIA
+   * ==========================================================================
+   *
+   * Se mantiene porque Inspection.evidenceIds
+   * todavía se utiliza dentro del modelo actual.
+   */
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS inspection_evidences (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+
       inspection_id TEXT NOT NULL,
+
       evidence_id TEXT NOT NULL,
+
       FOREIGN KEY (inspection_id)
       REFERENCES inspections(id)
       ON DELETE CASCADE
@@ -215,14 +371,24 @@ export async function runDatabaseMigrations() {
    * ==========================================================================
    * MOCK KOBO - SUBMISSIONS
    * ==========================================================================
+   *
+   * Guarda submissions aceptadas por el Mock Kobo.
+   *
+   * Esta tabla es fundamental para la idempotencia persistente
+   * durante desarrollo.
    */
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS mock_kobo_submissions (
       operation_key TEXT PRIMARY KEY NOT NULL,
+
       asset_uid TEXT NOT NULL,
+
       operation_id TEXT NOT NULL,
+
       reference_json TEXT NOT NULL,
+
       package_json TEXT NOT NULL,
+
       created_at TEXT NOT NULL
     );
   `);
@@ -231,23 +397,86 @@ export async function runDatabaseMigrations() {
    * ==========================================================================
    * MOCK KOBO - ATTACHMENTS
    * ==========================================================================
+   *
+   * Guarda evidencias aceptadas individualmente
+   * por el Mock Kobo.
    */
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS mock_kobo_attachments (
       operation_key TEXT PRIMARY KEY NOT NULL,
+
       asset_uid TEXT NOT NULL,
+
       submission_id TEXT NOT NULL,
+
       upload_operation_id TEXT NOT NULL,
+
       evidence_id TEXT NOT NULL,
+
       reference_json TEXT NOT NULL,
+
       attachment_json TEXT NOT NULL,
+
       created_at TEXT NOT NULL
     );
   `);
 
   /*
    * ==========================================================================
-   * ÍNDICES
+   * ÍNDICES - EMPRESAS
+   * ==========================================================================
+   */
+
+  /*
+   * Facilita ordenar por última actividad.
+   */
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
+      idx_companies_updated_at
+    ON companies(updated_at);
+  `);
+
+  /*
+   * Facilita búsquedas por estado.
+   */
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
+      idx_companies_status
+    ON companies(status);
+  `);
+
+  /*
+   * ==========================================================================
+   * ÍNDICES - INMUEBLES
+   * ==========================================================================
+   */
+
+  /*
+   * Consulta principal:
+   *
+   * getPropertiesByCompanyId()
+   */
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
+      idx_properties_company_id
+    ON properties(company_id);
+  `);
+
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
+      idx_properties_updated_at
+    ON properties(updated_at);
+  `);
+
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
+      idx_properties_status
+    ON properties(status);
+  `);
+
+  /*
+   * ==========================================================================
+   * ÍNDICES - INSPECCIONES
    * ==========================================================================
    */
   await database.execAsync(`
@@ -262,15 +491,15 @@ export async function runDatabaseMigrations() {
     ON inspections(company_id);
   `);
 
-  /*
-   * Facilita consultas y ordenamientos por actividad reciente.
-   */
   await database.execAsync(`
     CREATE INDEX IF NOT EXISTS
       idx_inspections_updated_at
     ON inspections(updated_at);
   `);
 
+  /*
+   * Cada syncOperationId identifica una única operación.
+   */
   await database.execAsync(`
     CREATE UNIQUE INDEX IF NOT EXISTS
       idx_inspections_sync_operation_id
@@ -278,10 +507,43 @@ export async function runDatabaseMigrations() {
     WHERE sync_operation_id IS NOT NULL;
   `);
 
+  /*
+   * ==========================================================================
+   * ÍNDICES - RESPUESTAS
+   * ==========================================================================
+   */
   await database.execAsync(`
     CREATE INDEX IF NOT EXISTS
       idx_inspection_responses_inspection_id
     ON inspection_responses(inspection_id);
+  `);
+
+  /*
+   * ==========================================================================
+   * ÍNDICES - RELACIÓN INSPECCIÓN / EVIDENCIA
+   * ==========================================================================
+   */
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
+      idx_inspection_evidences_inspection_id
+    ON inspection_evidences(inspection_id);
+  `);
+
+  /*
+   * ==========================================================================
+   * ÍNDICES - EVIDENCIAS
+   * ==========================================================================
+   */
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
+      idx_evidences_company_id
+    ON evidences(company_id);
+  `);
+
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
+      idx_evidences_property_id
+    ON evidences(property_id);
   `);
 
   await database.execAsync(`
@@ -292,10 +554,20 @@ export async function runDatabaseMigrations() {
 
   await database.execAsync(`
     CREATE INDEX IF NOT EXISTS
+      idx_evidences_question_id
+    ON evidences(question_id);
+  `);
+
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
       idx_evidences_status
     ON evidences(status);
   `);
 
+  /*
+   * Cada evidencia debe tener una única operación
+   * idempotente de upload.
+   */
   await database.execAsync(`
     CREATE UNIQUE INDEX IF NOT EXISTS
       idx_evidences_kobo_upload_operation
@@ -303,6 +575,11 @@ export async function runDatabaseMigrations() {
     WHERE kobo_upload_operation_id IS NOT NULL;
   `);
 
+  /*
+   * ==========================================================================
+   * ÍNDICES - MOCK KOBO
+   * ==========================================================================
+   */
   await database.execAsync(`
     CREATE UNIQUE INDEX IF NOT EXISTS
       idx_mock_kobo_asset_operation
@@ -337,8 +614,15 @@ export async function runDatabaseMigrations() {
  * AGREGAR COLUMNA SI NO EXISTE
  * ============================================================================
  *
- * Esta utilidad protege instalaciones anteriores
- * cuando agregamos nuevas columnas sin borrar información.
+ * Permite evolucionar tablas existentes sin borrar información.
+ *
+ * Ejemplo:
+ *
+ * addColumnIfMissing(
+ *   "inspections",
+ *   "updated_at",
+ *   "TEXT",
+ * );
  */
 async function addColumnIfMissing(
   tableName: string,

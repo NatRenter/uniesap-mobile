@@ -7,6 +7,23 @@ import { StatusBar } from "expo-status-bar";
 
 import AppTabs from "@/components/app-tabs";
 
+/*
+ * ============================================================================
+ * PERSISTENCIA SQLITE - EMPRESAS
+ * ============================================================================
+ */
+import {
+  deleteCompanyFromDatabase,
+  insertCompany,
+  replaceCompany,
+  selectAllCompanies,
+} from "@/database/companyDatabase";
+
+/*
+ * ============================================================================
+ * PERSISTENCIA SQLITE - EVIDENCIAS
+ * ============================================================================
+ */
 import {
   deleteEvidenceFromDatabase,
   insertEvidence,
@@ -14,43 +31,95 @@ import {
   selectAllEvidences,
 } from "@/database/evidenceDatabase";
 
+/*
+ * ============================================================================
+ * INICIALIZACIÓN SQLITE
+ * ============================================================================
+ */
 import { initializeDatabase } from "@/database/initializeDatabase.native";
 
+/*
+ * ============================================================================
+ * PERSISTENCIA SQLITE - INMUEBLES
+ * ============================================================================
+ */
 import {
-  saveUserProfileToDatabase,
-  selectUserProfile,
-} from "@/database/userProfileDatabase";
+  deletePropertyFromDatabase,
+  insertProperty,
+  replaceProperty,
+  selectAllProperties,
+} from "@/database/propertyDatabase";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useInspectionAutoSync } from "@/hooks/useInspectionAutoSync";
 
+/*
+ * ============================================================================
+ * REPOSITORY - EMPRESAS
+ * ============================================================================
+ */
+import {
+  configureCompanyRepositoryPersistence,
+  hydrateCompanyRepository,
+} from "@/repositories/companyRepository";
+
+/*
+ * ============================================================================
+ * REPOSITORY - EVIDENCIAS
+ * ============================================================================
+ */
 import {
   configureEvidenceRepositoryPersistence,
   hydrateEvidenceRepository,
 } from "@/repositories/evidenceRepository";
 
+/*
+ * ============================================================================
+ * REPOSITORY - INSPECCIONES
+ * ============================================================================
+ */
 import { hydrateInspectionRepository } from "@/repositories/inspectionRepository";
 
+/*
+ * ============================================================================
+ * REPOSITORY - INMUEBLES
+ * ============================================================================
+ */
 import {
-  configureUserProfileRepositoryPersistence,
-  hydrateUserProfileRepository,
-} from "@/repositories/userProfileRepository";
+  configurePropertyRepositoryPersistence,
+  hydratePropertyRepository,
+} from "@/repositories/propertyRepository";
 
 /*
  * ============================================================================
  * ROOT LAYOUT - ANDROID / IOS
  * ============================================================================
  *
- * Responsabilidades:
+ * Responsabilidades principales:
  *
  * 1. Inicializar SQLite.
- * 2. Configurar persistencia de evidencias.
- * 3. Configurar persistencia del perfil.
- * 4. Hidratar repositorios.
- * 5. Activar sincronización automática.
- * 6. Mostrar navegación global.
+ * 2. Ejecutar migraciones.
+ * 3. Configurar adapters de persistencia.
+ * 4. Hidratar empresas.
+ * 5. Hidratar inmuebles.
+ * 6. Hidratar inspecciones y evidencias.
+ * 7. Activar sincronización automática.
+ * 8. Renderizar Expo Router.
  *
- * Kobo y la lógica de sincronización permanecen intactos.
+ * ORDEN IMPORTANTE:
+ *
+ * CompanyRepository
+ *        ↓
+ * PropertyRepository
+ *        ↓
+ * InspectionRepository / EvidenceRepository
+ *
+ * Company debe hidratarse antes que Property porque SQLite
+ * mantiene la relación:
+ *
+ * properties.company_id
+ *        ↓
+ * companies.id
  */
 export default function RootLayout() {
   const pathname = usePathname();
@@ -61,23 +130,104 @@ export default function RootLayout() {
 
   const [databaseError, setDatabaseError] = useState<string | null>(null);
 
+  /*
+   * ==========================================================================
+   * SINCRONIZACIÓN AUTOMÁTICA
+   * ==========================================================================
+   *
+   * AutoSync solamente inicia después de que toda
+   * la persistencia local terminó de hidratarse.
+   */
   useInspectionAutoSync({
     enabled: databaseReady === true,
   });
 
   /*
-   * Inicializa todos los repositorios Native.
-   *
-   * Cada repositorio mantiene su propia responsabilidad,
-   * pero RootLayout coordina el arranque.
+   * ==========================================================================
+   * INICIALIZACIÓN DE ALMACENAMIENTO
+   * ==========================================================================
    */
   useEffect(() => {
     let active = true;
 
     async function initialize() {
       try {
+        /*
+         * ================================================================
+         * 1. SQLITE + MIGRACIONES
+         * ================================================================
+         *
+         * Aquí se crean, entre otras:
+         *
+         * companies
+         * properties
+         * inspections
+         * evidences
+         * user_profile
+         * tablas Mock Kobo
+         */
         await initializeDatabase();
 
+        /*
+         * ================================================================
+         * 2. CONFIGURAR COMPANY REPOSITORY
+         * ================================================================
+         *
+         * CompanyRepository no conoce directamente SQLite.
+         *
+         * Solamente conoce este contrato:
+         *
+         * loadAll
+         * insert
+         * replace
+         * delete
+         */
+        configureCompanyRepositoryPersistence({
+          async loadAll() {
+            const companies = await selectAllCompanies();
+
+            /*
+             * Repository interpreta null como:
+             *
+             * "No existen datos persistidos todavía.
+             *  Debo insertar el seed."
+             */
+            return companies.length === 0 ? null : companies;
+          },
+
+          insert: insertCompany,
+
+          replace: replaceCompany,
+
+          delete: deleteCompanyFromDatabase,
+        });
+
+        /*
+         * ================================================================
+         * 3. CONFIGURAR PROPERTY REPOSITORY
+         * ================================================================
+         */
+        configurePropertyRepositoryPersistence({
+          async loadAll() {
+            const properties = await selectAllProperties();
+
+            return properties.length === 0 ? null : properties;
+          },
+
+          insert: insertProperty,
+
+          replace: replaceProperty,
+
+          delete: deletePropertyFromDatabase,
+        });
+
+        /*
+         * ================================================================
+         * 4. CONFIGURAR EVIDENCE REPOSITORY
+         * ================================================================
+         *
+         * Este flujo se conserva respecto de la versión estable.
+         */
         configureEvidenceRepositoryPersistence({
           loadAll: selectAllEvidences,
 
@@ -88,18 +238,35 @@ export default function RootLayout() {
           delete: deleteEvidenceFromDatabase,
         });
 
-        configureUserProfileRepositoryPersistence({
-          load: selectUserProfile,
+        /*
+         * ================================================================
+         * 5. HIDRATAR EMPRESAS
+         * ================================================================
+         *
+         * Debe ocurrir primero porque Property.companyId
+         * depende de Company.
+         */
+        await hydrateCompanyRepository();
 
-          save: saveUserProfileToDatabase,
-        });
+        /*
+         * ================================================================
+         * 6. HIDRATAR INMUEBLES
+         * ================================================================
+         */
+        await hydratePropertyRepository();
 
+        /*
+         * ================================================================
+         * 7. HIDRATAR INSPECCIONES Y EVIDENCIAS
+         * ================================================================
+         *
+         * Estas dos capas ya existían y conservamos
+         * su funcionamiento actual.
+         */
         await Promise.all([
           hydrateInspectionRepository(),
 
           hydrateEvidenceRepository(),
-
-          hydrateUserProfileRepository(),
         ]);
 
         if (!active) {
@@ -134,6 +301,11 @@ export default function RootLayout() {
     };
   }, []);
 
+  /*
+   * ==========================================================================
+   * ESTADO DE CARGA
+   * ==========================================================================
+   */
   if (databaseReady === null) {
     return (
       <View
@@ -171,6 +343,11 @@ export default function RootLayout() {
     );
   }
 
+  /*
+   * ==========================================================================
+   * ERROR DE INICIALIZACIÓN
+   * ==========================================================================
+   */
   if (databaseReady === false) {
     return (
       <View
@@ -208,6 +385,20 @@ export default function RootLayout() {
     );
   }
 
+  /*
+   * ==========================================================================
+   * NAVEGACIÓN GLOBAL
+   * ==========================================================================
+   *
+   * Login e index no muestran AppTabs.
+   *
+   * Las demás rutas conservan:
+   *
+   * Inicio
+   * Empresas
+   * Trabajo
+   * Perfil
+   */
   const showGlobalNavigation = pathname !== "/" && pathname !== "/login";
 
   return (
@@ -225,6 +416,7 @@ export default function RootLayout() {
         <Stack
           screenOptions={{
             headerShown: false,
+
             animation: "slide_from_right",
           }}
         />
@@ -239,6 +431,11 @@ export default function RootLayout() {
  * ============================================================================
  * ESTILOS
  * ============================================================================
+ *
+ * Stack ocupa todo el espacio disponible.
+ *
+ * AppTabs queda fuera del Stack para evitar
+ * tapar contenido de las pantallas.
  */
 const styles = StyleSheet.create({
   app: {
@@ -260,6 +457,7 @@ const styles = StyleSheet.create({
 
   loadingTitle: {
     fontSize: 28,
+
     fontWeight: "700",
 
     marginBottom: 8,
@@ -269,6 +467,7 @@ const styles = StyleSheet.create({
     maxWidth: 420,
 
     fontSize: 15,
+
     lineHeight: 22,
 
     textAlign: "center",
@@ -276,6 +475,7 @@ const styles = StyleSheet.create({
 
   errorTitle: {
     fontSize: 20,
+
     fontWeight: "700",
 
     textAlign: "center",

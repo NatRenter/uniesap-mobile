@@ -9,9 +9,9 @@ import { Screen } from "@/components/ui/Screen";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
-import { getCompanyById } from "@/data/companies";
 import { getFormById } from "@/data/forms";
-import { getPropertyById } from "@/data/properties";
+import { getCompanyById } from "@/repositories/companyRepository";
+import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 

@@ -10,10 +10,11 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getCompanyById } from "@/data/companies";
 import { getFormsByIds } from "@/data/forms";
 import { getInspectionsByPropertyId } from "@/data/inspections";
-import { getPropertyById } from "@/data/properties";
+
+import { getCompanyById } from "@/repositories/companyRepository";
+import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
@@ -164,14 +165,12 @@ export default function PropertyDetailsScreen() {
                 },
               })
             }
-
             /*
              * Conservamos visible el nombre de la empresa
              * para evitar perder el contexto.
              */
             contextLabel={company.name}
             contextColor={company.branding.primaryColor}
-
             /*
              * El inmueble es la identidad principal
              * de esta pantalla.

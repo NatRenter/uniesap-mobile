@@ -9,9 +9,9 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getCompanyById } from "@/data/companies";
 import { getInspectionsByPropertyId } from "@/data/inspections";
-import { getPropertiesByCompanyId } from "@/data/properties";
+import { getCompanyById } from "@/repositories/companyRepository";
+import { getPropertiesByCompanyId } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 

@@ -16,6 +16,8 @@ import { CompanyColors, FontSize, Radius, Spacing } from "@/constants/theme";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useResponsive } from "@/hooks/useResponsive";
 
+import { createCompany } from "@/repositories/companyRepository";
+
 export default function NewCompanyScreen() {
   const { colors } = useAppTheme();
 
@@ -53,6 +55,15 @@ export default function NewCompanyScreen() {
    */
   const [companyColor, setCompanyColor] = useState("#F97316");
   const [customColor, setCustomColor] = useState("#F97316");
+
+  /*
+   * Estados del guardado real.
+   *
+   * saving evita pulsaciones duplicadas.
+   * saveError muestra una explicación sencilla si la persistencia falla.
+   */
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   /* ---------------------------------------------------------------------- */
   /*                           VISTA PREVIA                                 */
@@ -102,16 +113,107 @@ export default function NewCompanyScreen() {
   /*                               GUARDADO                                 */
   /* ---------------------------------------------------------------------- */
 
-  const handleSave = () => {
+  const handleSave = async () => {
     /*
-     * PROTOTIPO VISUAL
+     * ======================================================================
+     * VALIDACIÓN
+     * ======================================================================
      *
-     * Todavía no persistimos la empresa.
+     * Company requiere:
      *
-     * Más adelante este será el punto donde conectaremos
-     * el formulario con nuestra capa de datos/servicios.
+     * - nombre comercial;
+     * - estado;
+     * - municipio o ciudad.
+     *
+     * Razón social continúa siendo opcional en la interfaz.
+     * Si no se captura, utilizamos temporalmente el nombre comercial.
      */
-    router.navigate("/empresas");
+    const normalizedName = commercialName.trim();
+    const normalizedState = state.trim();
+    const normalizedCity = city.trim();
+
+    if (!normalizedName || !normalizedState || !normalizedCity) {
+      setSaveError(
+        "Completa el nombre comercial, el estado y el municipio o ciudad.",
+      );
+
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      /*
+       * ====================================================================
+       * GUARDAR EMPRESA
+       * ====================================================================
+       *
+       * createCompany():
+       *
+       * 1. genera un ID estable;
+       * 2. actualiza CompanyRepository;
+       * 3. persiste en SQLite o localStorage;
+       * 4. asigna createdAt y updatedAt.
+       */
+      const company = await createCompany({
+        name: normalizedName,
+
+        legalName: legalName.trim() || normalizedName,
+
+        ...(rfc.trim()
+          ? {
+              rfc: rfc.trim().toUpperCase(),
+            }
+          : {}),
+
+        state: normalizedState,
+        city: normalizedCity,
+
+        ...(phone.trim()
+          ? {
+              phone: phone.trim(),
+            }
+          : {}),
+
+        ...(email.trim()
+          ? {
+              email: email.trim().toLowerCase(),
+            }
+          : {}),
+
+        branding: {
+          primaryColor: companyColor,
+        },
+
+        status: "active",
+      });
+
+      /*
+       * Abrimos directamente la empresa recién creada.
+       *
+       * Esto confirma visualmente que el registro ya existe
+       * y evita devolver al usuario a una pantalla genérica.
+       */
+      router.replace({
+        pathname: "/empresas/[id]",
+
+        params: {
+          id: company.id,
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No fue posible guardar la empresa.";
+
+      console.error("Error guardando empresa:", error);
+
+      setSaveError(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -583,7 +685,14 @@ export default function NewCompanyScreen() {
 
           <View style={[styles.actions, !isPhone && styles.actionsWide]}>
             <View style={styles.actionButton}>
-              <AppButton onPress={handleSave}>Guardar empresa</AppButton>
+              <AppButton
+                onPress={() => {
+                  void handleSave();
+                }}
+                disabled={saving}
+              >
+                {saving ? "Guardando..." : "Guardar empresa"}
+              </AppButton>
             </View>
 
             <View style={styles.actionButton}>
@@ -593,6 +702,19 @@ export default function NewCompanyScreen() {
             </View>
           </View>
 
+          {saveError ? (
+            <Text
+              style={[
+                styles.saveError,
+                {
+                  color: colors.error,
+                },
+              ]}
+            >
+              {saveError}
+            </Text>
+          ) : null}
+
           <Text
             style={[
               styles.prototypeNotice,
@@ -601,7 +723,8 @@ export default function NewCompanyScreen() {
               },
             ]}
           >
-            Prototipo visual: los datos todavía no se almacenan.
+            La empresa se guardará localmente y permanecerá disponible al
+            reiniciar UNIESAP.
           </Text>
         </ResponsiveContainer>
       </ScrollView>
@@ -1176,6 +1299,16 @@ const styles = StyleSheet.create({
 
   actionButton: {
     minWidth: 200,
+  },
+
+  saveError: {
+    textAlign: "center",
+
+    fontSize: FontSize.small,
+
+    lineHeight: 20,
+
+    marginTop: Spacing.lg,
   },
 
   prototypeNotice: {

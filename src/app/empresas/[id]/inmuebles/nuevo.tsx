@@ -15,6 +15,9 @@ import { FontSize, Spacing } from "@/constants/theme";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useResponsive } from "@/hooks/useResponsive";
 
+import { getCompanyById } from "@/repositories/companyRepository";
+import { createProperty } from "@/repositories/propertyRepository";
+
 export default function NewPropertyScreen() {
   /*
    * Colores globales de la aplicación.
@@ -44,6 +47,14 @@ export default function NewPropertyScreen() {
     id: string;
   }>();
 
+  /*
+   * Recuperamos la empresa real desde CompanyRepository.
+   *
+   * Esto también protege la FOREIGN KEY de SQLite:
+   * nunca intentamos registrar un inmueble para una empresa inexistente.
+   */
+  const company = id ? getCompanyById(id) : undefined;
+
   /* ---------------------------------------------------------------------- */
   /*                              FORMULARIO                                */
   /* ---------------------------------------------------------------------- */
@@ -56,33 +67,163 @@ export default function NewPropertyScreen() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
 
+  /*
+   * Estado del guardado real.
+   *
+   * saving evita pulsaciones duplicadas.
+   * saveError permite explicar fallos de validación o persistencia.
+   */
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   /* ---------------------------------------------------------------------- */
   /*                                GUARDADO                                */
   /* ---------------------------------------------------------------------- */
 
-  const handleSave = () => {
+  const handleSave = async () => {
     /*
-     * PROTOTIPO VISUAL
-     *
-     * Todavía no almacenamos físicamente
-     * el nuevo inmueble.
-     *
-     * Más adelante este será el punto donde
-     * conectemos algo similar a:
-     *
-     * PropertyService.create(...)
-     *
-     * Por ahora conservamos el comportamiento:
-     * volver al listado de inmuebles.
+     * ======================================================================
+     * VALIDAR EMPRESA
+     * ======================================================================
      */
-    router.replace({
-      pathname: "/empresas/[id]/inmuebles",
+    if (!company) {
+      setSaveError(
+        "La empresa seleccionada no existe o ya no está disponible.",
+      );
 
-      params: {
-        id,
-      },
-    });
+      return;
+    }
+
+    /*
+     * ======================================================================
+     * VALIDAR CAMPOS OBLIGATORIOS
+     * ======================================================================
+     */
+    const normalizedName = name.trim();
+    const normalizedType = type.trim();
+    const normalizedCity = city.trim();
+    const normalizedState = state.trim();
+
+    if (
+      !normalizedName ||
+      !normalizedType ||
+      !normalizedCity ||
+      !normalizedState
+    ) {
+      setSaveError("Completa el nombre, tipo de inmueble, municipio y estado.");
+
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      /*
+       * ====================================================================
+       * CREAR INMUEBLE
+       * ====================================================================
+       *
+       * createProperty:
+       *
+       * 1. genera el ID;
+       * 2. relaciona el inmueble con company.id;
+       * 3. guarda en PropertyRepository;
+       * 4. persiste en SQLite o localStorage;
+       * 5. agrega createdAt y updatedAt.
+       *
+       * workers y formIds empiezan vacíos porque esta pantalla
+       * todavía no administra esas configuraciones.
+       */
+      const property = await createProperty({
+        companyId: company.id,
+
+        name: normalizedName,
+        type: normalizedType,
+
+        state: normalizedState,
+        city: normalizedCity,
+
+        ...(street.trim()
+          ? {
+              address: street.trim(),
+            }
+          : {}),
+
+        workers: 0,
+        formIds: [],
+
+        status: "active",
+      });
+
+      /*
+       * Abrimos directamente el detalle del inmueble recién creado.
+       *
+       * Así el usuario confirma que el registro fue creado
+       * y puede continuar configurándolo.
+       */
+      router.replace({
+        pathname: "/empresas/[id]/inmuebles/[propertyId]",
+
+        params: {
+          id: company.id,
+          propertyId: property.id,
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No fue posible guardar el inmueble.";
+
+      console.error("Error guardando inmueble:", error);
+
+      setSaveError(message);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  /*
+   * Si la ruta apunta a una empresa que no existe,
+   * mostramos un estado controlado y evitamos intentar guardar.
+   */
+  if (!company) {
+    return (
+      <Screen padded={false}>
+        <ResponsiveContainer>
+          <View style={styles.notFoundContainer}>
+            <Text
+              style={[
+                styles.notFoundTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Empresa no encontrada
+            </Text>
+
+            <Text
+              style={[
+                styles.notFoundDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              No es posible registrar un inmueble porque la empresa solicitada
+              no existe o ya no está disponible.
+            </Text>
+
+            <AppButton onPress={() => router.replace("/empresas")}>
+              Volver a Empresas
+            </AppButton>
+          </View>
+        </ResponsiveContainer>
+      </Screen>
+    );
+  }
 
   return (
     <Screen padded={false}>
@@ -141,7 +282,8 @@ export default function NewPropertyScreen() {
                 },
               ]}
             >
-              Registra una sucursal, centro de trabajo o instalación.
+              Registra una sucursal, centro de trabajo o instalación para{" "}
+              {company.name}.
             </Text>
           </View>
 
@@ -308,7 +450,14 @@ export default function NewPropertyScreen() {
 
           <View style={[styles.actions, !isPhone && styles.actionsWide]}>
             <View style={styles.actionButton}>
-              <AppButton onPress={handleSave}>Guardar inmueble</AppButton>
+              <AppButton
+                onPress={() => {
+                  void handleSave();
+                }}
+                disabled={saving}
+              >
+                {saving ? "Guardando..." : "Guardar inmueble"}
+              </AppButton>
             </View>
 
             <View style={styles.actionButton}>
@@ -319,8 +468,21 @@ export default function NewPropertyScreen() {
           </View>
 
           {/* ============================================================ */}
-          {/* AVISO                                                       */}
+          {/* ESTADO DEL GUARDADO                                           */}
           {/* ============================================================ */}
+
+          {saveError ? (
+            <Text
+              style={[
+                styles.saveError,
+                {
+                  color: colors.error,
+                },
+              ]}
+            >
+              {saveError}
+            </Text>
+          ) : null}
 
           <Text
             style={[
@@ -330,7 +492,8 @@ export default function NewPropertyScreen() {
               },
             ]}
           >
-            Prototipo visual: los datos todavía no se almacenan.
+            El inmueble se guardará localmente y permanecerá disponible después
+            de reiniciar UNIESAP.
           </Text>
         </ResponsiveContainer>
       </ScrollView>
@@ -523,6 +686,32 @@ const styles = StyleSheet.create({
 
   actionButton: {
     minWidth: 200,
+  },
+
+  notFoundContainer: {
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+    paddingTop: Spacing.xxxl,
+  },
+
+  notFoundTitle: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+  },
+
+  notFoundDescription: {
+    fontSize: FontSize.body,
+    lineHeight: 24,
+    marginBottom: Spacing.lg,
+  },
+
+  saveError: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+    textAlign: "center",
+    marginTop: Spacing.lg,
   },
 
   prototypeNotice: {

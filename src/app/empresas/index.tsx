@@ -10,8 +10,8 @@ import { Screen } from "@/components/ui/Screen";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
-import { companies } from "@/data/companies";
-import { getPropertiesByCompanyId } from "@/data/properties";
+import { getCompanies } from "@/repositories/companyRepository";
+import { getPropertiesByCompanyId } from "@/repositories/propertyRepository";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 
@@ -39,6 +39,18 @@ import { getInspectionsByCompanyId } from "@/repositories/inspectionRepository";
  */
 export default function CompaniesScreen() {
   const { colors } = useAppTheme();
+
+  /*
+   * ==========================================================================
+   * EMPRESAS DISPONIBLES
+   * ==========================================================================
+   *
+   * La pantalla ya no consume directamente src/data/companies.ts.
+   *
+   * Las empresas se obtienen desde CompanyRepository, que funciona como
+   * fuente central de datos después de la hidratación inicial.
+   */
+  const companies = getCompanies();
 
   return (
     <Screen padded={false}>
