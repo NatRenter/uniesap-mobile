@@ -10,57 +10,33 @@ import { Screen } from "@/components/ui/Screen";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
+import { companies } from "@/data/companies";
+import { getPropertiesByCompanyId } from "@/data/properties";
+
 import { useAppTheme } from "@/hooks/useAppTheme";
+
+import { getInspectionsByCompanyId } from "@/repositories/inspectionRepository";
 
 /*
  * ============================================================================
  * LISTADO DE EMPRESAS
  * ============================================================================
  *
- * Empresa e inmueble son conceptos distintos.
+ * Esta pantalla ya no mantiene una copia local de las empresas.
  *
- * Esta tarjeta resume:
+ * Ahora utiliza:
  *
- * - cantidad de inmuebles registrados;
- * - inspecciones pendientes;
- * - inspecciones realizadas.
+ * companies
+ *   → información propia de la empresa
  *
- * Al entrar a una empresa, la siguiente pantalla será responsable
- * de mostrar sus inmuebles.
+ * getPropertiesByCompanyId()
+ *   → cantidad real de inmuebles
+ *
+ * getInspectionsByCompanyId()
+ *   → estados reales de las inspecciones
+ *
+ * Empresa e inmueble continúan siendo entidades diferentes.
  */
-
-const companies = [
-  {
-    id: "1",
-    name: "AutoZone",
-    properties: 3,
-    pendingInspections: 2,
-    completedInspections: 10,
-    color: "#F97316",
-    initials: "AZ",
-  },
-
-  {
-    id: "2",
-    name: "CEDIS",
-    properties: 1,
-    pendingInspections: 1,
-    completedInspections: 7,
-    color: "#EF4444",
-    initials: "CE",
-  },
-
-  {
-    id: "3",
-    name: "Empresa Demo",
-    properties: 2,
-    pendingInspections: 2,
-    completedInspections: 3,
-    color: "#3B82F6",
-    initials: "ED",
-  },
-];
-
 export default function CompaniesScreen() {
   const { colors } = useAppTheme();
 
@@ -119,9 +95,41 @@ export default function CompaniesScreen() {
             desktopColumns={3}
             gap={Spacing.md}
           >
-            {companies.map((company) => (
-              <CompanyCard key={company.id} {...company} />
-            ))}
+            {companies.map((company) => {
+              /*
+               * Las métricas se calculan al renderizar
+               * utilizando las fuentes reales actuales.
+               */
+              const properties = getPropertiesByCompanyId(company.id);
+
+              const inspections = getInspectionsByCompanyId(company.id);
+
+              const pendingInspections = inspections.filter(
+                (inspection) => inspection.status === "draft",
+              ).length;
+
+              const inProgressInspections = inspections.filter(
+                (inspection) => inspection.status === "in_progress",
+              ).length;
+
+              const completedInspections = inspections.filter(
+                (inspection) => inspection.status === "completed",
+              ).length;
+
+              return (
+                <CompanyCard
+                  key={company.id}
+                  id={company.id}
+                  name={company.name}
+                  properties={properties.length}
+                  pendingInspections={pendingInspections}
+                  inProgressInspections={inProgressInspections}
+                  completedInspections={completedInspections}
+                  color={company.branding.primaryColor}
+                  initials={createCompanyInitials(company.name)}
+                />
+              );
+            })}
           </ResponsiveGrid>
         </ResponsiveContainer>
       </ScrollView>
@@ -130,16 +138,25 @@ export default function CompaniesScreen() {
 }
 
 /*
- * Tarjeta de una empresa.
+ * ============================================================================
+ * TARJETA DE EMPRESA
+ * ============================================================================
  *
- * No muestra una ubicación única porque una empresa puede tener
- * varios inmuebles en diferentes ciudades.
+ * No guarda contadores propios.
+ *
+ * Recibe los valores ya calculados desde:
+ *
+ * - inmuebles;
+ * - inspecciones pendientes;
+ * - inspecciones en proceso;
+ * - inspecciones completadas.
  */
 function CompanyCard({
   id,
   name,
   properties,
   pendingInspections,
+  inProgressInspections,
   completedInspections,
   color,
   initials,
@@ -148,6 +165,7 @@ function CompanyCard({
   name: string;
   properties: number;
   pendingInspections: number;
+  inProgressInspections: number;
   completedInspections: number;
   color: string;
   initials: string;
@@ -169,6 +187,8 @@ function CompanyCard({
       })}
     >
       <AppCard padded={false} style={styles.companyCard}>
+        {/* COLOR REPRESENTATIVO */}
+
         <View
           style={[
             styles.accent,
@@ -179,6 +199,8 @@ function CompanyCard({
         />
 
         <View style={styles.companyContent}>
+          {/* IDENTIDAD */}
+
           <View
             style={[
               styles.companyLogo,
@@ -198,6 +220,8 @@ function CompanyCard({
               {initials}
             </Text>
           </View>
+
+          {/* INFORMACIÓN */}
 
           <View style={styles.companyInformation}>
             <Text
@@ -223,6 +247,10 @@ function CompanyCard({
               {properties === 1 ? "" : "s"}
             </Text>
 
+            {/* ========================================================== */}
+            {/* ESTADOS REALES                                             */}
+            {/* ========================================================== */}
+
             <View style={styles.companyStats}>
               <StatusStat
                 value={pendingInspections}
@@ -230,13 +258,10 @@ function CompanyCard({
                 color={colors.warning}
               />
 
-              <View
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: colors.border,
-                  },
-                ]}
+              <StatusStat
+                value={inProgressInspections}
+                label="en proceso"
+                color={colors.primary}
               />
 
               <StatusStat
@@ -264,8 +289,7 @@ function CompanyCard({
 }
 
 /*
- * Métrica pequeña para diferenciar visualmente
- * inspecciones pendientes y realizadas.
+ * Métrica pequeña utilizada dentro de la tarjeta.
  */
 function StatusStat({
   value,
@@ -303,6 +327,31 @@ function StatusStat({
 
 /*
  * ============================================================================
+ * INICIALES
+ * ============================================================================
+ *
+ * Ejemplos:
+ *
+ * AutoZone      → AU
+ * CEDIS         → CE
+ * Empresa Demo  → ED
+ */
+function createCompanyInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) {
+    return "EM";
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
+/*
+ * ============================================================================
  * ESTILOS
  * ============================================================================
  *
@@ -311,6 +360,8 @@ function StatusStat({
  * teléfono  → 1 columna
  * tablet    → 2 columnas
  * web       → 3 columnas
+ *
+ * Los estados usan flexWrap para no desbordar en pantallas pequeñas.
  */
 const styles = StyleSheet.create({
   scrollContent: {
@@ -350,7 +401,7 @@ const styles = StyleSheet.create({
   },
 
   companyContent: {
-    minHeight: 118,
+    minHeight: 126,
 
     flexDirection: "row",
     alignItems: "center",
@@ -400,6 +451,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
+
+    columnGap: Spacing.sm,
+    rowGap: Spacing.xs,
   },
 
   statusStat: {
@@ -419,15 +473,6 @@ const styles = StyleSheet.create({
   stat: {
     fontSize: FontSize.caption,
     fontWeight: "600",
-  },
-
-  dot: {
-    width: 4,
-    height: 4,
-
-    borderRadius: Radius.full,
-
-    marginHorizontal: Spacing.sm,
   },
 
   arrow: {

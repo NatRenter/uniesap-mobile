@@ -49,6 +49,10 @@ type InspectionRow = {
 
   date: string;
 
+  created_at: string | null;
+
+  updated_at: string | null;
+
   status: "draft" | "in_progress" | "completed";
 
   sync_status: "local" | "pending" | "syncing" | "synced" | "error";
@@ -104,6 +108,8 @@ export async function insertInspection(inspection: Inspection) {
           form_id,
           inspector,
           date,
+          created_at,
+          updated_at,
           status,
           sync_status,
           sync_operation_id,
@@ -115,7 +121,7 @@ export async function insertInspection(inspection: Inspection) {
           last_sync_error
         )
         VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         );
         `,
       inspection.id,
@@ -124,6 +130,8 @@ export async function insertInspection(inspection: Inspection) {
       inspection.formId,
       inspection.inspector,
       inspection.date,
+      inspection.createdAt,
+      inspection.updatedAt,
       inspection.status,
       inspection.integration?.syncStatus ?? "local",
       inspection.integration?.syncOperationId ?? null,
@@ -202,6 +210,8 @@ export async function replaceInspection(inspection: Inspection) {
           form_id = ?,
           inspector = ?,
           date = ?,
+          created_at = ?,
+          updated_at = ?,
           status = ?,
           sync_status = ?,
           sync_operation_id = ?,
@@ -218,6 +228,8 @@ export async function replaceInspection(inspection: Inspection) {
       inspection.formId,
       inspection.inspector,
       inspection.date,
+      inspection.createdAt,
+      inspection.updatedAt,
       inspection.status,
       inspection.integration?.syncStatus ?? "local",
       inspection.integration?.syncOperationId ?? null,
@@ -327,7 +339,7 @@ export async function selectInspectionsByCompanyId(
       SELECT *
       FROM inspections
       WHERE company_id = ?
-      ORDER BY date DESC;
+      ORDER BY updated_at DESC, date DESC;
       `,
     companyId,
   );
@@ -345,7 +357,7 @@ export async function selectInspectionsByPropertyId(
       SELECT *
       FROM inspections
       WHERE property_id = ?
-      ORDER BY date DESC;
+      ORDER BY updated_at DESC, date DESC;
       `,
     propertyId,
   );
@@ -360,7 +372,7 @@ export async function selectAllInspections(): Promise<Inspection[]> {
     `
       SELECT *
       FROM inspections
-      ORDER BY date DESC;
+      ORDER BY updated_at DESC, date DESC;
       `,
   );
 
@@ -443,6 +455,17 @@ async function hydrateInspection(row: InspectionRow): Promise<Inspection> {
 
     date: row.date,
 
+    /*
+     * Bases antiguas pueden contener null durante una migración incompleta.
+     * Usamos date como respaldo seguro.
+     */
+    createdAt: normalizeInspectionTimestamp(row.created_at, row.date),
+
+    updatedAt: normalizeInspectionTimestamp(
+      row.updated_at,
+      row.created_at ?? row.date,
+    ),
+
     status: row.status,
 
     responses,
@@ -493,6 +516,29 @@ async function hydrateInspection(row: InspectionRow): Promise<Inspection> {
   };
 
   return inspection;
+}
+
+/*
+ * ============================================================================
+ * NORMALIZAR TIMESTAMP
+ * ============================================================================
+ *
+ * Protege lecturas provenientes de bases antiguas.
+ *
+ * Si el valor ya es ISO lo conservamos.
+ * Si solamente existe YYYY-MM-DD agregamos hora UTC.
+ */
+function normalizeInspectionTimestamp(
+  value: string | null,
+  fallback: string,
+): string {
+  const source = value?.trim() || fallback.trim();
+
+  if (source.includes("T")) {
+    return source;
+  }
+
+  return `${source}T00:00:00.000Z`;
 }
 
 /*

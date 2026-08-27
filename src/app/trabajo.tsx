@@ -50,8 +50,15 @@ export default function WorkScreen() {
   /*
    * El repositorio ya fue hidratado por RootLayout.
    */
+  /*
+   * Ordenamos por actividad real.
+   *
+   * updatedAt cambia cada vez que InspectionRepository
+   * guarda una modificación sobre la inspección.
+   */
   const inspections = [...getInspections()].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    (a, b) =>
+      getInspectionActivityTimestamp(b) - getInspectionActivityTimestamp(a),
   );
 
   const summary = createWorkSummary(inspections);
@@ -289,7 +296,7 @@ function WorkItem({ inspection }: { inspection: Inspection }) {
               ]}
             >
               {company?.name ?? "Empresa no disponible"} ·{" "}
-              {formatDate(inspection.date)}
+              {formatActivityDate(inspection.updatedAt)}
             </Text>
           </View>
 
@@ -467,6 +474,64 @@ function createWorkSummary(inspections: Inspection[]) {
       (inspection) => inspection.integration?.syncStatus === "error",
     ).length,
   };
+}
+
+/*
+ * Convierte updatedAt en timestamp para ordenar.
+ *
+ * createdAt/date quedan como respaldo por compatibilidad.
+ */
+function getInspectionActivityTimestamp(inspection: Inspection): number {
+  const candidates = [
+    inspection.updatedAt,
+    inspection.createdAt,
+    inspection.date,
+  ];
+
+  for (const candidate of candidates) {
+    const timestamp = new Date(candidate).getTime();
+
+    if (!Number.isNaN(timestamp)) {
+      return timestamp;
+    }
+  }
+
+  return 0;
+}
+
+/*
+ * Muestra cuándo se modificó realmente la inspección.
+ */
+function formatActivityDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return formatDate(value);
+  }
+
+  const today = new Date();
+
+  const sameDay =
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate();
+
+  const time = date.toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  if (sameDay) {
+    return `Actualizada hoy, ${time}`;
+  }
+
+  const day = date.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  return `Actualizada ${day}, ${time}`;
 }
 
 function formatDate(value: string): string {

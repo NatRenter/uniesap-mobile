@@ -43,7 +43,10 @@ import type { UserProfile } from "@/types/userProfile";
  * pero ya no está fija en AutoZone.
  *
  * La empresa activa se obtiene de la inspección pendiente o en proceso
- * con actividad más reciente.
+ * con updatedAt más reciente.
+ *
+ * De esta forma no importa cuál se creó primero:
+ * la última inspección realmente modificada toma el contexto activo.
  *
  * Si no existe ninguna inspección activa:
  *
@@ -598,7 +601,7 @@ function ActiveCompanyCard({
                 },
               ]}
             >
-              · {formatDate(inspection.date)}
+              · {formatActivityDate(inspection.updatedAt)}
             </Text>
           </View>
         </View>
@@ -765,9 +768,10 @@ function isActiveInspection(inspection: Inspection): boolean {
 /*
  * Obtiene la inspección activa más reciente.
  *
- * Actualmente Inspection dispone de date como referencia temporal.
- * Cuando añadamos updatedAt, podremos utilizar esa marca
- * para reflejar aún mejor la actividad más reciente.
+ * updatedAt representa la última modificación real.
+ *
+ * Si por compatibilidad llegara un registro antiguo,
+ * getInspectionTimestamp() conserva fallback a createdAt/date.
  */
 function getActiveInspection(
   inspections: Inspection[],
@@ -786,9 +790,21 @@ function compareInspectionActivity(a: Inspection, b: Inspection): number {
 }
 
 function getInspectionTimestamp(inspection: Inspection): number {
-  const timestamp = new Date(inspection.date).getTime();
+  const candidates = [
+    inspection.updatedAt,
+    inspection.createdAt,
+    inspection.date,
+  ];
 
-  return Number.isNaN(timestamp) ? 0 : timestamp;
+  for (const candidate of candidates) {
+    const timestamp = new Date(candidate).getTime();
+
+    if (!Number.isNaN(timestamp)) {
+      return timestamp;
+    }
+  }
+
+  return 0;
 }
 
 /*
@@ -993,7 +1009,8 @@ function RecentInspection({ inspection }: { inspection: Inspection }) {
             },
           ]}
         >
-          {property?.name ?? "Inmueble"} · {formatDate(inspection.date)}
+          {property?.name ?? "Inmueble"} ·{" "}
+          {formatActivityDate(inspection.updatedAt)}
         </Text>
       </View>
 
@@ -1047,6 +1064,52 @@ function getReadableInspectionStatus(inspection: Inspection) {
 
     color: "#F59E0B",
   };
+}
+
+/*
+ * ============================================================================
+ * FORMATEAR ÚLTIMA ACTIVIDAD
+ * ============================================================================
+ *
+ * Dashboard usa updatedAt para mostrar cuándo se modificó
+ * realmente una inspección.
+ *
+ * Hoy:
+ *   Hoy, 10:25
+ *
+ * Otro día:
+ *   27 ago 2026, 10:25
+ */
+function formatActivityDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return formatDate(value);
+  }
+
+  const today = new Date();
+
+  const sameDay =
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate();
+
+  const time = date.toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  if (sameDay) {
+    return `Hoy, ${time}`;
+  }
+
+  const day = date.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  return `${day}, ${time}`;
 }
 
 function formatDate(value: string): string {

@@ -57,7 +57,26 @@ export type Inspection = {
 
   inspector: string;
 
+  /*
+   * Fecha general de la inspección.
+   *
+   * Se conserva por compatibilidad con pantallas,
+   * reportes y datos existentes.
+   */
   date: string;
+
+  /*
+   * Momento exacto en que se creó el registro.
+   */
+  createdAt: string;
+
+  /*
+   * Momento exacto de la última modificación.
+   *
+   * Dashboard y Trabajo utilizan este campo
+   * para ordenar por actividad real.
+   */
+  updatedAt: string;
 
   status: InspectionStatus;
 

@@ -14,6 +14,9 @@ import type { Inspection } from "@/types/inspection";
  *
  * No deben confundirse con datos obligatorios del sistema.
  * Son únicamente información inicial de desarrollo.
+ *
+ * createdAt y updatedAt se incluyen para que el orden por actividad
+ * funcione también con estos registros de prueba.
  */
 
 export const initialInspections: Inspection[] = [
@@ -29,6 +32,10 @@ export const initialInspections: Inspection[] = [
     inspector: "Alexis",
 
     date: "2026-08-10",
+
+    createdAt: "2026-08-10T09:00:00.000Z",
+
+    updatedAt: "2026-08-10T10:30:00.000Z",
 
     status: "completed",
 
@@ -78,6 +85,10 @@ export const initialInspections: Inspection[] = [
 
     date: "2026-08-12",
 
+    createdAt: "2026-08-12T09:00:00.000Z",
+
+    updatedAt: "2026-08-12T11:15:00.000Z",
+
     status: "in_progress",
 
     responses: [
@@ -108,6 +119,10 @@ export const initialInspections: Inspection[] = [
 
     date: "2026-08-13",
 
+    createdAt: "2026-08-13T09:00:00.000Z",
+
+    updatedAt: "2026-08-13T09:00:00.000Z",
+
     status: "draft",
 
     responses: [],
@@ -131,6 +146,10 @@ export const initialInspections: Inspection[] = [
     inspector: "Alexis",
 
     date: "2026-08-14",
+
+    createdAt: "2026-08-14T09:00:00.000Z",
+
+    updatedAt: "2026-08-14T12:00:00.000Z",
 
     status: "completed",
 

@@ -45,6 +45,15 @@ export async function runDatabaseMigrations() {
    * ==========================================================================
    * INSPECCIONES
    * ==========================================================================
+   *
+   * created_at:
+   *   momento en que nació la inspección.
+   *
+   * updated_at:
+   *   última modificación real del registro.
+   *
+   * Estos campos permiten que Dashboard y Trabajo
+   * ordenen por actividad reciente y no solo por fecha.
    */
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS inspections (
@@ -54,6 +63,8 @@ export async function runDatabaseMigrations() {
       form_id TEXT NOT NULL,
       inspector TEXT NOT NULL,
       date TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
       status TEXT NOT NULL,
       sync_status TEXT NOT NULL,
       sync_operation_id TEXT,
@@ -66,6 +77,10 @@ export async function runDatabaseMigrations() {
     );
   `);
 
+  await addColumnIfMissing("inspections", "created_at", "TEXT");
+
+  await addColumnIfMissing("inspections", "updated_at", "TEXT");
+
   await addColumnIfMissing("inspections", "sync_operation_id", "TEXT");
 
   await addColumnIfMissing(
@@ -73,6 +88,52 @@ export async function runDatabaseMigrations() {
     "sync_attempt",
     "INTEGER NOT NULL DEFAULT 0",
   );
+
+  /*
+   * ==========================================================================
+   * BACKFILL DE FECHAS DE INSPECCIONES ANTIGUAS
+   * ==========================================================================
+   *
+   * Instalaciones existentes no tenían created_at ni updated_at.
+   *
+   * Utilizamos `date` como base para no perder compatibilidad:
+   *
+   * 2026-08-20
+   *      ↓
+   * 2026-08-20T00:00:00.000Z
+   *
+   * Si date ya contiene hora, se conserva.
+   */
+  await database.execAsync(`
+    UPDATE inspections
+    SET created_at =
+      CASE
+        WHEN created_at IS NOT NULL AND TRIM(created_at) <> ''
+          THEN created_at
+
+        WHEN INSTR(date, 'T') > 0
+          THEN date
+
+        ELSE date || 'T00:00:00.000Z'
+      END;
+  `);
+
+  await database.execAsync(`
+    UPDATE inspections
+    SET updated_at =
+      CASE
+        WHEN updated_at IS NOT NULL AND TRIM(updated_at) <> ''
+          THEN updated_at
+
+        WHEN created_at IS NOT NULL AND TRIM(created_at) <> ''
+          THEN created_at
+
+        WHEN INSTR(date, 'T') > 0
+          THEN date
+
+        ELSE date || 'T00:00:00.000Z'
+      END;
+  `);
 
   /*
    * ==========================================================================
@@ -199,6 +260,15 @@ export async function runDatabaseMigrations() {
     CREATE INDEX IF NOT EXISTS
       idx_inspections_company_id
     ON inspections(company_id);
+  `);
+
+  /*
+   * Facilita consultas y ordenamientos por actividad reciente.
+   */
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
+      idx_inspections_updated_at
+    ON inspections(updated_at);
   `);
 
   await database.execAsync(`

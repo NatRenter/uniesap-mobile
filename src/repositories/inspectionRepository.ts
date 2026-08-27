@@ -210,6 +210,8 @@ export function getInspectionsByPropertyId(propertyId: string): Inspection[] {
 export async function createInspection(
   input: CreateInspectionInput,
 ): Promise<Inspection> {
+  const now = new Date().toISOString();
+
   const inspection: Inspection = {
     id: createInspectionId(),
 
@@ -221,7 +223,16 @@ export async function createInspection(
 
     inspector: input.inspector,
 
-    date: new Date().toISOString(),
+    date: now,
+
+    /*
+     * createdAt nunca cambia después de crear el registro.
+     *
+     * updatedAt sí cambiará en cada updateInspection().
+     */
+    createdAt: now,
+
+    updatedAt: now,
 
     status: input.status,
 
@@ -288,7 +299,19 @@ export async function updateInspection(
 
   const currentInspection = cloneInspection(inspections[inspectionIndex]);
 
-  const updatedInspection = mergeInspectionChanges(currentInspection, changes);
+  /*
+   * Toda modificación confirmada por el repositorio
+   * cuenta como nueva actividad sobre la inspección.
+   *
+   * No permitimos que un caller altere createdAt accidentalmente.
+   */
+  const updatedInspection = mergeInspectionChanges(currentInspection, {
+    ...changes,
+
+    createdAt: currentInspection.createdAt,
+
+    updatedAt: new Date().toISOString(),
+  });
 
   /*
    * Actualización optimista.
@@ -493,6 +516,11 @@ function mergeInspectionChanges(
     ...currentInspection,
 
     ...changes,
+
+    /*
+     * La fecha de creación es inmutable.
+     */
+    createdAt: currentInspection.createdAt,
 
     responses:
       changes.responses !== undefined
