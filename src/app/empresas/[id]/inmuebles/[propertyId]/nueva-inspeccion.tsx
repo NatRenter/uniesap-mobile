@@ -93,8 +93,16 @@ export default function NewInspectionScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ResponsiveContainer>
-          {/* NAVEGACIÓN */}
-
+          {/* ---------------------------------------------------------------------- */}
+          {/* NAVEGACIÓN CONTEXTUAL                                                   */}
+          {/* ---------------------------------------------------------------------- */}
+          {/*
+           * Regresa explícitamente al inmueble actual.
+           *
+           * No utilizamos router.back() porque queremos que la navegación
+           * sea predecible aunque el usuario haya llegado a esta pantalla
+           * desde otro punto de la aplicación.
+           */}
           <Pressable
             onPress={() =>
               router.navigate({
@@ -114,8 +122,9 @@ export default function NewInspectionScreen() {
                   color: colors.primary,
                 },
               ]}
+              numberOfLines={1}
             >
-              ‹ Inmueble
+              ‹ {property.name}
             </Text>
           </Pressable>
 

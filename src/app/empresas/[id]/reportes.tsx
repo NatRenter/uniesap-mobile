@@ -2,6 +2,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
 
+import { ContextHeader } from "@/components/navigation/ContextHeader";
+
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
@@ -111,11 +113,15 @@ export default function ReportsScreen() {
          */}
         <ResponsiveContainer>
           {/* ====================================================== */}
-          {/* NAVEGACIÓN */}
+          {/* NAVEGACIÓN CONTEXTUAL */}
           {/* ====================================================== */}
 
-          <Pressable
-            onPress={() =>
+          <ContextHeader
+            /*
+             * Reportes pertenece al detalle de la empresa.
+             */
+            backLabel={company.name}
+            onBack={() =>
               router.navigate({
                 pathname: "/empresas/[id]",
 
@@ -124,63 +130,11 @@ export default function ReportsScreen() {
                 },
               })
             }
-          >
-            <Text
-              style={[
-                styles.backText,
-                {
-                  color: colors.primary,
-                },
-              ]}
-            >
-              ‹ Empresa
-            </Text>
-          </Pressable>
-
-          {/* ====================================================== */}
-          {/* EMPRESA */}
-          {/* ====================================================== */}
-
-          <Text
-            style={[
-              styles.overline,
-              {
-                /*
-                 * Conservamos el color representativo
-                 * configurado para cada empresa.
-                 */
-                color: company.branding.primaryColor,
-              },
-            ]}
-          >
-            {company.name.toUpperCase()}
-          </Text>
-
-          {/* ====================================================== */}
-          {/* ENCABEZADO */}
-          {/* ====================================================== */}
-
-          <Text
-            style={[
-              styles.title,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Reportes
-          </Text>
-
-          <Text
-            style={[
-              styles.subtitle,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-          >
-            Consulta y genera reportes a partir de las inspecciones realizadas.
-          </Text>
+            contextLabel={company.name}
+            contextColor={company.branding.primaryColor}
+            title="Reportes"
+            subtitle="Consulta y genera reportes a partir de las inspecciones realizadas."
+          />
 
           {/* ====================================================== */}
           {/* RESUMEN */}

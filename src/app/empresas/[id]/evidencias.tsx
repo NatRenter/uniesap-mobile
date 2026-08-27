@@ -2,6 +2,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
 
+import { ContextHeader } from "@/components/navigation/ContextHeader";
+
 import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -114,11 +116,15 @@ export default function CompanyEvidencesScreen() {
          */}
         <ResponsiveContainer>
           {/* ====================================================== */}
-          {/* NAVEGACIÓN */}
+          {/* NAVEGACIÓN CONTEXTUAL */}
           {/* ====================================================== */}
 
-          <Pressable
-            onPress={() =>
+          <ContextHeader
+            /*
+             * Evidencias pertenece al detalle de la empresa.
+             */
+            backLabel={company.name}
+            onBack={() =>
               router.navigate({
                 pathname: "/empresas/[id]",
 
@@ -127,59 +133,11 @@ export default function CompanyEvidencesScreen() {
                 },
               })
             }
-          >
-            <Text
-              style={[
-                styles.backText,
-                {
-                  color: colors.primary,
-                },
-              ]}
-            >
-              ‹ Empresa
-            </Text>
-          </Pressable>
-
-          {/* ====================================================== */}
-          {/* EMPRESA */}
-          {/* ====================================================== */}
-
-          <Text
-            style={[
-              styles.overline,
-              {
-                /*
-                 * Utilizamos el color representativo
-                 * configurado para cada empresa.
-                 */
-                color: company.branding.primaryColor,
-              },
-            ]}
-          >
-            {company.name.toUpperCase()}
-          </Text>
-
-          <Text
-            style={[
-              styles.title,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Evidencias
-          </Text>
-
-          <Text
-            style={[
-              styles.subtitle,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-          >
-            Fotografías y documentos recopilados durante las inspecciones.
-          </Text>
+            contextLabel={company.name}
+            contextColor={company.branding.primaryColor}
+            title="Evidencias"
+            subtitle="Fotografías y documentos recopilados durante las inspecciones."
+          />
 
           {/* ====================================================== */}
           {/* RESUMEN */}

@@ -2,6 +2,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
 
+import { ContextHeader } from "@/components/navigation/ContextHeader";
+
 import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -115,11 +117,15 @@ export default function CompanyInspectionsScreen() {
          */}
         <ResponsiveContainer>
           {/* ====================================================== */}
-          {/* NAVEGACIÓN */}
+          {/* NAVEGACIÓN CONTEXTUAL */}
           {/* ====================================================== */}
 
-          <Pressable
-            onPress={() =>
+          <ContextHeader
+            /*
+             * Inspecciones pertenece al contexto de la empresa.
+             */
+            backLabel={company.name}
+            onBack={() =>
               router.navigate({
                 pathname: "/empresas/[id]",
 
@@ -128,63 +134,14 @@ export default function CompanyInspectionsScreen() {
                 },
               })
             }
-          >
-            <Text
-              style={[
-                styles.backText,
-                {
-                  color: colors.primary,
-                },
-              ]}
-            >
-              ‹ Empresa
-            </Text>
-          </Pressable>
-
-          {/* ====================================================== */}
-          {/* CONTEXTO DE EMPRESA */}
-          {/* ====================================================== */}
-
-          <Text
-            style={[
-              styles.overline,
-              {
-                /*
-                 * Conservamos el color representativo
-                 * definido para cada empresa.
-                 */
-                color: company.branding.primaryColor,
-              },
-            ]}
-          >
-            {company.name.toUpperCase()}
-          </Text>
-
-          {/* ====================================================== */}
-          {/* ENCABEZADO */}
-          {/* ====================================================== */}
-
-          <Text
-            style={[
-              styles.title,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Inspecciones
-          </Text>
-
-          <Text
-            style={[
-              styles.subtitle,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-          >
-            Consulta el historial de capturas realizadas para esta empresa.
-          </Text>
+            /*
+             * El nombre y color de la empresa permanecen visibles.
+             */
+            contextLabel={company.name}
+            contextColor={company.branding.primaryColor}
+            title="Inspecciones"
+            subtitle="Consulta el historial de capturas realizadas para esta empresa."
+          />
 
           {/* ====================================================== */}
           {/* RESUMEN */}

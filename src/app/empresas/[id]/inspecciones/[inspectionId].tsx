@@ -4,6 +4,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
 
+import { ContextHeader } from "@/components/navigation/ContextHeader";
+
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
@@ -166,7 +168,11 @@ export default function InspectionDetailsScreen() {
   /* ---------------------------------------------------------------------- */
 
   const handleRetrySync = async () => {
-    if (isRetrying || !form || !canRetrySync) {
+    if (
+      isRetrying ||
+      !form ||
+      !canRetrySync
+    ) {
       return;
     }
 
@@ -180,12 +186,23 @@ export default function InspectionDetailsScreen() {
        *
        * Esta pantalla únicamente solicita el reintento.
        */
-      const result = await syncInspection(inspection.id);
+      const result =
+        await syncInspection(
+          inspection.id,
+        );
 
-      if (result.status === "error") {
-        setRetryError(result.error);
+      if (
+        result.status ===
+        "error"
+      ) {
+        setRetryError(
+          result.error,
+        );
       } else {
-        console.log("Reintento de sincronización procesado:", result);
+        console.log(
+          "Reintento de sincronización procesado:",
+          result,
+        );
       }
 
       /*
@@ -193,13 +210,24 @@ export default function InspectionDetailsScreen() {
        * Forzamos un render para volver a leer la inspección
        * y mostrar synced/error/syncing según corresponda.
        */
-      setRefreshVersion((value) => value + 1);
+      setRefreshVersion(
+        (value) =>
+          value + 1,
+      );
     } catch (error) {
-      const message = getErrorMessage(error);
+      const message =
+        getErrorMessage(
+          error,
+        );
 
-      setRetryError(message);
+      setRetryError(
+        message,
+      );
 
-      setRefreshVersion((value) => value + 1);
+      setRefreshVersion(
+        (value) =>
+          value + 1,
+      );
     } finally {
       setIsRetrying(false);
     }
@@ -213,11 +241,16 @@ export default function InspectionDetailsScreen() {
       >
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÓN                                                   */}
+          {/* NAVEGACIÓN CONTEXTUAL                                        */}
           {/* ============================================================ */}
 
-          <Pressable
-            onPress={() =>
+          <ContextHeader
+            /*
+             * Una inspección se abre desde el listado de inspecciones.
+             * El destino anterior es explícito para no depender del historial.
+             */
+            backLabel="Inspecciones"
+            onBack={() =>
               router.navigate({
                 pathname: "/empresas/[id]/inspecciones",
 
@@ -226,70 +259,26 @@ export default function InspectionDetailsScreen() {
                 },
               })
             }
-          >
-            <Text
-              style={[
-                styles.backText,
-                {
-                  color: colors.primary,
-                },
-              ]}
-            >
-              ‹ Inspecciones
-            </Text>
-          </Pressable>
+
+            /*
+             * La empresa permanece visible como contexto superior.
+             */
+            contextLabel={company.name}
+            contextColor={company.branding.primaryColor}
+
+            /*
+             * El formulario identifica la inspección actual
+             * y el inmueble aparece como descripción.
+             */
+            title={form?.title ?? "Formulario no disponible"}
+            subtitle={property?.name ?? "Inmueble no disponible"}
+          />
 
           {/* ============================================================ */}
-          {/* ENCABEZADO                                                   */}
+          {/* ESTADOS                                                      */}
           {/* ============================================================ */}
-
-          <Text
-            style={[
-              styles.companyOverline,
-              {
-                color: company.branding.primaryColor,
-              },
-            ]}
-          >
-            {company.name.toUpperCase()}
-          </Text>
-
-          <Text
-            style={[
-              styles.overline,
-              {
-                color: colors.primary,
-              },
-            ]}
-          >
-            INSPECCIÓN
-          </Text>
-
-          <Text
-            style={[
-              styles.title,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            {form?.title ?? "Formulario no disponible"}
-          </Text>
-
-          <Text
-            style={[
-              styles.property,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-          >
-            {property?.name ?? "Inmueble no disponible"}
-          </Text>
 
           <View style={styles.badges}>
-            {/* ESTADO DE LA INSPECCIÓN */}
-
             <View
               style={[
                 styles.statusBadge,
@@ -309,8 +298,6 @@ export default function InspectionDetailsScreen() {
                 ● {statusLabel}
               </Text>
             </View>
-
-            {/* ESTADO KOBO */}
 
             <View
               style={[
@@ -793,21 +780,25 @@ export default function InspectionDetailsScreen() {
                 <AppButton
                   onPress={() =>
                     router.navigate({
-                      pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
+                      pathname:
+                        "/empresas/[id]/inmuebles/[propertyId]/captura",
 
                       params: {
                         id,
 
-                        propertyId: inspection.propertyId,
+                        propertyId:
+                          inspection.propertyId,
 
-                        formId: inspection.formId,
+                        formId:
+                          inspection.formId,
 
                         /*
                          * Este parámetro indica a CaptureScreen que
                          * debe cargar y actualizar la inspección existente,
                          * no crear una nueva.
                          */
-                        inspectionId: inspection.id,
+                        inspectionId:
+                          inspection.id,
                       },
                     })
                   }

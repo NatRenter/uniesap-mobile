@@ -2,6 +2,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
 
+import { ContextHeader } from "@/components/navigation/ContextHeader";
+
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
@@ -144,133 +146,39 @@ export default function PropertyDetailsScreen() {
       >
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÓN                                                   */}
+          {/* NAVEGACIÓN CONTEXTUAL                                        */}
           {/* ============================================================ */}
 
-          <View style={styles.topNavigation}>
-            <Pressable
-              onPress={() =>
-                router.navigate({
-                  pathname: "/empresas/[id]/inspecciones",
+          <ContextHeader
+            /*
+             * El nivel anterior del inmueble
+             * es el listado de inmuebles de la empresa.
+             */
+            backLabel="Inmuebles"
+            onBack={() =>
+              router.navigate({
+                pathname: "/empresas/[id]/inmuebles",
 
-                  params: {
-                    id,
-                  },
-                })
-              }
-            >
-              <Text
-                style={[
-                  styles.link,
-                  {
-                    color: colors.primary,
-                  },
-                ]}
-              >
-                Ver todas
-              </Text>
-            </Pressable>
-
-            {/*
-             * El control se conserva preparado.
-             *
-             * Todavía no tenemos una ruta específica
-             * para editar inmuebles.
-             */}
-            <Pressable>
-              <Text
-                style={[
-                  styles.editText,
-                  {
-                    color: colors.primary,
-                  },
-                ]}
-              >
-                Editar
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* ============================================================ */}
-          {/* EMPRESA                                                      */}
-          {/* ============================================================ */}
-
-          <Text
-            style={[
-              styles.overline,
-              {
-                /*
-                 * Conservamos el color representativo
-                 * de cada empresa.
-                 */
-                color: company.branding.primaryColor,
-              },
-            ]}
-          >
-            {company.name.toUpperCase()}
-          </Text>
-
-          {/* ============================================================ */}
-          {/* IDENTIDAD DEL INMUEBLE                                       */}
-          {/* ============================================================ */}
-
-          <View style={styles.header}>
-            <View
-              style={[
-                styles.propertyIcon,
-                {
-                  backgroundColor: colors.primarySoft,
+                params: {
+                  id,
                 },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.propertyIconText,
-                  {
-                    color: colors.primary,
-                  },
-                ]}
-              >
-                ⌂
-              </Text>
-            </View>
+              })
+            }
 
-            <View style={styles.headerInfo}>
-              <Text
-                style={[
-                  styles.title,
-                  {
-                    color: colors.text,
-                  },
-                ]}
-                numberOfLines={2}
-              >
-                {property.name}
-              </Text>
+            /*
+             * Conservamos visible el nombre de la empresa
+             * para evitar perder el contexto.
+             */
+            contextLabel={company.name}
+            contextColor={company.branding.primaryColor}
 
-              <Text
-                style={[
-                  styles.subtitle,
-                  {
-                    color: colors.textSecondary,
-                  },
-                ]}
-              >
-                {location}
-              </Text>
-
-              <Text
-                style={[
-                  styles.propertyType,
-                  {
-                    color: colors.textMuted,
-                  },
-                ]}
-              >
-                {property.type}
-              </Text>
-            </View>
-          </View>
+            /*
+             * El inmueble es la identidad principal
+             * de esta pantalla.
+             */
+            title={property.name}
+            subtitle={`${location} · ${property.type}`}
+          />
 
           {/* ============================================================ */}
           {/* RESUMEN                                                      */}

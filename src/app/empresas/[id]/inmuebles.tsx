@@ -2,6 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
 
+import { ContextHeader } from "@/components/navigation/ContextHeader";
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
@@ -94,71 +95,41 @@ export default function CompanyPropertiesScreen() {
          */}
         <ResponsiveContainer>
           {/* ====================================================== */}
-          {/* ENCABEZADO */}
+          {/* ENCABEZADO                                             */}
+          {/* ====================================================== */}
+          {/* ====================================================== */}
+          {/* NAVEGACIÓN CONTEXTUAL                                  */}
           {/* ====================================================== */}
 
-          <View style={styles.header}>
-            <Pressable
-              onPress={() =>
-                router.navigate({
-                  pathname: "/empresas/[id]",
+          <ContextHeader
+            /*
+             * El nivel anterior de "Inmuebles"
+             * es el detalle de la empresa.
+             *
+             * Mostramos el nombre real para que el usuario
+             * sepa exactamente a dónde regresará.
+             */
+            backLabel={company.name}
+            onBack={() =>
+              router.navigate({
+                pathname: "/empresas/[id]",
 
-                  params: {
-                    id,
-                  },
-                })
-              }
-            >
-              <Text
-                style={[
-                  styles.backText,
-                  {
-                    color: colors.primary,
-                  },
-                ]}
-              >
-                ‹ Empresa
-              </Text>
-            </Pressable>
-
-            <Text
-              style={[
-                styles.overline,
-                {
-                  /*
-                   * Utilizamos el color representativo
-                   * configurado para cada empresa.
-                   */
-                  color: company.branding.primaryColor,
+                params: {
+                  id,
                 },
-              ]}
-            >
-              {company.name.toUpperCase()}
-            </Text>
-
-            <Text
-              style={[
-                styles.title,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Inmuebles
-            </Text>
-
-            <Text
-              style={[
-                styles.subtitle,
-                {
-                  color: colors.textSecondary,
-                },
-              ]}
-            >
-              Sucursales, centros de trabajo e instalaciones asociadas a esta
-              empresa.
-            </Text>
-          </View>
+              })
+            }
+            /*
+             * Conservamos visible el contexto de empresa.
+             */
+            contextLabel={company.name}
+            contextColor={company.branding.primaryColor}
+            /*
+             * Información propia de esta pantalla.
+             */
+            title="Inmuebles"
+            subtitle="Sucursales, centros de trabajo e instalaciones asociadas a esta empresa."
+          />
 
           {/* ====================================================== */}
           {/* ACCIÓN PRINCIPAL */}

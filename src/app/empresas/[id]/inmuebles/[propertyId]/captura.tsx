@@ -6,6 +6,8 @@ import { Image } from "expo-image";
 
 import { router, useLocalSearchParams } from "expo-router";
 
+import { ContextHeader } from "@/components/navigation/ContextHeader";
+
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { AppTextInput } from "@/components/ui/AppTextInput";
@@ -943,29 +945,40 @@ export default function CaptureScreen() {
       >
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÓN                                                   */}
+          {/* NAVEGACIÓN CONTEXTUAL                                        */}
           {/* ============================================================ */}
 
-          <View style={styles.topNavigation}>
-            <Pressable
-              onPress={() => {
-                if (!isProcessing) {
-                  router.back();
-                }
-              }}
-            >
-              <Text
-                style={[
-                  styles.backText,
-                  {
-                    color: colors.primary,
-                  },
-                ]}
-              >
-                ‹ Cancelar
-              </Text>
-            </Pressable>
+          <ContextHeader
+            /*
+             * Cancelar o regresar desde una captura lleva
+             * siempre al inmueble actual.
+             */
+            backLabel={property.name}
+            onBack={() => {
+              if (!isProcessing) {
+                navigateToProperty();
+              }
+            }}
+            /*
+             * La empresa continúa visible como contexto.
+             */
+            contextLabel={company.name}
+            contextColor={company.branding.primaryColor}
+            /*
+             * Distinguimos entre una inspección nueva
+             * y la continuación de un borrador existente.
+             */
+            title={
+              existingInspection ? "Continuar inspección" : "Nueva inspección"
+            }
+            subtitle={`${form.title} · ${property.name}`}
+          />
 
+          {/* ============================================================ */}
+          {/* ESTADO LOCAL                                                 */}
+          {/* ============================================================ */}
+
+          <View style={styles.captureStatusRow}>
             <View
               style={[
                 styles.draftBadge,
@@ -987,56 +1000,6 @@ export default function CaptureScreen() {
                 {statusLabel}
               </Text>
             </View>
-          </View>
-
-          {/* ============================================================ */}
-          {/* ENCABEZADO                                                   */}
-          {/* ============================================================ */}
-
-          <View style={styles.header}>
-            <Text
-              style={[
-                styles.overline,
-                {
-                  color: company.branding.primaryColor,
-                },
-              ]}
-            >
-              {company.name.toUpperCase()}
-            </Text>
-
-            <Text
-              style={[
-                styles.captureOverline,
-                {
-                  color: colors.primary,
-                },
-              ]}
-            >
-              {existingInspection ? "CONTINUAR INSPECCIÓN" : "NUEVA INSPECCIÓN"}
-            </Text>
-
-            <Text
-              style={[
-                styles.title,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              {form.title}
-            </Text>
-
-            <Text
-              style={[
-                styles.subtitle,
-                {
-                  color: colors.textSecondary,
-                },
-              ]}
-            >
-              {form.description}
-            </Text>
           </View>
 
           {/* ============================================================ */}
@@ -2234,6 +2197,19 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
 
     fontWeight: "700",
+  },
+
+  /*
+   * Estado visual de la captura.
+   *
+   * Se mantiene fuera de ContextHeader para que el encabezado
+   * pueda reutilizarse en otras pantallas.
+   */
+  captureStatusRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+
+    marginBottom: Spacing.lg,
   },
 
   /* -------------------------------------------------------------------- */
