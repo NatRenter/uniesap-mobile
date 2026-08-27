@@ -9,7 +9,7 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getInspectionsByPropertyId } from "@/data/inspections";
+import { getInspectionsByPropertyId } from "@/repositories/inspectionRepository";
 import { getCompanyById } from "@/repositories/companyRepository";
 import { getPropertiesByCompanyId } from "@/repositories/propertyRepository";
 

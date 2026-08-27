@@ -10,9 +10,9 @@ import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/repositories/companyRepository";
-import { getEvidencesByCompanyId } from "@/data/evidences";
+import { getEvidencesByCompanyId } from "@/repositories/evidenceRepository";
 import { getFormById } from "@/data/forms";
-import { getInspectionById } from "@/data/inspections";
+import { getInspectionById } from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";

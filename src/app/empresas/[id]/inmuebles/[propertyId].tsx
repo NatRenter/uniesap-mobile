@@ -11,7 +11,7 @@ import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
 import { getFormsByIds } from "@/data/forms";
-import { getInspectionsByPropertyId } from "@/data/inspections";
+import { getInspectionsByPropertyId } from "@/repositories/inspectionRepository";
 
 import { getCompanyById } from "@/repositories/companyRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";

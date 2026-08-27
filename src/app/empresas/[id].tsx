@@ -8,8 +8,8 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getEvidencesByCompanyId } from "@/data/evidences";
-import { getInspectionsByCompanyId } from "@/data/inspections";
+import { getEvidencesByCompanyId } from "@/repositories/evidenceRepository";
+import { getInspectionsByCompanyId } from "@/repositories/inspectionRepository";
 import { getReportsByCompanyId } from "@/data/reports";
 import { getCompanyById } from "@/repositories/companyRepository";
 import { getPropertiesByCompanyId } from "@/repositories/propertyRepository";

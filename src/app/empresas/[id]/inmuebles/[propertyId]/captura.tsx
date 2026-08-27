@@ -16,7 +16,10 @@ import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/repositories/companyRepository";
 import { getFormById } from "@/data/forms";
-import { getInspectionById } from "@/data/inspections";
+import { getInspectionById ,
+  createInspection,
+  updateInspection,
+} from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 
 import {
@@ -25,10 +28,7 @@ import {
   getEvidencesByQuestionId,
 } from "@/repositories/evidenceRepository";
 
-import {
-  createInspection,
-  updateInspection,
-} from "@/repositories/inspectionRepository";
+
 
 import {
   captureEvidencePhoto,

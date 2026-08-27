@@ -12,7 +12,7 @@ import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/repositories/companyRepository";
 import { getFormById } from "@/data/forms";
-import { getInspectionById } from "@/data/inspections";
+import { getInspectionById } from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 import { getReportsByCompanyId } from "@/data/reports";
 

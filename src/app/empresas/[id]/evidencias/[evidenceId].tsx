@@ -8,9 +8,9 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/repositories/companyRepository";
-import { getEvidenceById } from "@/data/evidences";
+import { getEvidenceById } from "@/repositories/evidenceRepository";
 import { getFormById } from "@/data/forms";
-import { getInspectionById } from "@/data/inspections";
+import { getInspectionById } from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";

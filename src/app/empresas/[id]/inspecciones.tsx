@@ -11,7 +11,7 @@ import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/repositories/companyRepository";
 import { getFormById } from "@/data/forms";
-import { getInspectionsByCompanyId } from "@/data/inspections";
+import { getInspectionsByCompanyId } from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
