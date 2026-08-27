@@ -18,6 +18,10 @@ import { Screen } from "@/components/ui/Screen";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
+import { getCompanyById } from "@/data/companies";
+import { getFormById } from "@/data/forms";
+import { getPropertyById } from "@/data/properties";
+
 import { useAppTheme } from "@/hooks/useAppTheme";
 
 import { getInspections } from "@/repositories/inspectionRepository";
@@ -35,20 +39,21 @@ import type { UserProfile } from "@/types/userProfile";
  * DASHBOARD
  * ============================================================================
  *
- * El Dashboard utiliza ahora datos reales del perfil
- * y del repositorio de inspecciones.
+ * Inicio vuelve a utilizar el concepto de "Empresa activa",
+ * pero ya no está fija en AutoZone.
  *
- * Objetivos:
+ * La empresa activa se obtiene de la inspección pendiente o en proceso
+ * con actividad más reciente.
  *
- * - mostrar el nombre y fotografía del usuario;
- * - mostrar pendientes y errores reales;
- * - mantener accesos rápidos simples;
- * - conservar diseño responsive en celular, tablet y web.
+ * Si no existe ninguna inspección activa:
  *
- * Empresas/inmuebles todavía conservan sus fuentes actuales.
+ * - no se muestra una empresa ficticia;
+ * - aparece un estado vacío;
+ * - el usuario puede iniciar una nueva inspección.
+ *
+ * La pantalla sigue adaptándose a celular, tablet y web
+ * mediante ResponsiveContainer y ResponsiveGrid.
  */
-
-const ACTIVE_COMPANY_ID = "1";
 
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
@@ -56,10 +61,10 @@ export default function DashboardScreen() {
   const [profile, setProfile] = useState<UserProfile>(getUserProfile());
 
   /*
-   * Escucha cambios del perfil.
+   * El Dashboard escucha cambios del perfil.
    *
-   * Si el usuario cambia nombre o fotografía,
-   * el Dashboard se actualiza sin reiniciar la app.
+   * Si el usuario cambia su nombre o fotografía,
+   * Inicio se actualiza sin reiniciar la aplicación.
    */
   useEffect(() => {
     return subscribeToUserProfile(setProfile);
@@ -68,15 +73,61 @@ export default function DashboardScreen() {
   /*
    * RootLayout hidrata InspectionRepository antes
    * de mostrar esta pantalla.
-   *
-   * Por eso esta lectura representa el estado local actual.
    */
   const inspections = getInspections();
 
   const summary = createInspectionSummary(inspections);
 
+  /*
+   * Empresa activa:
+   *
+   * solamente se consideran:
+   * - draft
+   * - in_progress
+   *
+   * Las inspecciones completed ya no mantienen
+   * una empresa como activa aunque estén pendientes de sincronización.
+   */
+  const activeInspection = getActiveInspection(inspections);
+
+  const activeCompany = activeInspection
+    ? getCompanyById(activeInspection.companyId)
+    : undefined;
+
+  const activeProperty = activeInspection
+    ? getPropertyById(activeInspection.propertyId)
+    : undefined;
+
+  const activeForm = activeInspection
+    ? getFormById(activeInspection.formId)
+    : undefined;
+
+  /*
+   * Cuenta cuántas inspecciones abiertas existen
+   * dentro de la empresa activa.
+   */
+  const activeCompanyInspectionCount = activeInspection
+    ? inspections.filter(
+        (inspection) =>
+          inspection.companyId === activeInspection.companyId &&
+          isActiveInspection(inspection),
+      ).length
+    : 0;
+
+  /*
+   * Indica si también existen inspecciones abiertas
+   * en otras empresas.
+   */
+  const activeInspectionsOtherCompanies = activeInspection
+    ? inspections.filter(
+        (inspection) =>
+          inspection.companyId !== activeInspection.companyId &&
+          isActiveInspection(inspection),
+      ).length
+    : 0;
+
   const recentInspections = [...inspections]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .sort(compareInspectionActivity)
     .slice(0, 3);
 
   const fullName = `${profile.firstName} ${profile.lastName}`.trim();
@@ -133,8 +184,8 @@ export default function DashboardScreen() {
             </View>
 
             {/*
-             * La fotografía del perfil funciona también
-             * como acceso directo al módulo Perfil.
+             * La fotografía también funciona
+             * como acceso directo a Perfil.
              */}
             <Pressable
               accessibilityRole="button"
@@ -172,7 +223,7 @@ export default function DashboardScreen() {
           </View>
 
           {/* ============================================================ */}
-          {/* RESUMEN REAL DE TRABAJO                                      */}
+          {/* RESUMEN                                                      */}
           {/* ============================================================ */}
 
           <View style={styles.section}>
@@ -234,7 +285,7 @@ export default function DashboardScreen() {
               <StatCard
                 value={String(summary.errors)}
                 label="Con error"
-                color={summary.errors > 0 ? colors.error : colors.text}
+                color={summary.errors > 0 ? colors.error : colors.textMuted}
               />
             </ResponsiveGrid>
           </View>
@@ -257,7 +308,7 @@ export default function DashboardScreen() {
               </Text>
 
               <Pressable
-                onPress={() => router.navigate("/empresas")}
+                onPress={() => router.navigate("/trabajo")}
                 style={({ pressed }) => ({
                   opacity: pressed ? 0.7 : 1,
                 })}
@@ -270,104 +321,24 @@ export default function DashboardScreen() {
                     },
                   ]}
                 >
-                  Cambiar
+                  Ver trabajo
                 </Text>
               </Pressable>
             </View>
 
-            <Pressable
-              onPress={() =>
-                router.navigate({
-                  pathname: "/empresas/[id]",
-
-                  params: {
-                    id: ACTIVE_COMPANY_ID,
-                  },
-                })
-              }
-              style={({ pressed }) => ({
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <AppCard padded={false} style={styles.companyCard}>
-                <View
-                  style={[
-                    styles.companyAccent,
-                    {
-                      backgroundColor: "#F97316",
-                    },
-                  ]}
-                />
-
-                <View style={styles.companyContent}>
-                  <View
-                    style={[
-                      styles.companyLogo,
-                      {
-                        backgroundColor: "#F9731620",
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.companyLogoText,
-                        {
-                          color: "#F97316",
-                        },
-                      ]}
-                    >
-                      AZ
-                    </Text>
-                  </View>
-
-                  <View style={styles.companyInformation}>
-                    <Text
-                      style={[
-                        styles.companyName,
-                        {
-                          color: colors.text,
-                        },
-                      ]}
-                    >
-                      AutoZone
-                    </Text>
-
-                    <Text
-                      style={[
-                        styles.companyLocation,
-                        {
-                          color: colors.textSecondary,
-                        },
-                      ]}
-                    >
-                      3 inmuebles registrados
-                    </Text>
-
-                    <Text
-                      style={[
-                        styles.companyActivity,
-                        {
-                          color: colors.textMuted,
-                        },
-                      ]}
-                    >
-                      Acceso rápido a la empresa
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={[
-                      styles.arrow,
-                      {
-                        color: colors.textMuted,
-                      },
-                    ]}
-                  >
-                    ›
-                  </Text>
-                </View>
-              </AppCard>
-            </Pressable>
+            {activeInspection && activeCompany && activeProperty ? (
+              <ActiveCompanyCard
+                inspection={activeInspection}
+                companyName={activeCompany.name}
+                companyColor={activeCompany.branding.primaryColor}
+                propertyName={activeProperty.name}
+                formTitle={activeForm?.title ?? "Inspección"}
+                activeInspectionCount={activeCompanyInspectionCount}
+                otherCompanyActiveCount={activeInspectionsOtherCompanies}
+              />
+            ) : (
+              <NoActiveInspectionCard />
+            )}
           </View>
 
           {/* ============================================================ */}
@@ -400,22 +371,14 @@ export default function DashboardScreen() {
 
               <QuickAction
                 icon="✓"
-                title="Continuar trabajo"
-                onPress={() => router.navigate("/trabajo")}
+                title="Nueva inspección"
+                onPress={() => router.navigate("/empresas")}
               />
 
               <QuickAction
                 icon="▤"
-                title="Ver reportes"
-                onPress={() =>
-                  router.navigate({
-                    pathname: "/empresas/[id]/reportes",
-
-                    params: {
-                      id: ACTIVE_COMPANY_ID,
-                    },
-                  })
-                }
+                title="Ver trabajo"
+                onPress={() => router.navigate("/trabajo")}
               />
             </ResponsiveGrid>
           </View>
@@ -475,11 +438,302 @@ export default function DashboardScreen() {
 }
 
 /*
- * Resume los estados principales del trabajo.
+ * ============================================================================
+ * EMPRESA ACTIVA
+ * ============================================================================
  *
- * Una inspección con error de sincronización
- * se contabiliza también como completada si su captura terminó,
- * pero se destaca por separado en "Con error".
+ * Muestra solamente el contexto de trabajo actual.
+ *
+ * El botón principal continúa exactamente
+ * la inspección activa seleccionada.
+ */
+function ActiveCompanyCard({
+  inspection,
+  companyName,
+  companyColor,
+  propertyName,
+  formTitle,
+  activeInspectionCount,
+  otherCompanyActiveCount,
+}: {
+  inspection: Inspection;
+
+  companyName: string;
+  companyColor: string;
+
+  propertyName: string;
+  formTitle: string;
+
+  activeInspectionCount: number;
+  otherCompanyActiveCount: number;
+}) {
+  const { colors } = useAppTheme();
+
+  const statusLabel =
+    inspection.status === "in_progress" ? "En proceso" : "Pendiente";
+
+  const statusColor =
+    inspection.status === "in_progress" ? colors.primary : colors.warning;
+
+  return (
+    <AppCard padded={false} style={styles.activeCompanyCard}>
+      <View
+        style={[
+          styles.companyAccent,
+          {
+            backgroundColor: companyColor,
+          },
+        ]}
+      />
+
+      <View style={styles.activeCompanyContent}>
+        {/* EMPRESA */}
+
+        <View style={styles.activeCompanyHeader}>
+          <View
+            style={[
+              styles.companyLogo,
+              {
+                backgroundColor: `${companyColor}20`,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.companyLogoText,
+                {
+                  color: companyColor,
+                },
+              ]}
+            >
+              {createCompanyInitials(companyName)}
+            </Text>
+          </View>
+
+          <View style={styles.activeCompanyIdentity}>
+            <Text
+              style={[
+                styles.companyName,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              {companyName}
+            </Text>
+
+            <Text
+              style={[
+                styles.companyActivity,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              {activeInspectionCount} inspección
+              {activeInspectionCount === 1 ? "" : "es"} activa
+              {activeInspectionCount === 1 ? "" : "s"}
+            </Text>
+          </View>
+        </View>
+
+        {/* INSPECCIÓN ACTUAL */}
+
+        <View
+          style={[
+            styles.currentWork,
+            {
+              backgroundColor: colors.background,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.currentProperty,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            {propertyName}
+          </Text>
+
+          <Text
+            style={[
+              styles.currentForm,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            {formTitle}
+          </Text>
+
+          <View style={styles.currentStatusRow}>
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor: statusColor,
+                },
+              ]}
+            />
+
+            <Text
+              style={[
+                styles.currentStatus,
+                {
+                  color: statusColor,
+                },
+              ]}
+            >
+              {statusLabel}
+            </Text>
+
+            <Text
+              style={[
+                styles.currentDate,
+                {
+                  color: colors.textMuted,
+                },
+              ]}
+            >
+              · {formatDate(inspection.date)}
+            </Text>
+          </View>
+        </View>
+
+        {/* ACCIÓN PRINCIPAL */}
+
+        <Pressable
+          onPress={() => continueInspection(inspection)}
+          style={({ pressed }) => [
+            styles.continueButton,
+            {
+              backgroundColor: colors.primary,
+
+              opacity: pressed ? 0.8 : 1,
+            },
+          ]}
+        >
+          <Text style={styles.continueButtonText}>Continuar inspección</Text>
+        </Pressable>
+
+        {/* OTRAS EMPRESAS */}
+
+        {otherCompanyActiveCount > 0 ? (
+          <Pressable
+            onPress={() => router.navigate("/trabajo")}
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Text
+              style={[
+                styles.otherWorkText,
+                {
+                  color: colors.primary,
+                },
+              ]}
+            >
+              También tienes {otherCompanyActiveCount} inspección
+              {otherCompanyActiveCount === 1 ? "" : "es"} activa
+              {otherCompanyActiveCount === 1 ? "" : "s"} en otra
+              {otherCompanyActiveCount === 1 ? " empresa" : "s empresas"}.
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </AppCard>
+  );
+}
+
+/*
+ * ============================================================================
+ * SIN INSPECCIÓN ACTIVA
+ * ============================================================================
+ *
+ * Se muestra cuando ya no existen inspecciones
+ * draft ni in_progress.
+ */
+function NoActiveInspectionCard() {
+  const { colors } = useAppTheme();
+
+  return (
+    <AppCard>
+      <View style={styles.noActiveContent}>
+        <View
+          style={[
+            styles.noActiveIcon,
+            {
+              backgroundColor: colors.primarySoft,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.noActiveIconText,
+              {
+                color: colors.primary,
+              },
+            ]}
+          >
+            ✓
+          </Text>
+        </View>
+
+        <Text
+          style={[
+            styles.noActiveTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          No hay inspecciones activas
+        </Text>
+
+        <Text
+          style={[
+            styles.noActiveDescription,
+            {
+              color: colors.textSecondary,
+            },
+          ]}
+        >
+          Cuando inicies una nueva inspección, la empresa y el inmueble
+          aparecerán aquí.
+        </Text>
+
+        <Pressable
+          onPress={() => router.navigate("/empresas")}
+          style={({ pressed }) => [
+            styles.startInspectionButton,
+            {
+              borderColor: colors.primary,
+
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.startInspectionText,
+              {
+                color: colors.primary,
+              },
+            ]}
+          >
+            Iniciar inspección
+          </Text>
+        </Pressable>
+      </View>
+    </AppCard>
+  );
+}
+
+/*
+ * Calcula el resumen visible del Dashboard.
  */
 function createInspectionSummary(inspections: Inspection[]) {
   return {
@@ -498,6 +752,62 @@ function createInspectionSummary(inspections: Inspection[]) {
       (inspection) => inspection.integration?.syncStatus === "error",
     ).length,
   };
+}
+
+/*
+ * Determina si una inspección todavía representa
+ * trabajo de campo activo.
+ */
+function isActiveInspection(inspection: Inspection): boolean {
+  return inspection.status === "draft" || inspection.status === "in_progress";
+}
+
+/*
+ * Obtiene la inspección activa más reciente.
+ *
+ * Actualmente Inspection dispone de date como referencia temporal.
+ * Cuando añadamos updatedAt, podremos utilizar esa marca
+ * para reflejar aún mejor la actividad más reciente.
+ */
+function getActiveInspection(
+  inspections: Inspection[],
+): Inspection | undefined {
+  return [...inspections]
+    .filter(isActiveInspection)
+    .sort(compareInspectionActivity)[0];
+}
+
+/*
+ * Orden descendente:
+ * inspección más reciente primero.
+ */
+function compareInspectionActivity(a: Inspection, b: Inspection): number {
+  return getInspectionTimestamp(b) - getInspectionTimestamp(a);
+}
+
+function getInspectionTimestamp(inspection: Inspection): number {
+  const timestamp = new Date(inspection.date).getTime();
+
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+/*
+ * Continúa exactamente la inspección activa.
+ */
+function continueInspection(inspection: Inspection): void {
+  router.navigate({
+    pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
+
+    params: {
+      id: inspection.companyId,
+
+      propertyId: inspection.propertyId,
+
+      formId: inspection.formId,
+
+      inspectionId: inspection.id,
+    },
+  });
 }
 
 /*
@@ -615,16 +925,28 @@ function QuickAction({
 }
 
 /*
- * Actividad reciente basada en una inspección real.
+ * Actividad reciente basada en inspecciones reales.
  */
 function RecentInspection({ inspection }: { inspection: Inspection }) {
   const { colors } = useAppTheme();
 
   const status = getReadableInspectionStatus(inspection);
 
+  const property = getPropertyById(inspection.propertyId);
+
   return (
     <Pressable
-      onPress={() =>
+      onPress={() => {
+        /*
+         * Una inspección abierta vuelve a Captura.
+         * Una completada abre su detalle.
+         */
+        if (isActiveInspection(inspection)) {
+          continueInspection(inspection);
+
+          return;
+        }
+
         router.navigate({
           pathname: "/empresas/[id]/inspecciones/[inspectionId]",
 
@@ -633,8 +955,8 @@ function RecentInspection({ inspection }: { inspection: Inspection }) {
 
             inspectionId: inspection.id,
           },
-        })
-      }
+        });
+      }}
       style={({ pressed }) => [
         styles.activity,
         {
@@ -671,7 +993,7 @@ function RecentInspection({ inspection }: { inspection: Inspection }) {
             },
           ]}
         >
-          {formatDate(inspection.date)}
+          {property?.name ?? "Inmueble"} · {formatDate(inspection.date)}
         </Text>
       </View>
 
@@ -690,7 +1012,7 @@ function RecentInspection({ inspection }: { inspection: Inspection }) {
 }
 
 /*
- * Traduce estados internos a etiquetas simples.
+ * Traduce estados técnicos a etiquetas simples.
  */
 function getReadableInspectionStatus(inspection: Inspection) {
   if (inspection.integration?.syncStatus === "error") {
@@ -749,16 +1071,30 @@ function createInitials(firstName: string, lastName: string): string {
   return `${first}${last}`.toUpperCase() || "U";
 }
 
+function createCompanyInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) {
+    return "EM";
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
 /*
  * ============================================================================
  * ESTILOS
  * ============================================================================
  *
- * ResponsiveGrid mantiene:
+ * La tarjeta de Empresa activa usa flexWrap para que:
  *
- * celular → tarjetas compactas
- * tablet  → varias columnas
- * web     → uso controlado del espacio
+ * celular → el contenido se apile cuando sea necesario.
+ * tablet  → aproveche mejor el ancho.
+ * web     → mantenga un ancho controlado por ResponsiveContainer.
  */
 const styles = StyleSheet.create({
   scrollContent: {
@@ -866,7 +1202,9 @@ const styles = StyleSheet.create({
     fontSize: FontSize.small,
   },
 
-  companyCard: {
+  activeCompanyCard: {
+    width: "100%",
+
     overflow: "hidden",
   },
 
@@ -874,11 +1212,15 @@ const styles = StyleSheet.create({
     height: 5,
   },
 
-  companyContent: {
+  activeCompanyContent: {
+    padding: Spacing.lg,
+  },
+
+  activeCompanyHeader: {
     flexDirection: "row",
     alignItems: "center",
 
-    padding: Spacing.md,
+    marginBottom: Spacing.md,
   },
 
   companyLogo: {
@@ -900,7 +1242,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  companyInformation: {
+  activeCompanyIdentity: {
     flex: 1,
     minWidth: 0,
   },
@@ -912,22 +1254,144 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
 
-  companyLocation: {
+  companyActivity: {
     fontSize: FontSize.small,
+  },
+
+  currentWork: {
+    borderRadius: Radius.md,
+
+    padding: Spacing.md,
+
+    marginBottom: Spacing.md,
+  },
+
+  currentProperty: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
 
     marginBottom: Spacing.xs,
   },
 
-  companyActivity: {
+  currentForm: {
+    fontSize: FontSize.small,
+
+    marginBottom: Spacing.sm,
+  },
+
+  currentStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+
+    gap: 4,
+  },
+
+  statusDot: {
+    width: 8,
+    height: 8,
+
+    borderRadius: Radius.full,
+  },
+
+  currentStatus: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+  },
+
+  currentDate: {
     fontSize: FontSize.caption,
   },
 
-  arrow: {
-    flexShrink: 0,
+  continueButton: {
+    minHeight: 48,
 
-    fontSize: 32,
+    alignItems: "center",
+    justifyContent: "center",
 
-    marginLeft: Spacing.sm,
+    borderRadius: Radius.md,
+
+    paddingHorizontal: Spacing.md,
+
+    marginBottom: Spacing.sm,
+  },
+
+  continueButtonText: {
+    color: "#FFFFFF",
+
+    fontSize: FontSize.body,
+    fontWeight: "700",
+  },
+
+  otherWorkText: {
+    fontSize: FontSize.caption,
+    fontWeight: "600",
+
+    lineHeight: 19,
+
+    textAlign: "center",
+
+    marginTop: Spacing.xs,
+  },
+
+  noActiveContent: {
+    alignItems: "center",
+
+    paddingVertical: Spacing.lg,
+  },
+
+  noActiveIcon: {
+    width: 52,
+    height: 52,
+
+    borderRadius: Radius.full,
+
+    alignItems: "center",
+    justifyContent: "center",
+
+    marginBottom: Spacing.md,
+  },
+
+  noActiveIconText: {
+    fontSize: FontSize.h3,
+    fontWeight: "800",
+  },
+
+  noActiveTitle: {
+    fontSize: FontSize.cardTitle,
+    fontWeight: "700",
+
+    textAlign: "center",
+
+    marginBottom: Spacing.sm,
+  },
+
+  noActiveDescription: {
+    maxWidth: 520,
+
+    fontSize: FontSize.small,
+    lineHeight: 21,
+
+    textAlign: "center",
+
+    marginBottom: Spacing.lg,
+  },
+
+  startInspectionButton: {
+    minHeight: 46,
+
+    alignItems: "center",
+    justifyContent: "center",
+
+    borderWidth: 1,
+    borderRadius: Radius.md,
+
+    paddingHorizontal: Spacing.lg,
+  },
+
+  startInspectionText: {
+    fontSize: FontSize.small,
+    fontWeight: "700",
   },
 
   actionCard: {
