@@ -1,4 +1,13 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { router } from "expo-router";
 
@@ -11,19 +20,32 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 
+import { getInspections } from "@/repositories/inspectionRepository";
+
+import {
+  getUserProfile,
+  subscribeToUserProfile,
+} from "@/repositories/userProfileRepository";
+
+import type { Inspection } from "@/types/inspection";
+import type { UserProfile } from "@/types/userProfile";
+
 /*
  * ============================================================================
  * DASHBOARD
  * ============================================================================
  *
- * Esta es la pantalla Inicio de la navegación global.
+ * El Dashboard utiliza ahora datos reales del perfil
+ * y del repositorio de inspecciones.
  *
- * En esta fase:
+ * Objetivos:
  *
- * - conectamos el botón de perfil;
- * - quitamos herramientas técnicas del Dashboard;
- * - mantenemos la estructura responsive actual;
- * - dejamos el rediseño avanzado del resumen para la siguiente fase.
+ * - mostrar el nombre y fotografía del usuario;
+ * - mostrar pendientes y errores reales;
+ * - mantener accesos rápidos simples;
+ * - conservar diseño responsive en celular, tablet y web.
+ *
+ * Empresas/inmuebles todavía conservan sus fuentes actuales.
  */
 
 const ACTIVE_COMPANY_ID = "1";
@@ -31,7 +53,37 @@ const ACTIVE_COMPANY_ID = "1";
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
 
-  const companyColor = "#F97316";
+  const [profile, setProfile] = useState<UserProfile>(getUserProfile());
+
+  /*
+   * Escucha cambios del perfil.
+   *
+   * Si el usuario cambia nombre o fotografía,
+   * el Dashboard se actualiza sin reiniciar la app.
+   */
+  useEffect(() => {
+    return subscribeToUserProfile(setProfile);
+  }, []);
+
+  /*
+   * RootLayout hidrata InspectionRepository antes
+   * de mostrar esta pantalla.
+   *
+   * Por eso esta lectura representa el estado local actual.
+   */
+  const inspections = getInspections();
+
+  const summary = createInspectionSummary(inspections);
+
+  const recentInspections = [...inspections]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 3);
+
+  const fullName = `${profile.firstName} ${profile.lastName}`.trim();
+
+  const firstName = profile.firstName.trim() || fullName || "Usuario";
+
+  const initials = createInitials(profile.firstName, profile.lastName);
 
   return (
     <Screen padded={false}>
@@ -65,7 +117,7 @@ export default function DashboardScreen() {
                   },
                 ]}
               >
-                Hola 👋
+                Hola, {firstName} 👋
               </Text>
 
               <Text
@@ -81,7 +133,8 @@ export default function DashboardScreen() {
             </View>
 
             {/*
-             * El acceso del encabezado ahora abre el Perfil real.
+             * La fotografía del perfil funciona también
+             * como acceso directo al módulo Perfil.
              */}
             <Pressable
               accessibilityRole="button"
@@ -91,21 +144,99 @@ export default function DashboardScreen() {
                 styles.profileButton,
                 {
                   backgroundColor: colors.primarySoft,
+
                   opacity: pressed ? 0.75 : 1,
                 },
               ]}
             >
+              {profile.photoUri ? (
+                <Image
+                  source={{
+                    uri: profile.photoUri,
+                  }}
+                  style={styles.profileImage}
+                />
+              ) : (
+                <Text
+                  style={[
+                    styles.profileInitial,
+                    {
+                      color: colors.primary,
+                    },
+                  ]}
+                >
+                  {initials}
+                </Text>
+              )}
+            </Pressable>
+          </View>
+
+          {/* ============================================================ */}
+          {/* RESUMEN REAL DE TRABAJO                                      */}
+          {/* ============================================================ */}
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
               <Text
                 style={[
-                  styles.profileInitial,
+                  styles.sectionTitle,
                   {
-                    color: colors.primary,
+                    color: colors.text,
                   },
                 ]}
               >
-                A
+                Resumen
               </Text>
-            </Pressable>
+
+              <Pressable
+                onPress={() => router.navigate("/trabajo")}
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  style={[
+                    styles.link,
+                    {
+                      color: colors.primary,
+                    },
+                  ]}
+                >
+                  Ver trabajo
+                </Text>
+              </Pressable>
+            </View>
+
+            <ResponsiveGrid
+              phoneColumns={2}
+              tabletColumns={4}
+              desktopColumns={4}
+              gap={Spacing.md}
+            >
+              <StatCard
+                value={String(summary.pending)}
+                label="Pendientes"
+                color={colors.warning}
+              />
+
+              <StatCard
+                value={String(summary.inProgress)}
+                label="En proceso"
+                color={colors.primary}
+              />
+
+              <StatCard
+                value={String(summary.completed)}
+                label="Completadas"
+                color={colors.success}
+              />
+
+              <StatCard
+                value={String(summary.errors)}
+                label="Con error"
+                color={summary.errors > 0 ? colors.error : colors.text}
+              />
+            </ResponsiveGrid>
           </View>
 
           {/* ============================================================ */}
@@ -148,6 +279,7 @@ export default function DashboardScreen() {
               onPress={() =>
                 router.navigate({
                   pathname: "/empresas/[id]",
+
                   params: {
                     id: ACTIVE_COMPANY_ID,
                   },
@@ -162,7 +294,7 @@ export default function DashboardScreen() {
                   style={[
                     styles.companyAccent,
                     {
-                      backgroundColor: companyColor,
+                      backgroundColor: "#F97316",
                     },
                   ]}
                 />
@@ -172,7 +304,7 @@ export default function DashboardScreen() {
                     style={[
                       styles.companyLogo,
                       {
-                        backgroundColor: `${companyColor}20`,
+                        backgroundColor: "#F9731620",
                       },
                     ]}
                   >
@@ -180,7 +312,7 @@ export default function DashboardScreen() {
                       style={[
                         styles.companyLogoText,
                         {
-                          color: companyColor,
+                          color: "#F97316",
                         },
                       ]}
                     >
@@ -219,7 +351,7 @@ export default function DashboardScreen() {
                         },
                       ]}
                     >
-                      Última actividad · hace 2 días
+                      Acceso rápido a la empresa
                     </Text>
                   </View>
 
@@ -236,38 +368,6 @@ export default function DashboardScreen() {
                 </View>
               </AppCard>
             </Pressable>
-          </View>
-
-          {/* ============================================================ */}
-          {/* RESUMEN                                                      */}
-          {/* ============================================================ */}
-
-          <View style={styles.section}>
-            <Text
-              style={[
-                styles.sectionTitle,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Resumen
-            </Text>
-
-            <ResponsiveGrid
-              phoneColumns={2}
-              tabletColumns={4}
-              desktopColumns={4}
-              gap={Spacing.md}
-            >
-              <StatCard value="12" label="Empresas" />
-
-              <StatCard value="28" label="Inmuebles" />
-
-              <StatCard value="46" label="Inspecciones" />
-
-              <StatCard value="5" label="Pendientes" highlighted />
-            </ResponsiveGrid>
           </View>
 
           {/* ============================================================ */}
@@ -300,15 +400,8 @@ export default function DashboardScreen() {
 
               <QuickAction
                 icon="✓"
-                title="Nueva inspección"
-                onPress={() =>
-                  router.navigate({
-                    pathname: "/empresas/[id]/inmuebles",
-                    params: {
-                      id: ACTIVE_COMPANY_ID,
-                    },
-                  })
-                }
+                title="Continuar trabajo"
+                onPress={() => router.navigate("/trabajo")}
               />
 
               <QuickAction
@@ -317,6 +410,7 @@ export default function DashboardScreen() {
                 onPress={() =>
                   router.navigate({
                     pathname: "/empresas/[id]/reportes",
+
                     params: {
                       id: ACTIVE_COMPANY_ID,
                     },
@@ -343,44 +437,35 @@ export default function DashboardScreen() {
             </Text>
 
             <AppCard>
-              <ActivityItem
-                company="AutoZone"
-                action="Inspección actualizada"
-                time="Hace 2 horas"
-                accentColor="#F97316"
-              />
+              {recentInspections.length > 0 ? (
+                recentInspections.map((inspection, index) => (
+                  <View key={inspection.id}>
+                    <RecentInspection inspection={inspection} />
 
-              <View
-                style={[
-                  styles.divider,
-                  {
-                    backgroundColor: colors.divider,
-                  },
-                ]}
-              />
-
-              <ActivityItem
-                company="LALA"
-                action="Reporte generado"
-                time="Ayer"
-                accentColor="#EF4444"
-              />
-
-              <View
-                style={[
-                  styles.divider,
-                  {
-                    backgroundColor: colors.divider,
-                  },
-                ]}
-              />
-
-              <ActivityItem
-                company="Empresa Demo"
-                action="Empresa registrada"
-                time="Hace 3 días"
-                accentColor="#3B82F6"
-              />
+                    {index < recentInspections.length - 1 ? (
+                      <View
+                        style={[
+                          styles.divider,
+                          {
+                            backgroundColor: colors.divider,
+                          },
+                        ]}
+                      />
+                    ) : null}
+                  </View>
+                ))
+              ) : (
+                <Text
+                  style={[
+                    styles.emptyText,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Todavía no hay actividad reciente.
+                </Text>
+              )}
             </AppCard>
           </View>
         </ResponsiveContainer>
@@ -390,16 +475,42 @@ export default function DashboardScreen() {
 }
 
 /*
- * Tarjeta pequeña del resumen.
+ * Resume los estados principales del trabajo.
+ *
+ * Una inspección con error de sincronización
+ * se contabiliza también como completada si su captura terminó,
+ * pero se destaca por separado en "Con error".
+ */
+function createInspectionSummary(inspections: Inspection[]) {
+  return {
+    pending: inspections.filter((inspection) => inspection.status === "draft")
+      .length,
+
+    inProgress: inspections.filter(
+      (inspection) => inspection.status === "in_progress",
+    ).length,
+
+    completed: inspections.filter(
+      (inspection) => inspection.status === "completed",
+    ).length,
+
+    errors: inspections.filter(
+      (inspection) => inspection.integration?.syncStatus === "error",
+    ).length,
+  };
+}
+
+/*
+ * Tarjeta numérica del resumen.
  */
 function StatCard({
   value,
   label,
-  highlighted = false,
+  color,
 }: {
   value: string;
   label: string;
-  highlighted?: boolean;
+  color: string;
 }) {
   const { colors } = useAppTheme();
 
@@ -409,7 +520,7 @@ function StatCard({
         style={[
           styles.statValue,
           {
-            color: highlighted ? colors.warning : colors.text,
+            color,
           },
         ]}
       >
@@ -432,9 +543,6 @@ function StatCard({
 
 /*
  * Acción rápida reutilizable.
- *
- * Los botones ejecutan acciones reales; ya no se utilizan como
- * sustitutos del botón Atrás.
  */
 function QuickAction({
   icon,
@@ -454,7 +562,9 @@ function QuickAction({
         styles.actionCard,
         {
           backgroundColor: colors.surface,
+
           borderColor: colors.border,
+
           opacity: pressed ? 0.7 : 1,
         },
       ]}
@@ -505,28 +615,38 @@ function QuickAction({
 }
 
 /*
- * Fila visual del historial reciente.
+ * Actividad reciente basada en una inspección real.
  */
-function ActivityItem({
-  company,
-  action,
-  time,
-  accentColor,
-}: {
-  company: string;
-  action: string;
-  time: string;
-  accentColor: string;
-}) {
+function RecentInspection({ inspection }: { inspection: Inspection }) {
   const { colors } = useAppTheme();
 
+  const status = getReadableInspectionStatus(inspection);
+
   return (
-    <View style={styles.activity}>
+    <Pressable
+      onPress={() =>
+        router.navigate({
+          pathname: "/empresas/[id]/inspecciones/[inspectionId]",
+
+          params: {
+            id: inspection.companyId,
+
+            inspectionId: inspection.id,
+          },
+        })
+      }
+      style={({ pressed }) => [
+        styles.activity,
+        {
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
       <View
         style={[
           styles.activityDot,
           {
-            backgroundColor: accentColor,
+            backgroundColor: status.color,
           },
         ]}
       />
@@ -540,7 +660,7 @@ function ActivityItem({
             },
           ]}
         >
-          {company}
+          {status.label}
         </Text>
 
         <Text
@@ -551,7 +671,7 @@ function ActivityItem({
             },
           ]}
         >
-          {action}
+          {formatDate(inspection.date)}
         </Text>
       </View>
 
@@ -563,10 +683,70 @@ function ActivityItem({
           },
         ]}
       >
-        {time}
+        ›
       </Text>
-    </View>
+    </Pressable>
   );
+}
+
+/*
+ * Traduce estados internos a etiquetas simples.
+ */
+function getReadableInspectionStatus(inspection: Inspection) {
+  if (inspection.integration?.syncStatus === "error") {
+    return {
+      label: "Error de sincronización",
+
+      color: "#EF4444",
+    };
+  }
+
+  if (inspection.status === "completed") {
+    return {
+      label:
+        inspection.integration?.syncStatus === "synced"
+          ? "Inspección sincronizada"
+          : "Inspección completada",
+
+      color: "#22C55E",
+    };
+  }
+
+  if (inspection.status === "in_progress") {
+    return {
+      label: "Inspección en proceso",
+
+      color: "#3B82F6",
+    };
+  }
+
+  return {
+    label: "Inspección pendiente",
+
+    color: "#F59E0B",
+  };
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function createInitials(firstName: string, lastName: string): string {
+  const first = firstName.trim().charAt(0);
+
+  const last = lastName.trim().charAt(0);
+
+  return `${first}${last}`.toUpperCase() || "U";
 }
 
 /*
@@ -574,8 +754,11 @@ function ActivityItem({
  * ESTILOS
  * ============================================================================
  *
- * ResponsiveContainer y ResponsiveGrid conservan los ajustes ya existentes
- * para celular, tablet y escritorio.
+ * ResponsiveGrid mantiene:
+ *
+ * celular → tarjetas compactas
+ * tablet  → varias columnas
+ * web     → uso controlado del espacio
  */
 const styles = StyleSheet.create({
   scrollContent: {
@@ -617,8 +800,8 @@ const styles = StyleSheet.create({
   },
 
   profileButton: {
-    width: 48,
-    height: 48,
+    width: 52,
+    height: 52,
 
     flexShrink: 0,
 
@@ -626,6 +809,13 @@ const styles = StyleSheet.create({
 
     alignItems: "center",
     justifyContent: "center",
+
+    overflow: "hidden",
+  },
+
+  profileImage: {
+    width: "100%",
+    height: "100%",
   },
 
   profileInitial: {
@@ -659,6 +849,21 @@ const styles = StyleSheet.create({
     fontWeight: "600",
 
     marginBottom: Spacing.md,
+  },
+
+  statCard: {
+    width: "100%",
+  },
+
+  statValue: {
+    fontSize: FontSize.h2,
+    fontWeight: "700",
+
+    marginBottom: Spacing.sm,
+  },
+
+  statLabel: {
+    fontSize: FontSize.small,
   },
 
   companyCard: {
@@ -723,21 +928,6 @@ const styles = StyleSheet.create({
     fontSize: 32,
 
     marginLeft: Spacing.sm,
-  },
-
-  statCard: {
-    width: "100%",
-  },
-
-  statValue: {
-    fontSize: FontSize.h2,
-    fontWeight: "700",
-
-    marginBottom: Spacing.sm,
-  },
-
-  statLabel: {
-    fontSize: FontSize.small,
   },
 
   actionCard: {
@@ -825,12 +1015,17 @@ const styles = StyleSheet.create({
   activityTime: {
     flexShrink: 0,
 
-    fontSize: FontSize.caption,
+    fontSize: FontSize.body,
 
     marginLeft: Spacing.sm,
   },
 
   divider: {
     height: 1,
+  },
+
+  emptyText: {
+    fontSize: FontSize.small,
+    lineHeight: 22,
   },
 });

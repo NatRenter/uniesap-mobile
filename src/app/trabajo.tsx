@@ -9,66 +9,52 @@ import { Screen } from "@/components/ui/Screen";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
+import { getCompanyById } from "@/data/companies";
+import { getFormById } from "@/data/forms";
+import { getPropertyById } from "@/data/properties";
+
 import { useAppTheme } from "@/hooks/useAppTheme";
+
+import { getInspections } from "@/repositories/inspectionRepository";
+
+import type {
+  Inspection,
+  InspectionStatus,
+  InspectionSyncStatus,
+} from "@/types/inspection";
 
 /*
  * ============================================================================
  * TRABAJO
  * ============================================================================
  *
- * Este módulo responde a:
+ * Este módulo ya no utiliza datos temporales.
  *
- * "¿Qué tengo que hacer?"
+ * Lee directamente InspectionRepository para responder:
  *
- * No reemplaza Empresas.
+ * "¿Qué inspecciones necesitan mi atención?"
  *
- * Empresas = estructura y consulta por empresa/inmueble.
- * Trabajo  = inspecciones que requieren atención.
+ * La pantalla muestra información simple:
  *
- * Los datos todavía son temporales; en una fase posterior se conectarán
- * directamente con InspectionRepository.
+ * - pendiente;
+ * - en proceso;
+ * - completada;
+ * - error de sincronización.
+ *
+ * Los detalles técnicos continúan en Opciones de desarrollador.
  */
-
-const workItems = [
-  {
-    id: "inspection-demo-001",
-    companyId: "2",
-    propertyId: "property-001",
-    company: "CEDIS",
-    property: "LALA La Piedad",
-    title: "Inspección de riesgos",
-    status: "pending" as const,
-    statusLabel: "Pendiente",
-    dateLabel: "Hoy",
-  },
-
-  {
-    id: "inspection-demo-002",
-    companyId: "1",
-    propertyId: "property-002",
-    company: "AutoZone",
-    property: "AutoZone Celaya",
-    title: "Inspección general",
-    status: "in_progress" as const,
-    statusLabel: "En proceso",
-    dateLabel: "Hoy",
-  },
-
-  {
-    id: "inspection-demo-003",
-    companyId: "1",
-    propertyId: "property-003",
-    company: "AutoZone",
-    property: "AutoZone Salamanca",
-    title: "Revisión de extintores",
-    status: "completed" as const,
-    statusLabel: "Completada",
-    dateLabel: "Ayer",
-  },
-];
 
 export default function WorkScreen() {
   const { colors } = useAppTheme();
+
+  /*
+   * El repositorio ya fue hidratado por RootLayout.
+   */
+  const inspections = [...getInspections()].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  );
+
+  const summary = createWorkSummary(inspections);
 
   return (
     <Screen padded={false}>
@@ -77,6 +63,10 @@ export default function WorkScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ResponsiveContainer>
+          {/* ============================================================ */}
+          {/* HEADER                                                       */}
+          {/* ============================================================ */}
+
           <View style={styles.header}>
             <Text
               style={[
@@ -97,8 +87,7 @@ export default function WorkScreen() {
                 },
               ]}
             >
-              Consulta rápidamente inspecciones pendientes, en proceso y
-              completadas.
+              Consulta rápidamente las inspecciones que necesitan atención.
             </Text>
           </View>
 
@@ -107,16 +96,34 @@ export default function WorkScreen() {
           {/* ============================================================ */}
 
           <ResponsiveGrid
-            phoneColumns={3}
-            tabletColumns={3}
-            desktopColumns={3}
+            phoneColumns={2}
+            tabletColumns={4}
+            desktopColumns={4}
             gap={Spacing.sm}
           >
-            <SummaryCard value="1" label="Pendiente" color={colors.warning} />
+            <SummaryCard
+              value={String(summary.pending)}
+              label="Pendientes"
+              color={colors.warning}
+            />
 
-            <SummaryCard value="1" label="En proceso" color={colors.primary} />
+            <SummaryCard
+              value={String(summary.inProgress)}
+              label="En proceso"
+              color={colors.primary}
+            />
 
-            <SummaryCard value="1" label="Completada" color={colors.success} />
+            <SummaryCard
+              value={String(summary.completed)}
+              label="Completadas"
+              color={colors.success}
+            />
+
+            <SummaryCard
+              value={String(summary.errors)}
+              label="Con error"
+              color={summary.errors > 0 ? colors.error : colors.textMuted}
+            />
           </ResponsiveGrid>
 
           {/* ============================================================ */}
@@ -135,11 +142,37 @@ export default function WorkScreen() {
               Mis inspecciones
             </Text>
 
-            <View style={styles.list}>
-              {workItems.map((item) => (
-                <WorkItem key={item.id} {...item} />
-              ))}
-            </View>
+            {inspections.length > 0 ? (
+              <View style={styles.list}>
+                {inspections.map((inspection) => (
+                  <WorkItem key={inspection.id} inspection={inspection} />
+                ))}
+              </View>
+            ) : (
+              <AppCard>
+                <Text
+                  style={[
+                    styles.emptyTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  No hay trabajo registrado
+                </Text>
+
+                <Text
+                  style={[
+                    styles.emptyDescription,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Las inspecciones nuevas aparecerán aquí automáticamente.
+                </Text>
+              </AppCard>
+            )}
           </View>
         </ResponsiveContainer>
       </ScrollView>
@@ -148,9 +181,7 @@ export default function WorkScreen() {
 }
 
 /*
- * Resumen simple.
- *
- * Evitamos saturar al usuario con demasiadas métricas.
+ * Tarjeta numérica del resumen.
  */
 function SummaryCard({
   value,
@@ -192,51 +223,34 @@ function SummaryCard({
 }
 
 /*
- * Tarjeta individual de trabajo.
+ * Tarjeta de una inspección real.
  *
- * En esta primera fase la navegación abre el inmueble relacionado.
- * Posteriormente se conectará directamente a la inspección real.
+ * Si la captura está pendiente/en proceso:
+ *     abre Captura y continúa el trabajo.
+ *
+ * Si está completada:
+ *     abre el detalle de inspección.
  */
-function WorkItem({
-  companyId,
-  propertyId,
-  company,
-  property,
-  title,
-  status,
-  statusLabel,
-  dateLabel,
-}: {
-  id: string;
-  companyId: string;
-  propertyId: string;
-  company: string;
-  property: string;
-  title: string;
-  status: "pending" | "in_progress" | "completed";
-  statusLabel: string;
-  dateLabel: string;
-}) {
+function WorkItem({ inspection }: { inspection: Inspection }) {
   const { colors } = useAppTheme();
 
-  const statusColor =
-    status === "pending"
-      ? colors.warning
-      : status === "in_progress"
-        ? colors.primary
-        : colors.success;
+  const company = getCompanyById(inspection.companyId);
+
+  const property = getPropertyById(inspection.propertyId);
+
+  const form = getFormById(inspection.formId);
+
+  const state = resolveWorkState(
+    inspection.status,
+    inspection.integration?.syncStatus,
+    colors,
+  );
+
+  const actionLabel = inspection.status === "completed" ? "Ver" : "Continuar";
 
   return (
     <Pressable
-      onPress={() =>
-        router.navigate({
-          pathname: "/empresas/[id]/inmuebles/[propertyId]",
-          params: {
-            id: companyId,
-            propertyId,
-          },
-        })
-      }
+      onPress={() => openInspection(inspection)}
       style={({ pressed }) => ({
         opacity: pressed ? 0.75 : 1,
       })}
@@ -252,7 +266,7 @@ function WorkItem({
                 },
               ]}
             >
-              {title}
+              {form?.title ?? "Inspección"}
             </Text>
 
             <Text
@@ -263,7 +277,7 @@ function WorkItem({
                 },
               ]}
             >
-              {property}
+              {property?.name ?? "Inmueble no disponible"}
             </Text>
 
             <Text
@@ -274,42 +288,58 @@ function WorkItem({
                 },
               ]}
             >
-              {company} · {dateLabel}
+              {company?.name ?? "Empresa no disponible"} ·{" "}
+              {formatDate(inspection.date)}
             </Text>
           </View>
 
           <Text
             style={[
-              styles.arrow,
+              styles.actionLabel,
               {
-                color: colors.textMuted,
+                color: colors.primary,
               },
             ]}
           >
-            ›
+            {actionLabel}
           </Text>
         </View>
 
-        <View style={styles.statusRow}>
-          <View
-            style={[
-              styles.statusDot,
-              {
-                backgroundColor: statusColor,
-              },
-            ]}
-          />
+        <View style={styles.statusArea}>
+          <View style={styles.statusRow}>
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor: state.color,
+                },
+              ]}
+            />
 
-          <Text
-            style={[
-              styles.statusText,
-              {
-                color: statusColor,
-              },
-            ]}
-          >
-            {statusLabel}
-          </Text>
+            <Text
+              style={[
+                styles.statusText,
+                {
+                  color: state.color,
+                },
+              ]}
+            >
+              {state.label}
+            </Text>
+          </View>
+
+          {state.syncLabel ? (
+            <Text
+              style={[
+                styles.syncText,
+                {
+                  color: state.syncColor,
+                },
+              ]}
+            >
+              {state.syncLabel}
+            </Text>
+          ) : null}
         </View>
       </AppCard>
     </Pressable>
@@ -317,12 +347,149 @@ function WorkItem({
 }
 
 /*
+ * Abre el destino correcto según el estado.
+ */
+function openInspection(inspection: Inspection): void {
+  if (inspection.status === "completed") {
+    router.navigate({
+      pathname: "/empresas/[id]/inspecciones/[inspectionId]",
+
+      params: {
+        id: inspection.companyId,
+
+        inspectionId: inspection.id,
+      },
+    });
+
+    return;
+  }
+
+  router.navigate({
+    pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
+
+    params: {
+      id: inspection.companyId,
+
+      propertyId: inspection.propertyId,
+
+      formId: inspection.formId,
+
+      inspectionId: inspection.id,
+    },
+  });
+}
+
+/*
+ * Resume el estado interno con términos de interfaz.
+ *
+ * La sincronización se muestra de manera simple:
+ * no exponemos submissionId, operationId ni otros datos técnicos.
+ */
+function resolveWorkState(
+  status: InspectionStatus,
+  syncStatus: InspectionSyncStatus | undefined,
+  colors: ReturnType<typeof useAppTheme>["colors"],
+) {
+  if (syncStatus === "error") {
+    return {
+      label:
+        status === "completed"
+          ? "Completada"
+          : status === "in_progress"
+            ? "En proceso"
+            : "Pendiente",
+
+      color:
+        status === "completed"
+          ? colors.success
+          : status === "in_progress"
+            ? colors.primary
+            : colors.warning,
+
+      syncLabel: "Error de sincronización",
+
+      syncColor: colors.error,
+    };
+  }
+
+  if (status === "completed") {
+    return {
+      label: "Completada",
+      color: colors.success,
+
+      syncLabel:
+        syncStatus === "synced"
+          ? "✓ Sincronizada"
+          : syncStatus === "syncing"
+            ? "Sincronizando..."
+            : syncStatus === "pending"
+              ? "Pendiente de subir"
+              : undefined,
+
+      syncColor: syncStatus === "synced" ? colors.success : colors.textMuted,
+    };
+  }
+
+  if (status === "in_progress") {
+    return {
+      label: "En proceso",
+      color: colors.primary,
+      syncLabel: undefined,
+      syncColor: colors.textMuted,
+    };
+  }
+
+  return {
+    label: "Pendiente",
+    color: colors.warning,
+    syncLabel: undefined,
+    syncColor: colors.textMuted,
+  };
+}
+
+/*
+ * Calcula las métricas visibles.
+ */
+function createWorkSummary(inspections: Inspection[]) {
+  return {
+    pending: inspections.filter((inspection) => inspection.status === "draft")
+      .length,
+
+    inProgress: inspections.filter(
+      (inspection) => inspection.status === "in_progress",
+    ).length,
+
+    completed: inspections.filter(
+      (inspection) => inspection.status === "completed",
+    ).length,
+
+    errors: inspections.filter(
+      (inspection) => inspection.integration?.syncStatus === "error",
+    ).length,
+  };
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/*
  * ============================================================================
  * ESTILOS
  * ============================================================================
  *
- * El contenido utiliza ResponsiveContainer y ResponsiveGrid para conservar
- * el comportamiento en teléfono, tablet y web.
+ * La bandeja mantiene una sola columna para facilitar lectura.
+ * El resumen sí aprovecha múltiples columnas en tablet y web.
  */
 const styles = StyleSheet.create({
   scrollContent: {
@@ -382,6 +549,8 @@ const styles = StyleSheet.create({
   workHeader: {
     flexDirection: "row",
     alignItems: "center",
+
+    gap: Spacing.md,
   },
 
   workText: {
@@ -406,19 +575,27 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
   },
 
-  arrow: {
+  actionLabel: {
     flexShrink: 0,
 
-    fontSize: 28,
+    fontSize: FontSize.small,
+    fontWeight: "700",
+  },
 
-    marginLeft: Spacing.md,
+  statusArea: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+
+    gap: Spacing.sm,
+
+    marginTop: Spacing.md,
   },
 
   statusRow: {
     flexDirection: "row",
     alignItems: "center",
-
-    marginTop: Spacing.md,
   },
 
   statusDot: {
@@ -433,5 +610,22 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: FontSize.caption,
     fontWeight: "700",
+  },
+
+  syncText: {
+    fontSize: FontSize.caption,
+    fontWeight: "600",
+  },
+
+  emptyTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+
+    marginBottom: Spacing.xs,
+  },
+
+  emptyDescription: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
   },
 });
