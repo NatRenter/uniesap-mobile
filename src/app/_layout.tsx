@@ -31,6 +31,13 @@ import {
   selectAllEvidences,
 } from "@/database/evidenceDatabase";
 
+import {
+  deleteReportFromDatabase,
+  insertReport,
+  replaceReport,
+  selectAllReports,
+} from "@/database/reportDatabase";
+
 /*
  * ============================================================================
  * INICIALIZACIÓN SQLITE
@@ -89,6 +96,11 @@ import {
   configurePropertyRepositoryPersistence,
   hydratePropertyRepository,
 } from "@/repositories/propertyRepository";
+
+import {
+  configureReportRepositoryPersistence,
+  hydrateReportRepository,
+} from "@/repositories/reportRepository";
 
 /*
  * ============================================================================
@@ -239,6 +251,16 @@ export default function RootLayout() {
         });
 
         /*
+         * ReportRepository utiliza SQLite en Android/iOS.
+         */
+        configureReportRepositoryPersistence({
+          loadAll: selectAllReports,
+          insert: insertReport,
+          replace: replaceReport,
+          delete: deleteReportFromDatabase,
+        });
+
+        /*
          * ================================================================
          * 5. HIDRATAR EMPRESAS
          * ================================================================
@@ -264,9 +286,11 @@ export default function RootLayout() {
          * su funcionamiento actual.
          */
         await Promise.all([
+          hydrateCompanyRepository(),
+          hydratePropertyRepository(),
           hydrateInspectionRepository(),
-
           hydrateEvidenceRepository(),
+          hydrateReportRepository(),
         ]);
 
         if (!active) {

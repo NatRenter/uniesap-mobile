@@ -14,7 +14,7 @@ import { getCompanyById } from "@/repositories/companyRepository";
 import { getFormById } from "@/data/forms";
 import { getInspectionById } from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
-import { getReportsByCompanyId } from "@/data/reports";
+import { getReportsByCompanyId } from "@/repositories/reportRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 

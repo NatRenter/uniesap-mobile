@@ -1,16 +1,41 @@
 import type { Report } from "@/types/report";
 
-export const reports: Report[] = [
+/*
+ * ============================================================================
+ * REPORT SEED
+ * ============================================================================
+ *
+ * Estos reportes son datos iniciales de desarrollo.
+ *
+ * Solamente se utilizarán cuando la persistencia de reportes
+ * todavía esté completamente vacía.
+ *
+ * A diferencia de src/data/reports.ts, este archivo NO será
+ * consultado directamente por las pantallas.
+ *
+ * Flujo:
+ *
+ * ReportSeed
+ *     ↓
+ * ReportRepository
+ *     ↓
+ * SQLite / localStorage
+ */
+
+export const initialReports: Report[] = [
   {
     id: "report-001",
 
     companyId: "company-001",
+
     propertyId: "property-001",
+
     inspectionId: "inspection-001",
 
     title: "Reporte de análisis de riesgos",
 
     format: "excel",
+
     status: "generated",
 
     includeEvidence: true,
@@ -22,12 +47,15 @@ export const reports: Report[] = [
     id: "report-002",
 
     companyId: "company-001",
+
     propertyId: "property-001",
+
     inspectionId: "inspection-002",
 
     title: "Reporte de inspección de extintores",
 
     format: "excel",
+
     status: "pending",
 
     includeEvidence: true,
@@ -39,12 +67,15 @@ export const reports: Report[] = [
     id: "report-003",
 
     companyId: "company-002",
+
     propertyId: "property-004",
+
     inspectionId: "inspection-004",
 
     title: "Reporte de análisis de riesgos - LALA",
 
     format: "pdf",
+
     status: "generated",
 
     includeEvidence: true,
@@ -52,15 +83,3 @@ export const reports: Report[] = [
     createdAt: "2026-08-14",
   },
 ];
-
-export function getReportById(id: string) {
-  return reports.find((report) => report.id === id);
-}
-
-export function getReportsByCompanyId(companyId: string) {
-  return reports.filter((report) => report.companyId === companyId);
-}
-
-export function getReportsByInspectionId(inspectionId: string) {
-  return reports.filter((report) => report.inspectionId === inspectionId);
-}

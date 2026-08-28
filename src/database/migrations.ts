@@ -423,6 +423,79 @@ export async function runDatabaseMigrations() {
 
   /*
    * ==========================================================================
+   * REPORTES
+   * ==========================================================================
+   *
+   * Aquí solamente persistimos el registro del reporte.
+   *
+   * El archivo físico Excel/PDF se generará después
+   * mediante una capa independiente.
+   */
+  await database.execAsync(`
+  CREATE TABLE IF NOT EXISTS reports (
+    id TEXT PRIMARY KEY NOT NULL,
+
+    company_id TEXT NOT NULL,
+
+    property_id TEXT NOT NULL,
+
+    inspection_id TEXT NOT NULL,
+
+    title TEXT NOT NULL,
+
+    format TEXT NOT NULL,
+
+    status TEXT NOT NULL,
+
+    include_evidence INTEGER NOT NULL DEFAULT 0,
+
+    created_at TEXT NOT NULL,
+
+    file_uri TEXT,
+
+    FOREIGN KEY (company_id)
+      REFERENCES companies(id),
+
+    FOREIGN KEY (property_id)
+      REFERENCES properties(id),
+
+    FOREIGN KEY (inspection_id)
+      REFERENCES inspections(id)
+  );
+`);
+
+  /*
+   * ==========================================================================
+   * ÍNDICES DE REPORTES
+   * ==========================================================================
+   */
+
+  await database.execAsync(`
+  CREATE INDEX IF NOT EXISTS
+    idx_reports_company_id
+  ON reports(company_id);
+`);
+
+  await database.execAsync(`
+  CREATE INDEX IF NOT EXISTS
+    idx_reports_property_id
+  ON reports(property_id);
+`);
+
+  await database.execAsync(`
+  CREATE INDEX IF NOT EXISTS
+    idx_reports_inspection_id
+  ON reports(inspection_id);
+`);
+
+  await database.execAsync(`
+  CREATE INDEX IF NOT EXISTS
+    idx_reports_status
+  ON reports(status);
+`);
+
+  /*
+   * ==========================================================================
    * ÍNDICES - EMPRESAS
    * ==========================================================================
    */

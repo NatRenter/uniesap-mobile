@@ -12,7 +12,7 @@ import { getEvidencesByInspectionId } from "@/repositories/evidenceRepository";
 import { getFormById } from "@/data/forms";
 import { getInspectionById } from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
-import { getReportById } from "@/data/reports";
+import { getReportById } from "@/repositories/reportRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 

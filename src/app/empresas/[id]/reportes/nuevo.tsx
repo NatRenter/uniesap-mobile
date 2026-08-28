@@ -17,41 +17,94 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getCompanyById } from "@/repositories/companyRepository";
-import { getEvidencesByInspectionId } from "@/repositories/evidenceRepository";
 import { getFormById } from "@/data/forms";
+
+import { getCompanyById } from "@/repositories/companyRepository";
+
+import { getEvidencesByInspectionId } from "@/repositories/evidenceRepository";
+
 import {
   getInspectionById,
   getInspectionsByCompanyId,
 } from "@/repositories/inspectionRepository";
+
 import { getPropertyById } from "@/repositories/propertyRepository";
+
+/*
+ * ReportRepository será la fuente real de los reportes.
+ *
+ * Android / iOS → SQLite
+ * Web           → localStorage
+ */
+import { createReport } from "@/repositories/reportRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useResponsive } from "@/hooks/useResponsive";
 
+/*
+ * Formatos disponibles actualmente.
+ *
+ * Más adelante estos formatos se conectarán
+ * con sus respectivos generadores físicos.
+ */
 type ReportFormatOption = "excel" | "pdf";
 
+/*
+ * ============================================================================
+ * NUEVO REPORTE
+ * ============================================================================
+ *
+ * Esta pantalla permite:
+ *
+ * 1. Seleccionar una inspección.
+ * 2. Seleccionar Excel o PDF.
+ * 3. Elegir si se incluyen evidencias.
+ * 4. Crear un registro Report persistente.
+ *
+ * Todavía NO genera físicamente:
+ *
+ * - un archivo Excel;
+ * - un archivo PDF.
+ *
+ * El reporte comienza con:
+ *
+ * status = "pending"
+ *
+ * y posteriormente un servicio de generación
+ * podrá cambiarlo a:
+ *
+ * status = "generated"
+ */
 export default function NewReportScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * useResponsive nos permite modificar Ãºnicamente
-   * aquellas zonas donde un grid normal no es suficiente.
+   * useResponsive nos permite adaptar
+   * ciertas zonas específicas de la pantalla.
    *
-   * AquÃ­ lo utilizaremos principalmente para construir
-   * el layout principal de configuraciÃ³n + resumen.
+   * Teléfono:
+   * configuración y resumen verticales.
+   *
+   * Tablet / Web:
+   * configuración y resumen en columnas.
    */
   const { isPhone } = useResponsive();
 
   /*
-   * ParÃ¡metros recibidos desde Expo Router.
+   * ==========================================================================
+   * PARÁMETROS DE LA RUTA
+   * ==========================================================================
    *
-   * inspectionId es opcional porque esta pantalla puede abrirse:
+   * id:
+   * empresa actual.
    *
-   * 1. Desde Reportes.
-   * 2. Directamente desde una inspecciÃ³n.
+   * inspectionId:
+   * opcional.
+   *
+   * Puede recibirse cuando el usuario entra
+   * directamente desde una inspección.
    */
   const { id, inspectionId: routeInspectionId } = useLocalSearchParams<{
     id: string;
@@ -59,67 +112,96 @@ export default function NewReportScreen() {
   }>();
 
   /*
-   * Recuperamos la empresa.
+   * ==========================================================================
+   * EMPRESA
+   * ==========================================================================
    *
-   * IMPORTANTE:
-   * todavÃ­a NO hacemos return porque todos los Hooks
-   * deben ejecutarse siempre en el mismo orden.
+   * CompanyRepository ya está conectado a:
+   *
+   * Android / iOS → SQLite
+   * Web           → localStorage
    */
   const company = getCompanyById(id);
 
   /*
-   * Recuperamos las inspecciones de la empresa.
+   * Recuperamos solamente las inspecciones
+   * pertenecientes a esta empresa.
    *
-   * Si la empresa no existe utilizamos temporalmente
-   * un arreglo vacÃ­o.
+   * Si la empresa no existe usamos un arreglo vacío
+   * hasta terminar de ejecutar todos los Hooks.
    */
   const companyInspections = company
     ? getInspectionsByCompanyId(company.id)
     : [];
 
   /*
-   * Si la pantalla recibiÃ³ inspectionId y esa inspecciÃ³n
-   * existe, la seleccionamos automÃ¡ticamente.
+   * ==========================================================================
+   * INSPECCIÓN INICIAL
+   * ==========================================================================
    *
-   * De lo contrario utilizamos la primera disponible.
+   * Si recibimos inspectionId desde la ruta
+   * y existe realmente, la seleccionamos.
+   *
+   * En caso contrario usamos la primera inspección
+   * disponible de la empresa.
    */
   const initialInspectionId =
     routeInspectionId && getInspectionById(routeInspectionId)
       ? routeInspectionId
       : companyInspections[0]?.id;
 
-  /* ---------------------------------------------------------------------- */
-  /*                                ESTADO                                  */
-  /* ---------------------------------------------------------------------- */
+  /*
+   * ==========================================================================
+   * ESTADO
+   * ==========================================================================
+   */
 
   /*
-   * InspecciÃ³n que alimentarÃ¡ el reporte.
+   * Inspección actualmente seleccionada.
    */
   const [selectedInspectionId, setSelectedInspectionId] = useState<
     string | undefined
   >(initialInspectionId);
 
   /*
-   * Formato de salida.
+   * Formato que tendrá el reporte.
    *
-   * En esta etapa mantenemos Excel y PDF preparados
-   * aunque todavÃ­a no generemos fÃ­sicamente el archivo.
+   * Todavía representa únicamente la configuración
+   * del futuro archivo físico.
    */
   const [selectedFormat, setSelectedFormat] =
     useState<ReportFormatOption>("excel");
 
   /*
-   * Determina si las evidencias asociadas a la inspecciÃ³n
-   * deberÃ¡n incorporarse al reporte.
+   * Define si el reporte deberá considerar
+   * las evidencias de la inspección.
    */
   const [includeEvidence, setIncludeEvidence] = useState(true);
 
-  /* ---------------------------------------------------------------------- */
-  /*                         DATOS DERIVADOS                                */
-  /* ---------------------------------------------------------------------- */
+  /*
+   * ==========================================================================
+   * ESTADO DE CREACIÓN DEL REPORTE
+   * ==========================================================================
+   *
+   * Evita que varios clics consecutivos
+   * generen varios registros iguales.
+   */
+  const [isGenerating, setIsGenerating] = useState(false);
 
   /*
-   * Resolvemos la inspecciÃ³n seleccionada.
+   * Guarda un mensaje cuando ocurre un error
+   * al persistir el nuevo reporte.
+   */
+  const [generationError, setGenerationError] = useState<string | null>(null);
+
+  /*
+   * ==========================================================================
+   * DATOS DERIVADOS
+   * ==========================================================================
+   */
+
+  /*
+   * Recupera la inspección seleccionada.
    */
   const selectedInspection = selectedInspectionId
     ? getInspectionById(selectedInspectionId)
@@ -127,8 +209,10 @@ export default function NewReportScreen() {
 
   /*
    * Inspection
-   *     â†“
+   *     ↓
    * Property
+   *
+   * Recuperamos el inmueble asociado.
    */
   const selectedProperty = selectedInspection
     ? getPropertyById(selectedInspection.propertyId)
@@ -136,8 +220,11 @@ export default function NewReportScreen() {
 
   /*
    * Inspection
-   *     â†“
+   *     ↓
    * Form
+   *
+   * El formulario sigue siendo configuración estática
+   * dentro de src/data/forms.ts por ahora.
    */
   const selectedForm = selectedInspection
     ? getFormById(selectedInspection.formId)
@@ -145,29 +232,33 @@ export default function NewReportScreen() {
 
   /*
    * Inspection
-   *     â†“
+   *     ↓
    * Evidences
+   *
+   * Estas evidencias ya provienen del
+   * EvidenceRepository persistente.
    */
   const selectedEvidences = selectedInspection
     ? getEvidencesByInspectionId(selectedInspection.id)
     : [];
 
   /*
-   * El tÃ­tulo se deriva del formulario.
+   * ==========================================================================
+   * TÍTULO DEL REPORTE
+   * ==========================================================================
    *
-   * No necesitamos useMemo aquÃ­ porque la operaciÃ³n
-   * es pequeÃ±a y evita el problema de memoizaciÃ³n
-   * que encontramos anteriormente con React Compiler.
+   * Por ahora se deriva automáticamente
+   * del formulario seleccionado.
    */
   const reportTitle = selectedForm
     ? `Reporte de ${selectedForm.title}`
     : "Nuevo reporte";
 
   /*
-   * Todos los Hooks ya fueron ejecutados.
+   * Todos los Hooks anteriores ya fueron ejecutados.
    *
-   * Ahora sÃ­ podemos realizar un return condicional
-   * de forma segura.
+   * Ahora sí podemos hacer una salida condicional
+   * sin romper las reglas de React Hooks.
    */
   if (!company) {
     return (
@@ -179,7 +270,7 @@ export default function NewReportScreen() {
               fontWeight: "600",
             }}
           >
-            â€¹ Empresas
+            ‹ Empresas
           </Text>
         </Pressable>
 
@@ -199,39 +290,152 @@ export default function NewReportScreen() {
     );
   }
 
-  /* ---------------------------------------------------------------------- */
-  /*                         GENERACIÃ“N DEL REPORTE                          */
-  /* ---------------------------------------------------------------------- */
-
   /*
-   * GENERACIÃ“N SIMULADA
+   * ==========================================================================
+   * CREAR REPORTE
+   * ==========================================================================
    *
-   * Por ahora solamente validamos que exista una inspecciÃ³n
-   * y regresamos al historial.
+   * Este proceso ahora SÍ crea un registro persistente.
    *
-   * MÃ¡s adelante este serÃ¡ el punto de entrada para:
+   * Flujo:
    *
-   * ReportRequest
-   *      â†“
-   * ReportService
-   *      â”œâ”€â”€ ExcelGenerator
-   *      â””â”€â”€ PdfGenerator
+   * Pantalla
+   *    ↓
+   * createReport()
+   *    ↓
+   * ReportRepository
+   *    ↓
+   * PersistenceAdapter
+   *    ↓
+   * SQLite / localStorage
    *
-   * De esta forma Kobo NO quedarÃ¡ acoplado directamente
-   * al generador de archivos.
+   * IMPORTANTE:
+   *
+   * Todavía no se crea físicamente Excel/PDF.
    */
-  const handleGenerate = () => {
-    if (!selectedInspection) {
+  const handleGenerate = async () => {
+    /*
+     * Validamos los datos mínimos.
+     */
+    if (!selectedInspection || !selectedProperty) {
+      setGenerationError(
+        "No fue posible determinar la inspección o el inmueble del reporte.",
+      );
+
       return;
     }
 
-    router.navigate({
-      pathname: "/empresas/[id]/reportes",
+    /*
+     * Evita crear varios reportes
+     * mientras el primero sigue guardándose.
+     */
+    if (isGenerating) {
+      return;
+    }
 
-      params: {
-        id,
-      },
-    });
+    /*
+     * Activamos estado de guardado.
+     */
+    setIsGenerating(true);
+
+    /*
+     * Limpiamos cualquier error anterior.
+     */
+    setGenerationError(null);
+
+    try {
+      /*
+       * Creamos el registro real del reporte.
+       *
+       * El repository se encarga de:
+       *
+       * 1. crear el ID;
+       * 2. agregarlo a memoria;
+       * 3. persistirlo;
+       * 4. hacer rollback si ocurre un error.
+       */
+      const report = await createReport({
+        /*
+         * Usamos company.id y no directamente
+         * el parámetro recibido en la URL.
+         *
+         * Así guardamos siempre el ID real actual.
+         */
+        companyId: company.id,
+
+        /*
+         * Inmueble asociado a la inspección.
+         */
+        propertyId: selectedProperty.id,
+
+        /*
+         * Inspección que alimentará el reporte.
+         */
+        inspectionId: selectedInspection.id,
+
+        /*
+         * Nombre visible del reporte.
+         */
+        title: reportTitle,
+
+        /*
+         * Excel o PDF.
+         */
+        format: selectedFormat,
+
+        /*
+         * Configuración de evidencias.
+         */
+        includeEvidence,
+
+        /*
+         * El archivo todavía no existe.
+         *
+         * Por eso comenzamos como pending.
+         */
+        status: "pending",
+      });
+
+      /*
+       * =========================================================================
+       * NAVEGACIÓN DESPUÉS DEL GUARDADO
+       * =========================================================================
+       *
+       * El reporte ya quedó persistido.
+       *
+       * Abrimos directamente su detalle
+       * usando el ID recién creado.
+       */
+      router.replace({
+        pathname: "/empresas/[id]/reportes/[reportId]",
+
+        params: {
+          id: company.id,
+          reportId: report.id,
+        },
+      });
+    } catch (error) {
+      /*
+       * Registramos el error completo en consola
+       * para las herramientas de desarrollo.
+       */
+      console.error("Error al crear el reporte:", error);
+
+      /*
+       * Mensaje corto para el usuario.
+       */
+      setGenerationError(
+        error instanceof Error
+          ? error.message
+          : "Ocurrió un error inesperado al crear el reporte.",
+      );
+    } finally {
+      /*
+       * Siempre liberamos el estado,
+       * tanto en éxito como en error.
+       */
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -242,7 +446,7 @@ export default function NewReportScreen() {
       >
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÃ“N                                                   */}
+          {/* NAVEGACIÓN                                                   */}
           {/* ============================================================ */}
 
           <Pressable
@@ -251,7 +455,7 @@ export default function NewReportScreen() {
                 pathname: "/empresas/[id]/reportes",
 
                 params: {
-                  id,
+                  id: company.id,
                 },
               })
             }
@@ -264,7 +468,7 @@ export default function NewReportScreen() {
                 },
               ]}
             >
-              â€¹ Reportes
+              ‹ Reportes
             </Text>
           </Pressable>
 
@@ -306,11 +510,11 @@ export default function NewReportScreen() {
               },
             ]}
           >
-            Selecciona la inspecciÃ³n y configura el contenido del reporte.
+            Selecciona la inspección y configura el contenido del reporte.
           </Text>
 
           {/* ============================================================ */}
-          {/* SELECCIÃ“N DE INSPECCIÃ“N                                      */}
+          {/* SELECCIÓN DE INSPECCIÓN                                      */}
           {/* ============================================================ */}
 
           <View style={styles.section}>
@@ -322,7 +526,7 @@ export default function NewReportScreen() {
                 },
               ]}
             >
-              1. Seleccionar inspecciÃ³n
+              1. Seleccionar inspección
             </Text>
 
             <Text
@@ -333,19 +537,19 @@ export default function NewReportScreen() {
                 },
               ]}
             >
-              El reporte se construirÃ¡ a partir de la informaciÃ³n capturada en
-              una inspecciÃ³n.
+              El reporte se construirá a partir de la información capturada en
+              una inspección.
             </Text>
 
             {/*
-             * ResponsiveGrid permite aprovechar mejor tablets y web:
+             * ResponsiveGrid adapta las tarjetas:
              *
-             * MÃ³vil   â†’ 1 inspecciÃ³n por fila
-             * Tablet  â†’ 2 inspecciones por fila
-             * Desktop â†’ 2 inspecciones por fila
+             * Teléfono → 1 columna
+             * Tablet   → 2 columnas
+             * Web      → 2 columnas
              *
-             * Utilizamos 2 y no 3 en escritorio porque estas tarjetas
-             * contienen bastante informaciÃ³n.
+             * Utilizamos dos columnas en escritorio
+             * porque las tarjetas contienen bastante información.
              */}
             <ResponsiveGrid
               phoneColumns={1}
@@ -354,10 +558,19 @@ export default function NewReportScreen() {
               gap={Spacing.sm}
             >
               {companyInspections.map((inspection) => {
+                /*
+                 * Inmueble de esta inspección.
+                 */
                 const property = getPropertyById(inspection.propertyId);
 
+                /*
+                 * Formulario utilizado en la inspección.
+                 */
                 const form = getFormById(inspection.formId);
 
+                /*
+                 * Indica si la tarjeta está seleccionada.
+                 */
                 const selected = inspection.id === selectedInspectionId;
 
                 return (
@@ -368,11 +581,23 @@ export default function NewReportScreen() {
                     date={inspection.date}
                     status={inspection.status}
                     selected={selected}
-                    onPress={() => setSelectedInspectionId(inspection.id)}
+                    onPress={() => {
+                      /*
+                       * Al cambiar de inspección también
+                       * limpiamos errores anteriores.
+                       */
+                      setGenerationError(null);
+
+                      setSelectedInspectionId(inspection.id);
+                    }}
                   />
                 );
               })}
             </ResponsiveGrid>
+
+            {/* ========================================================== */}
+            {/* SIN INSPECCIONES                                           */}
+            {/* ========================================================== */}
 
             {companyInspections.length === 0 && (
               <AppCard>
@@ -395,14 +620,14 @@ export default function NewReportScreen() {
                     },
                   ]}
                 >
-                  Esta empresa todavÃ­a no tiene inspecciones registradas.
+                  Esta empresa todavía no tiene inspecciones registradas.
                 </Text>
               </AppCard>
             )}
           </View>
 
           {/* ============================================================ */}
-          {/* CONFIGURACIÃ“N DEL REPORTE                                    */}
+          {/* CONFIGURACIÓN DEL REPORTE                                    */}
           {/* ============================================================ */}
 
           {selectedInspection && (
@@ -419,17 +644,14 @@ export default function NewReportScreen() {
               </Text>
 
               {/*
-               * MÃ“VIL:
+               * Teléfono:
                *
-               * ConfiguraciÃ³n
+               * Configuración
                * Resumen
                *
-               * TABLET / DESKTOP:
+               * Tablet / Web:
                *
-               * ConfiguraciÃ³n | Resumen
-               *
-               * No utilizamos dos layouts completamente diferentes.
-               * Simplemente cambiamos flexDirection segÃºn el dispositivo.
+               * Configuración | Resumen
                */}
               <View
                 style={[
@@ -438,16 +660,19 @@ export default function NewReportScreen() {
                 ]}
               >
                 {/* ====================================================== */}
-                {/* COLUMNA DE CONFIGURACIÃ“N                               */}
+                {/* CONFIGURACIÓN                                           */}
                 {/* ====================================================== */}
 
                 <View
                   style={[
                     styles.configurationColumn,
+
                     !isPhone && styles.configurationColumnWide,
                   ]}
                 >
-                  {/* FORMATO */}
+                  {/* ==================================================== */}
+                  {/* FORMATO                                              */}
+                  {/* ==================================================== */}
 
                   <View style={styles.configurationSection}>
                     <Text
@@ -464,21 +689,35 @@ export default function NewReportScreen() {
                     <View style={styles.formatRow}>
                       <FormatOption
                         label="Excel"
-                        description="Hoja de cÃ¡lculo"
+                        description="Hoja de cálculo"
                         selected={selectedFormat === "excel"}
-                        onPress={() => setSelectedFormat("excel")}
+                        onPress={() => {
+                          /*
+                           * Cambiamos el formato
+                           * y limpiamos errores anteriores.
+                           */
+                          setGenerationError(null);
+
+                          setSelectedFormat("excel");
+                        }}
                       />
 
                       <FormatOption
                         label="PDF"
                         description="Documento"
                         selected={selectedFormat === "pdf"}
-                        onPress={() => setSelectedFormat("pdf")}
+                        onPress={() => {
+                          setGenerationError(null);
+
+                          setSelectedFormat("pdf");
+                        }}
                       />
                     </View>
                   </View>
 
-                  {/* CONTENIDO */}
+                  {/* ==================================================== */}
+                  {/* CONTENIDO                                            */}
+                  {/* ==================================================== */}
 
                   <View style={styles.configurationSection}>
                     <Text
@@ -514,8 +753,8 @@ export default function NewReportScreen() {
                               },
                             ]}
                           >
-                            Agrega las fotografÃ­as y documentos relacionados con
-                            la inspecciÃ³n.
+                            Agrega las fotografías y documentos relacionados con
+                            la inspección.
                           </Text>
 
                           <Text
@@ -535,7 +774,15 @@ export default function NewReportScreen() {
 
                         <Switch
                           value={includeEvidence}
-                          onValueChange={setIncludeEvidence}
+                          onValueChange={(value) => {
+                            /*
+                             * Actualizamos la configuración
+                             * de evidencias del futuro reporte.
+                             */
+                            setGenerationError(null);
+
+                            setIncludeEvidence(value);
+                          }}
                         />
                       </View>
                     </AppCard>
@@ -543,12 +790,13 @@ export default function NewReportScreen() {
                 </View>
 
                 {/* ====================================================== */}
-                {/* COLUMNA DE RESUMEN                                     */}
+                {/* RESUMEN                                                */}
                 {/* ====================================================== */}
 
                 <View
                   style={[
                     styles.summaryColumn,
+
                     !isPhone && styles.summaryColumnWide,
                   ]}
                 >
@@ -576,7 +824,7 @@ export default function NewReportScreen() {
                     <Divider />
 
                     <InfoRow
-                      label="InspecciÃ³n"
+                      label="Inspección"
                       value={selectedForm?.title ?? "No disponible"}
                     />
 
@@ -602,11 +850,49 @@ export default function NewReportScreen() {
 
                     <InfoRow
                       label="Incluir evidencias"
-                      value={includeEvidence ? "SÃ­" : "No"}
+                      value={includeEvidence ? "Sí" : "No"}
                     />
+
+                    <Divider />
+
+                    {/*
+                     * Los nuevos reportes nacen como pending.
+                     *
+                     * Posteriormente el generador físico
+                     * cambiará este estado.
+                     */}
+                    <InfoRow label="Estado inicial" value="Pendiente" />
                   </AppCard>
                 </View>
               </View>
+
+              {/* ======================================================== */}
+              {/* ERROR                                                    */}
+              {/* ======================================================== */}
+
+              {generationError && (
+                <View
+                  style={[
+                    styles.generationError,
+
+                    {
+                      borderColor: colors.error,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.generationErrorText,
+
+                      {
+                        color: colors.error,
+                      },
+                    ]}
+                  >
+                    {generationError}
+                  </Text>
+                </View>
+              )}
 
               {/* ======================================================== */}
               {/* ACCIONES                                                 */}
@@ -614,8 +900,15 @@ export default function NewReportScreen() {
 
               <View style={[styles.actions, !isPhone && styles.actionsWide]}>
                 <View style={styles.actionButton}>
+                  {/*
+                   * No usamos disabled por ahora para no depender
+                   * de una propiedad adicional de AppButton.
+                   *
+                   * handleGenerate ya bloquea internamente
+                   * múltiples ejecuciones.
+                   */}
                   <AppButton onPress={handleGenerate}>
-                    Generar reporte
+                    {isGenerating ? "Guardando reporte..." : "Generar reporte"}
                   </AppButton>
                 </View>
 
@@ -627,7 +920,7 @@ export default function NewReportScreen() {
                         pathname: "/empresas/[id]/reportes",
 
                         params: {
-                          id,
+                          id: company.id,
                         },
                       })
                     }
@@ -640,7 +933,7 @@ export default function NewReportScreen() {
           )}
 
           {/* ============================================================ */}
-          {/* AVISO DEL PROTOTIPO                                          */}
+          {/* INFORMACIÓN DE LA ETAPA                                      */}
           {/* ============================================================ */}
 
           <Text
@@ -651,8 +944,8 @@ export default function NewReportScreen() {
               },
             ]}
           >
-            Prototipo visual: la generaciÃ³n del archivo todavÃ­a no estÃ¡
-            conectada al servicio real.
+            El reporte se guarda en UNIESAP. La creación física del archivo
+            Excel o PDF se integrará en la siguiente etapa.
           </Text>
         </ResponsiveContainer>
       </ScrollView>
@@ -665,10 +958,12 @@ export default function NewReportScreen() {
 /* -------------------------------------------------------------------------- */
 
 /*
- * Tarjeta seleccionable que representa una inspecciÃ³n.
+ * Tarjeta seleccionable de una inspección.
  *
- * No contiene lÃ³gica de datos propia.
- * Recibe toda la informaciÃ³n preparada desde la pantalla principal.
+ * No consulta datos directamente.
+ *
+ * La pantalla principal prepara toda
+ * la información que necesita.
  */
 function InspectionOption({
   title,
@@ -691,8 +986,8 @@ function InspectionOption({
   const { colors } = useAppTheme();
 
   /*
-   * Convertimos el estado tÃ©cnico de la inspecciÃ³n
-   * a una etiqueta visible para el usuario.
+   * Convertimos el estado técnico
+   * a una etiqueta visible.
    */
   const statusLabel =
     status === "completed"
@@ -701,6 +996,10 @@ function InspectionOption({
         ? "En proceso"
         : "Borrador";
 
+  /*
+   * Elegimos un color de acuerdo
+   * con el estado de captura.
+   */
   const statusColor =
     status === "completed"
       ? colors.success
@@ -723,7 +1022,9 @@ function InspectionOption({
         },
       ]}
     >
-      {/* RADIO DE SELECCIÃ“N */}
+      {/* ================================================================ */}
+      {/* RADIO                                                            */}
+      {/* ================================================================ */}
 
       <View
         style={[
@@ -747,7 +1048,9 @@ function InspectionOption({
         )}
       </View>
 
-      {/* INFORMACIÃ“N */}
+      {/* ================================================================ */}
+      {/* INFORMACIÓN                                                      */}
+      {/* ================================================================ */}
 
       <View style={styles.inspectionInfo}>
         <Text
@@ -789,7 +1092,9 @@ function InspectionOption({
         </Text>
       </View>
 
-      {/* ESTADO */}
+      {/* ================================================================ */}
+      {/* ESTADO                                                           */}
+      {/* ================================================================ */}
 
       <Text
         style={[
@@ -811,8 +1116,8 @@ function InspectionOption({
 /* -------------------------------------------------------------------------- */
 
 /*
- * OpciÃ³n reutilizable para elegir el formato
- * del archivo que se generarÃ¡.
+ * Opción reutilizable para seleccionar
+ * Excel o PDF.
  */
 function FormatOption({
   label,
@@ -875,7 +1180,7 @@ function FormatOption({
           },
         ]}
       >
-        {selected ? "â— Seleccionado" : "â—‹ Seleccionar"}
+        {selected ? "● Seleccionado" : "○ Seleccionar"}
       </Text>
     </Pressable>
   );
@@ -885,6 +1190,9 @@ function FormatOption({
 /*                                  INFO ROW                                  */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Fila sencilla utilizada en el resumen.
+ */
 function InfoRow({ label, value }: { label: string; value: string }) {
   const { colors } = useAppTheme();
 
@@ -921,6 +1229,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 /*                                  DIVIDER                                   */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Separador visual compatible
+ * con modo claro y oscuro.
+ */
 function Divider() {
   const { colors } = useAppTheme();
 
@@ -942,6 +1254,10 @@ function Divider() {
 /* -------------------------------------------------------------------------- */
 
 /*
+ * ============================================================================
+ * FORMATEAR FECHA
+ * ============================================================================
+ *
  * Acepta:
  *
  * 2026-08-20
@@ -955,16 +1271,28 @@ function Divider() {
  * 20/08/2026
  */
 function formatDate(date: string) {
+  /*
+   * Si existe hora tomamos solamente
+   * la parte correspondiente a la fecha.
+   */
   const normalized = date.includes("T") ? date.split("T")[0] : date;
 
   const parts = normalized.split("-");
 
+  /*
+   * Si el formato no coincide,
+   * devolvemos el valor original.
+   */
   if (parts.length !== 3) {
     return date;
   }
 
   const [year, month, day] = parts;
 
+  /*
+   * year se utiliza aquí para construir
+   * el formato DD/MM/YYYY.
+   */
   return `${day}/${month}/${year}`;
 }
 
@@ -972,16 +1300,35 @@ function formatDate(date: string) {
 /*                                   STYLES                                   */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * ============================================================================
+ * ESTILOS
+ * ============================================================================
+ *
+ * ResponsiveContainer controla:
+ *
+ * - ancho máximo;
+ * - centrado;
+ * - padding horizontal;
+ * - espacio superior.
+ *
+ * Los estilos siguientes complementan
+ * ese comportamiento para teléfono,
+ * tablet y Web.
+ */
 const styles = StyleSheet.create({
   /*
-   * ResponsiveContainer controla el padding horizontal
-   * y superior. ScrollView solamente conserva
-   * espacio inferior.
+   * Espacio inferior para que el contenido
+   * no termine pegado a la navegación global.
    */
   scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
 
+  /*
+   * Botón contextual para regresar
+   * al historial de reportes.
+   */
   backText: {
     fontSize: FontSize.small,
 
@@ -990,6 +1337,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
 
+  /*
+   * Nombre de la empresa.
+   */
   overline: {
     fontSize: FontSize.caption,
 
@@ -1000,6 +1350,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
 
+  /*
+   * Título principal.
+   */
   title: {
     fontSize: FontSize.h1,
 
@@ -1008,6 +1361,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
 
+  /*
+   * Descripción principal.
+   */
   subtitle: {
     fontSize: FontSize.body,
 
@@ -1016,10 +1372,17 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
 
+  /*
+   * Agrupa cada sección
+   * principal de la pantalla.
+   */
   section: {
     marginBottom: Spacing.xl,
   },
 
+  /*
+   * Títulos secundarios.
+   */
   sectionTitle: {
     fontSize: FontSize.cardTitle,
 
@@ -1028,6 +1391,10 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
 
+  /*
+   * Descripción que acompaña
+   * a cada sección.
+   */
   sectionDescription: {
     fontSize: FontSize.small,
 
@@ -1037,8 +1404,11 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * Cada opciÃ³n ocupa todo el ancho que
-   * ResponsiveGrid le asigne.
+   * ==========================================================================
+   * TARJETA DE INSPECCIÓN
+   * ==========================================================================
+   *
+   * ResponsiveGrid controla su ancho.
    */
   inspectionOption: {
     width: "100%",
@@ -1056,6 +1426,9 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
 
+  /*
+   * Indicador circular de selección.
+   */
   radio: {
     width: 22,
 
@@ -1072,6 +1445,9 @@ const styles = StyleSheet.create({
     marginRight: Spacing.md,
   },
 
+  /*
+   * Centro del indicador seleccionado.
+   */
   radioInner: {
     width: 10,
 
@@ -1080,12 +1456,15 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
 
+  /*
+   * Información de la inspección.
+   */
   inspectionInfo: {
     flex: 1,
 
     /*
-     * Evita que textos largos rompan la distribuciÃ³n
-     * horizontal de la tarjeta.
+     * Evita desbordamientos
+     * con textos largos.
      */
     minWidth: 0,
   },
@@ -1120,6 +1499,12 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.md,
   },
 
+  /*
+   * ==========================================================================
+   * CONFIGURACIÓN
+   * ==========================================================================
+   */
+
   configurationTitle: {
     fontSize: FontSize.h2,
 
@@ -1129,9 +1514,9 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * En mÃ³vil:
+   * Teléfono:
    *
-   * configuraciÃ³n
+   * configuración
    * resumen
    */
   configurationLayout: {
@@ -1141,9 +1526,9 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * Tablet y desktop:
+   * Tablet / Web:
    *
-   * configuraciÃ³n | resumen
+   * configuración | resumen
    */
   configurationLayoutWide: {
     flexDirection: "row",
@@ -1180,9 +1565,8 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * Excel y PDF permanecen uno al lado del otro.
-   * El contenido de cada tarjeta estÃ¡ preparado
-   * para espacios mÃ¡s pequeÃ±os.
+   * Excel y PDF se muestran
+   * uno junto al otro.
    */
   formatRow: {
     flexDirection: "row",
@@ -1190,6 +1574,10 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
 
+  /*
+   * Tarjeta individual
+   * para seleccionar formato.
+   */
   formatOption: {
     flex: 1,
 
@@ -1222,6 +1610,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  /*
+   * Configuración de evidencias.
+   */
   optionRow: {
     flexDirection: "row",
 
@@ -1259,9 +1650,11 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * En escritorio esta tarjeta forma la columna
-   * derecha de la configuraciÃ³n.
+   * ==========================================================================
+   * RESUMEN
+   * ==========================================================================
    */
+
   summaryCard: {
     width: "100%",
   },
@@ -1285,7 +1678,39 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * MÃ³vil:
+   * ==========================================================================
+   * ERROR DE CREACIÓN
+   * ==========================================================================
+   *
+   * Se muestra únicamente si falla
+   * createReport().
+   */
+  generationError: {
+    width: "100%",
+
+    borderWidth: 1,
+
+    borderRadius: Radius.md,
+
+    padding: Spacing.md,
+
+    marginTop: Spacing.lg,
+  },
+
+  generationErrorText: {
+    fontSize: FontSize.small,
+
+    lineHeight: 20,
+
+    fontWeight: "600",
+  },
+
+  /*
+   * ==========================================================================
+   * ACCIONES
+   * ==========================================================================
+   *
+   * Teléfono:
    * botones verticales.
    */
   actions: {
@@ -1295,8 +1720,8 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * Tablet / desktop:
-   * botones en la misma fila.
+   * Tablet / Web:
+   * botones horizontales.
    */
   actionsWide: {
     flexDirection: "row",
@@ -1308,6 +1733,13 @@ const styles = StyleSheet.create({
     minWidth: 200,
   },
 
+  /*
+   * Aviso temporal.
+   *
+   * Deja claro que el registro del Report
+   * ya es real pero el archivo físico
+   * todavía no se genera.
+   */
   prototypeNotice: {
     fontSize: FontSize.caption,
 
@@ -1317,6 +1749,12 @@ const styles = StyleSheet.create({
 
     marginTop: Spacing.lg,
   },
+
+  /*
+   * ==========================================================================
+   * ESTADO VACÍO
+   * ==========================================================================
+   */
 
   emptyTitle: {
     fontSize: FontSize.body,
@@ -1332,6 +1770,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
+  /*
+   * ==========================================================================
+   * NO ENCONTRADO
+   * ==========================================================================
+   */
+
   notFound: {
     flex: 1,
 
@@ -1344,4 +1788,3 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
-
