@@ -9,7 +9,7 @@ import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { Screen } from "@/components/ui/Screen";
 
-import { getFormById } from "@/data/forms";
+import { getFormById } from "@/repositories/formRepository";
 
 import { getEvidencesByInspectionId } from "@/repositories/evidenceRepository";
 

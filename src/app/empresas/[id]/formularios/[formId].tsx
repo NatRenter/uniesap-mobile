@@ -7,7 +7,7 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getFormById } from "@/data/forms";
+import { getFormById } from "@/repositories/formRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 

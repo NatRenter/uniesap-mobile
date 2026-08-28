@@ -15,7 +15,7 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/repositories/companyRepository";
-import { getFormById } from "@/data/forms";
+import { getFormById } from "@/repositories/formRepository";
 import { getInspectionById ,
   createInspection,
   updateInspection,

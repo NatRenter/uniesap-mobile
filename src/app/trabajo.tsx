@@ -9,7 +9,7 @@ import { Screen } from "@/components/ui/Screen";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
-import { getFormById } from "@/data/forms";
+import { getFormById } from "@/repositories/formRepository";
 import { getCompanyById } from "@/repositories/companyRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 

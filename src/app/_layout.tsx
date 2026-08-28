@@ -31,6 +31,26 @@ import {
   selectAllEvidences,
 } from "@/database/evidenceDatabase";
 
+/*
+ * ============================================================================
+ * PERSISTENCIA SQLITE - FORMULARIOS
+ * ============================================================================
+ *
+ * FormDatabase es el adaptador físico entre
+ * FormRepository y SQLite.
+ */
+import {
+  deleteFormFromDatabase,
+  insertForm,
+  replaceForm,
+  selectAllForms,
+} from "@/database/formDatabase";
+
+/*
+ * ============================================================================
+ * PERSISTENCIA SQLITE - REPORTES
+ * ============================================================================
+ */
 import {
   deleteReportFromDatabase,
   insertReport,
@@ -82,6 +102,16 @@ import {
 
 /*
  * ============================================================================
+ * REPOSITORY - FORMULARIOS
+ * ============================================================================
+ */
+import {
+  configureFormRepositoryPersistence,
+  hydrateFormRepository,
+} from "@/repositories/formRepository";
+
+/*
+ * ============================================================================
  * REPOSITORY - INSPECCIONES
  * ============================================================================
  */
@@ -97,6 +127,11 @@ import {
   hydratePropertyRepository,
 } from "@/repositories/propertyRepository";
 
+/*
+ * ============================================================================
+ * REPOSITORY - REPORTES
+ * ============================================================================
+ */
 import {
   configureReportRepositoryPersistence,
   hydrateReportRepository,
@@ -114,30 +149,33 @@ import {
  * 3. Configurar adapters de persistencia.
  * 4. Hidratar empresas.
  * 5. Hidratar inmuebles.
- * 6. Hidratar inspecciones y evidencias.
- * 7. Activar sincronización automática.
- * 8. Renderizar Expo Router.
+ * 6. Hidratar formularios.
+ * 7. Hidratar inspecciones.
+ * 8. Hidratar evidencias.
+ * 9. Hidratar reportes.
+ * 10. Activar sincronización automática.
+ * 11. Renderizar Expo Router.
  *
- * ORDEN IMPORTANTE:
+ * Arquitectura:
  *
- * CompanyRepository
- *        ↓
- * PropertyRepository
- *        ↓
- * InspectionRepository / EvidenceRepository
- *
- * Company debe hidratarse antes que Property porque SQLite
- * mantiene la relación:
- *
- * properties.company_id
- *        ↓
- * companies.id
+ * UI
+ *  ↓
+ * Repository
+ *  ↓
+ * Database Adapter
+ *  ↓
+ * SQLite
  */
 export default function RootLayout() {
   const pathname = usePathname();
 
   const { colors, isDark } = useAppTheme();
 
+  /*
+   * null  → inicializando
+   * true  → almacenamiento listo
+   * false → error
+   */
   const [databaseReady, setDatabaseReady] = useState<boolean | null>(null);
 
   const [databaseError, setDatabaseError] = useState<string | null>(null);
@@ -147,8 +185,8 @@ export default function RootLayout() {
    * SINCRONIZACIÓN AUTOMÁTICA
    * ==========================================================================
    *
-   * AutoSync solamente inicia después de que toda
-   * la persistencia local terminó de hidratarse.
+   * No permitimos AutoSync hasta que toda la persistencia
+   * local esté preparada.
    */
   useInspectionAutoSync({
     enabled: databaseReady === true,
@@ -165,44 +203,42 @@ export default function RootLayout() {
     async function initialize() {
       try {
         /*
-         * ================================================================
-         * 1. SQLITE + MIGRACIONES
-         * ================================================================
+         * ====================================================================
+         * PASO 1 - SQLITE + MIGRACIONES
+         * ====================================================================
          *
-         * Aquí se crean, entre otras:
+         * initializeDatabase() prepara la base de datos
+         * y ejecuta runDatabaseMigrations().
+         *
+         * Aquí deben existir ya:
          *
          * companies
          * properties
+         * forms
          * inspections
+         * inspection_responses
          * evidences
+         * reports
          * user_profile
-         * tablas Mock Kobo
+         * mock_kobo_submissions
+         * mock_kobo_attachments
          */
         await initializeDatabase();
 
         /*
-         * ================================================================
-         * 2. CONFIGURAR COMPANY REPOSITORY
-         * ================================================================
-         *
-         * CompanyRepository no conoce directamente SQLite.
-         *
-         * Solamente conoce este contrato:
-         *
-         * loadAll
-         * insert
-         * replace
-         * delete
+         * ====================================================================
+         * PASO 2 - COMPANY REPOSITORY
+         * ====================================================================
          */
         configureCompanyRepositoryPersistence({
           async loadAll() {
             const companies = await selectAllCompanies();
 
             /*
-             * Repository interpreta null como:
+             * null significa que la persistencia está vacía.
              *
-             * "No existen datos persistidos todavía.
-             *  Debo insertar el seed."
+             * El repository podrá insertar entonces
+             * sus datos seed iniciales.
              */
             return companies.length === 0 ? null : companies;
           },
@@ -215,9 +251,9 @@ export default function RootLayout() {
         });
 
         /*
-         * ================================================================
-         * 3. CONFIGURAR PROPERTY REPOSITORY
-         * ================================================================
+         * ====================================================================
+         * PASO 3 - PROPERTY REPOSITORY
+         * ====================================================================
          */
         configurePropertyRepositoryPersistence({
           async loadAll() {
@@ -234,11 +270,31 @@ export default function RootLayout() {
         });
 
         /*
-         * ================================================================
-         * 4. CONFIGURAR EVIDENCE REPOSITORY
-         * ================================================================
+         * ====================================================================
+         * PASO 4 - FORM REPOSITORY
+         * ====================================================================
          *
-         * Este flujo se conserva respecto de la versión estable.
+         * A partir de aquí los formularios pueden vivir
+         * físicamente dentro de SQLite.
+         */
+        configureFormRepositoryPersistence({
+          async loadAll() {
+            const forms = await selectAllForms();
+
+            return forms.length === 0 ? null : forms;
+          },
+
+          insert: insertForm,
+
+          replace: replaceForm,
+
+          delete: deleteFormFromDatabase,
+        });
+
+        /*
+         * ====================================================================
+         * PASO 5 - EVIDENCE REPOSITORY
+         * ====================================================================
          */
         configureEvidenceRepositoryPersistence({
           loadAll: selectAllEvidences,
@@ -251,45 +307,50 @@ export default function RootLayout() {
         });
 
         /*
-         * ReportRepository utiliza SQLite en Android/iOS.
+         * ====================================================================
+         * PASO 6 - REPORT REPOSITORY
+         * ====================================================================
          */
         configureReportRepositoryPersistence({
           loadAll: selectAllReports,
+
           insert: insertReport,
+
           replace: replaceReport,
+
           delete: deleteReportFromDatabase,
         });
 
         /*
-         * ================================================================
-         * 5. HIDRATAR EMPRESAS
-         * ================================================================
+         * ====================================================================
+         * PASO 7 - HIDRATACIÓN
+         * ====================================================================
          *
-         * Debe ocurrir primero porque Property.companyId
-         * depende de Company.
+         * Primero hidratamos Company porque Property depende
+         * de Company mediante:
+         *
+         * properties.company_id → companies.id
          */
         await hydrateCompanyRepository();
 
         /*
-         * ================================================================
-         * 6. HIDRATAR INMUEBLES
-         * ================================================================
+         * Property puede hidratarse después de Company.
          */
         await hydratePropertyRepository();
 
         /*
-         * ================================================================
-         * 7. HIDRATAR INSPECCIONES Y EVIDENCIAS
-         * ================================================================
+         * Los demás repositories ya pueden hidratarse.
          *
-         * Estas dos capas ya existían y conservamos
-         * su funcionamiento actual.
+         * FormRepository se encuentra aquí antes de permitir
+         * que la interfaz se renderice.
          */
         await Promise.all([
-          hydrateCompanyRepository(),
-          hydratePropertyRepository(),
+          hydrateFormRepository(),
+
           hydrateInspectionRepository(),
+
           hydrateEvidenceRepository(),
+
           hydrateReportRepository(),
         ]);
 
@@ -413,15 +474,6 @@ export default function RootLayout() {
    * ==========================================================================
    * NAVEGACIÓN GLOBAL
    * ==========================================================================
-   *
-   * Login e index no muestran AppTabs.
-   *
-   * Las demás rutas conservan:
-   *
-   * Inicio
-   * Empresas
-   * Trabajo
-   * Perfil
    */
   const showGlobalNavigation = pathname !== "/" && pathname !== "/login";
 
@@ -455,11 +507,6 @@ export default function RootLayout() {
  * ============================================================================
  * ESTILOS
  * ============================================================================
- *
- * Stack ocupa todo el espacio disponible.
- *
- * AppTabs queda fuera del Stack para evitar
- * tapar contenido de las pantallas.
  */
 const styles = StyleSheet.create({
   app: {
@@ -474,6 +521,7 @@ const styles = StyleSheet.create({
     flex: 1,
 
     alignItems: "center",
+
     justifyContent: "center",
 
     padding: 32,

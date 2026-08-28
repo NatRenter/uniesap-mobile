@@ -20,7 +20,7 @@ import {
   type ImportedKoboInspection,
 } from "@/services/koboInspectionService";
 
-import { getFormById } from "@/data/forms";
+import { getFormById } from "@/repositories/formRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 

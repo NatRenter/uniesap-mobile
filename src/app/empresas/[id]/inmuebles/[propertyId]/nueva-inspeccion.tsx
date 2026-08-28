@@ -8,7 +8,7 @@ import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/repositories/companyRepository";
-import { getFormsByIds } from "@/data/forms";
+import { getFormsByIds } from "@/repositories/formRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";

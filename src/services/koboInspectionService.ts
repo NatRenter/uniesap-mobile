@@ -1,4 +1,4 @@
-import { getFormById } from "@/data/forms";
+import { getFormById } from "@/repositories/formRepository";
 
 import {
   getKoboService,

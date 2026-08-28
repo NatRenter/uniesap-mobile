@@ -549,6 +549,66 @@ export async function runDatabaseMigrations() {
 
   /*
    * ==========================================================================
+   * FORMULARIOS
+   * ==========================================================================
+   *
+   * Fuente persistente principal para FormDefinition.
+   *
+   * Los formularios dejan de depender directamente de:
+   *
+   * src/data/forms.ts
+   *
+   * y pasan a utilizar:
+   *
+   * FormRepository
+   *      ↓
+   * FormDatabase
+   *      ↓
+   * SQLite
+   *
+   * questions_json almacena la definición completa de las
+   * preguntas del formulario.
+   *
+   * integration_json almacena opcionalmente la configuración
+   * necesaria para integraciones externas como KoboToolbox.
+   *
+   * Utilizamos JSON porque tanto questions como integration
+   * son estructuras anidadas y no necesitamos normalizarlas
+   * todavía en tablas independientes.
+   */
+  await database.execAsync(`
+    CREATE TABLE IF NOT EXISTS forms (
+      id TEXT PRIMARY KEY NOT NULL,
+
+      title TEXT NOT NULL,
+
+      description TEXT NOT NULL,
+
+      version TEXT NOT NULL,
+
+      status TEXT NOT NULL,
+
+      questions_json TEXT NOT NULL DEFAULT '[]',
+
+      integration_json TEXT
+    );
+  `);
+
+  /*
+   * ==========================================================================
+   * ÍNDICES - FORMULARIOS
+   * ==========================================================================
+   *
+   * Permite localizar rápidamente formularios activos/inactivos.
+   */
+  await database.execAsync(`
+    CREATE INDEX IF NOT EXISTS
+      idx_forms_status
+    ON forms(status);
+  `);
+
+  /*
+   * ==========================================================================
    * ÍNDICES - INSPECCIONES
    * ==========================================================================
    */

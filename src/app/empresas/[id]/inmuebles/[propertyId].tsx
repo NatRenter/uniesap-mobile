@@ -10,7 +10,7 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
-import { getFormsByIds } from "@/data/forms";
+import { getFormsByIds } from "@/repositories/formRepository";
 import { getInspectionsByPropertyId } from "@/repositories/inspectionRepository";
 
 import { getCompanyById } from "@/repositories/companyRepository";

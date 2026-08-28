@@ -14,7 +14,7 @@ import { Screen } from "@/components/ui/Screen";
 
 import { getCompanyById } from "@/repositories/companyRepository";
 import { getEvidencesByInspectionId } from "@/repositories/evidenceRepository";
-import { getFormById } from "@/data/forms";
+import { getFormById } from "@/repositories/formRepository";
 import { getInspectionById } from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 

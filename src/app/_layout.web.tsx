@@ -10,6 +10,12 @@ import AppTabs from "@/components/app-tabs";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useInspectionAutoSync } from "@/hooks/useInspectionAutoSync";
 
+/*
+ * ============================================================================
+ * REPOSITORIES
+ * ============================================================================
+ */
+
 import {
   configureCompanyRepositoryPersistence,
   hydrateCompanyRepository,
@@ -19,6 +25,11 @@ import {
   configureEvidenceRepositoryPersistence,
   hydrateEvidenceRepository,
 } from "@/repositories/evidenceRepository";
+
+import {
+  configureFormRepositoryPersistence,
+  hydrateFormRepository,
+} from "@/repositories/formRepository";
 
 import { hydrateInspectionRepository } from "@/repositories/inspectionRepository";
 
@@ -32,6 +43,12 @@ import {
   hydrateReportRepository,
 } from "@/repositories/reportRepository";
 
+/*
+ * ============================================================================
+ * WEB STORAGE
+ * ============================================================================
+ */
+
 import {
   loadWebCompanies,
   saveWebCompanies,
@@ -41,6 +58,8 @@ import {
   loadWebEvidences,
   saveWebEvidences,
 } from "@/repositories/evidenceWebStorage";
+
+import { loadWebForms, saveWebForms } from "@/repositories/formWebStorage";
 
 import {
   loadWebProperties,
@@ -52,8 +71,15 @@ import {
   saveWebReports,
 } from "@/repositories/reportWebStorage";
 
+/*
+ * ============================================================================
+ * TYPES
+ * ============================================================================
+ */
+
 import type { Company } from "@/types/company";
 import type { Evidence } from "@/types/evidence";
+import type { FormDefinition } from "@/types/form";
 import type { Property } from "@/types/property";
 import type { Report } from "@/types/report";
 
@@ -62,37 +88,25 @@ import type { Report } from "@/types/report";
  * ROOT LAYOUT - WEB
  * ============================================================================
  *
- * Responsabilidades principales:
+ * Responsabilidades:
  *
- * 1. Configurar la persistencia Web.
- * 2. Hidratar los repositories al iniciar.
- * 3. Activar la sincronización automática.
- * 4. Mostrar el Stack de Expo Router.
- * 5. Mantener la navegación global.
+ * 1. Configurar persistencia Web.
+ * 2. Conectar repositories con localStorage.
+ * 3. Hidratar repositories.
+ * 4. Activar sincronización automática.
+ * 5. Renderizar Expo Router.
  *
- * Persistencia utilizada:
+ * Arquitectura Web:
  *
- * CompanyRepository
- *        ↓
+ * UI
+ *  ↓
+ * Repository
+ *  ↓
+ * WebStorage
+ *  ↓
  * localStorage
  *
- * PropertyRepository
- *        ↓
- * localStorage
- *
- * InspectionRepository
- *        ↓
- * localStorage
- *
- * EvidenceRepository
- *        ↓
- * localStorage
- *
- * ReportRepository
- *        ↓
- * localStorage
- *
- * Este archivo NO utiliza SQLite.
+ * No utilizamos SQLite en Web.
  */
 export default function WebRootLayout() {
   const pathname = usePathname();
@@ -100,16 +114,13 @@ export default function WebRootLayout() {
   const { colors, isDark } = useAppTheme();
 
   /*
-   * repositoryReady indica cuándo todos los repositories
-   * necesarios ya fueron hidratados.
+   * Indica cuándo todos los repositories
+   * necesarios están disponibles.
    */
   const [repositoryReady, setRepositoryReady] = useState(false);
 
   /*
-   * Conservamos el error para diagnóstico.
-   *
-   * Más adelante podrá mostrarse dentro del apartado
-   * de opciones de desarrollador.
+   * Se conserva para diagnóstico.
    */
   const [repositoryError, setRepositoryError] = useState<string | null>(null);
 
@@ -127,8 +138,6 @@ export default function WebRootLayout() {
          * ====================================================================
          * PASO 1 - EMPRESAS
          * ====================================================================
-         *
-         * Conectamos CompanyRepository con localStorage.
          */
         configureCompanyRepositoryPersistence(
           createWebCompanyPersistenceAdapter(),
@@ -138,8 +147,6 @@ export default function WebRootLayout() {
          * ====================================================================
          * PASO 2 - INMUEBLES
          * ====================================================================
-         *
-         * Conectamos PropertyRepository con localStorage.
          */
         configurePropertyRepositoryPersistence(
           createWebPropertyPersistenceAdapter(),
@@ -147,10 +154,23 @@ export default function WebRootLayout() {
 
         /*
          * ====================================================================
-         * PASO 3 - EVIDENCIAS
+         * PASO 3 - FORMULARIOS
          * ====================================================================
          *
-         * Conectamos EvidenceRepository con localStorage.
+         * FormRepository queda conectado con:
+         *
+         * localStorage
+         *      ↑
+         * FormWebStorage
+         *      ↑
+         * FormRepository
+         */
+        configureFormRepositoryPersistence(createWebFormPersistenceAdapter());
+
+        /*
+         * ====================================================================
+         * PASO 4 - EVIDENCIAS
+         * ====================================================================
          */
         configureEvidenceRepositoryPersistence(
           createWebEvidencePersistenceAdapter(),
@@ -158,13 +178,8 @@ export default function WebRootLayout() {
 
         /*
          * ====================================================================
-         * PASO 4 - REPORTES
+         * PASO 5 - REPORTES
          * ====================================================================
-         *
-         * Conectamos ReportRepository con localStorage.
-         *
-         * Aquí solamente persistimos el registro del reporte.
-         * El archivo Excel/PDF real se generará posteriormente.
          */
         configureReportRepositoryPersistence(
           createWebReportPersistenceAdapter(),
@@ -172,19 +187,15 @@ export default function WebRootLayout() {
 
         /*
          * ====================================================================
-         * PASO 5 - HIDRATAR REPOSITORIES
+         * PASO 6 - HIDRATACIÓN
          * ====================================================================
-         *
-         * Todos los repositories se preparan antes de mostrar
-         * la aplicación como lista.
-         *
-         * InspectionRepository conserva su mecanismo Web actual
-         * de persistencia.
          */
         await Promise.all([
           hydrateCompanyRepository(),
 
           hydratePropertyRepository(),
+
+          hydrateFormRepository(),
 
           hydrateInspectionRepository(),
 
@@ -229,25 +240,19 @@ export default function WebRootLayout() {
    * ==========================================================================
    * SINCRONIZACIÓN AUTOMÁTICA
    * ==========================================================================
-   *
-   * La sincronización solamente se activa cuando
-   * todos los repositories ya están preparados.
    */
   useInspectionAutoSync({
     enabled: repositoryReady,
   });
 
   /*
-   * repositoryError todavía no se muestra directamente
-   * en la interfaz.
-   *
-   * Se conserva para el futuro centro de diagnóstico.
+   * Se mantiene disponible para el futuro
+   * centro de diagnóstico.
    */
   void repositoryError;
 
   /*
-   * Login e index inicial quedan fuera
-   * de la navegación principal.
+   * Login e index no muestran navegación principal.
    */
   const showGlobalNavigation = pathname !== "/" && pathname !== "/login";
 
@@ -281,23 +286,13 @@ export default function WebRootLayout() {
  * ============================================================================
  * ADAPTADOR WEB DE EMPRESAS
  * ============================================================================
- *
- * Conecta CompanyRepository con localStorage.
  */
 function createWebCompanyPersistenceAdapter() {
   return {
-    /*
-     * Recupera todas las empresas persistidas.
-     */
     async loadAll(): Promise<Company[] | null> {
       return loadWebCompanies();
     },
 
-    /*
-     * Inserta una empresa nueva.
-     *
-     * También evitamos duplicados durante Fast Refresh.
-     */
     async insert(company: Company): Promise<void> {
       const current = loadWebCompanies() ?? [];
 
@@ -310,11 +305,6 @@ function createWebCompanyPersistenceAdapter() {
       saveWebCompanies([company, ...current]);
     },
 
-    /*
-     * Reemplaza una empresa existente.
-     *
-     * Si no existe, hacemos un upsert.
-     */
     async replace(company: Company): Promise<void> {
       const current = loadWebCompanies() ?? [];
 
@@ -333,9 +323,6 @@ function createWebCompanyPersistenceAdapter() {
       saveWebCompanies(updated);
     },
 
-    /*
-     * Elimina una empresa por ID.
-     */
     async delete(id: string): Promise<boolean> {
       const current = loadWebCompanies() ?? [];
 
@@ -356,21 +343,13 @@ function createWebCompanyPersistenceAdapter() {
  * ============================================================================
  * ADAPTADOR WEB DE INMUEBLES
  * ============================================================================
- *
- * Conecta PropertyRepository con localStorage.
  */
 function createWebPropertyPersistenceAdapter() {
   return {
-    /*
-     * Recupera todos los inmuebles.
-     */
     async loadAll(): Promise<Property[] | null> {
       return loadWebProperties();
     },
 
-    /*
-     * Inserta un inmueble nuevo.
-     */
     async insert(property: Property): Promise<void> {
       const current = loadWebProperties() ?? [];
 
@@ -385,9 +364,6 @@ function createWebPropertyPersistenceAdapter() {
       saveWebProperties([property, ...current]);
     },
 
-    /*
-     * Actualiza un inmueble existente.
-     */
     async replace(property: Property): Promise<void> {
       const current = loadWebProperties() ?? [];
 
@@ -406,9 +382,6 @@ function createWebPropertyPersistenceAdapter() {
       saveWebProperties(updated);
     },
 
-    /*
-     * Elimina un inmueble.
-     */
     async delete(id: string): Promise<boolean> {
       const current = loadWebProperties() ?? [];
 
@@ -427,26 +400,94 @@ function createWebPropertyPersistenceAdapter() {
 
 /*
  * ============================================================================
- * ADAPTADOR WEB DE EVIDENCIAS
+ * ADAPTADOR WEB DE FORMULARIOS
  * ============================================================================
  *
- * Conecta EvidenceRepository con localStorage.
- *
- * Se mantiene idempotente para soportar Fast Refresh
- * sin crear evidencias duplicadas.
+ * Esta es la nueva pieza que permite que FormRepository
+ * utilice localStorage en Web.
+ */
+function createWebFormPersistenceAdapter() {
+  return {
+    /*
+     * Recupera formularios persistidos.
+     *
+     * null significa que todavía no existe almacenamiento
+     * y FormRepository deberá insertar el seed.
+     */
+    async loadAll(): Promise<FormDefinition[] | null> {
+      return loadWebForms();
+    },
+
+    /*
+     * Inserta un formulario.
+     *
+     * Se evita duplicar registros durante Fast Refresh.
+     */
+    async insert(form: FormDefinition): Promise<void> {
+      const current = loadWebForms() ?? [];
+
+      const existingIndex = current.findIndex((item) => item.id === form.id);
+
+      if (existingIndex !== -1) {
+        return;
+      }
+
+      saveWebForms([form, ...current]);
+    },
+
+    /*
+     * Actualiza un formulario existente.
+     *
+     * Si todavía no existe, hacemos upsert.
+     */
+    async replace(form: FormDefinition): Promise<void> {
+      const current = loadWebForms() ?? [];
+
+      const index = current.findIndex((item) => item.id === form.id);
+
+      if (index === -1) {
+        saveWebForms([form, ...current]);
+
+        return;
+      }
+
+      const updated = [...current];
+
+      updated[index] = form;
+
+      saveWebForms(updated);
+    },
+
+    /*
+     * Elimina un formulario.
+     */
+    async delete(id: string): Promise<boolean> {
+      const current = loadWebForms() ?? [];
+
+      const updated = current.filter((form) => form.id !== id);
+
+      if (updated.length === current.length) {
+        return false;
+      }
+
+      saveWebForms(updated);
+
+      return true;
+    },
+  };
+}
+
+/*
+ * ============================================================================
+ * ADAPTADOR WEB DE EVIDENCIAS
+ * ============================================================================
  */
 function createWebEvidencePersistenceAdapter() {
   return {
-    /*
-     * Recupera todas las evidencias.
-     */
     async loadAll(): Promise<Evidence[] | null> {
       return loadWebEvidences();
     },
 
-    /*
-     * Inserta una evidencia nueva.
-     */
     async insert(evidence: Evidence): Promise<void> {
       const current = loadWebEvidences() ?? [];
 
@@ -465,9 +506,6 @@ function createWebEvidencePersistenceAdapter() {
       saveWebEvidences([evidence, ...current]);
     },
 
-    /*
-     * Reemplaza o actualiza una evidencia.
-     */
     async replace(evidence: Evidence): Promise<void> {
       const current = loadWebEvidences() ?? [];
 
@@ -486,9 +524,6 @@ function createWebEvidencePersistenceAdapter() {
       saveWebEvidences(updated);
     },
 
-    /*
-     * Elimina una evidencia.
-     */
     async delete(id: string): Promise<boolean> {
       const current = loadWebEvidences() ?? [];
 
@@ -509,31 +544,13 @@ function createWebEvidencePersistenceAdapter() {
  * ============================================================================
  * ADAPTADOR WEB DE REPORTES
  * ============================================================================
- *
- * Conecta ReportRepository con localStorage.
- *
- * Por ahora persistimos únicamente:
- *
- * - información del reporte;
- * - formato solicitado;
- * - estado;
- * - relación con empresa/inmueble/inspección;
- * - fileUri cuando posteriormente exista un archivo generado.
  */
 function createWebReportPersistenceAdapter() {
   return {
-    /*
-     * Recupera todos los reportes.
-     */
     async loadAll(): Promise<Report[] | null> {
       return loadWebReports();
     },
 
-    /*
-     * Inserta un reporte nuevo.
-     *
-     * Evitamos duplicados durante Fast Refresh.
-     */
     async insert(report: Report): Promise<void> {
       const current = loadWebReports() ?? [];
 
@@ -546,17 +563,6 @@ function createWebReportPersistenceAdapter() {
       saveWebReports([report, ...current]);
     },
 
-    /*
-     * Actualiza un reporte existente.
-     *
-     * Posteriormente será utilizado para:
-     *
-     * pending
-     *    ↓
-     * generated
-     *
-     * y para almacenar fileUri.
-     */
     async replace(report: Report): Promise<void> {
       const current = loadWebReports() ?? [];
 
@@ -575,9 +581,6 @@ function createWebReportPersistenceAdapter() {
       saveWebReports(updated);
     },
 
-    /*
-     * Elimina un reporte persistido.
-     */
     async delete(id: string): Promise<boolean> {
       const current = loadWebReports() ?? [];
 
@@ -598,10 +601,6 @@ function createWebReportPersistenceAdapter() {
  * ============================================================================
  * ESTILOS WEB
  * ============================================================================
- *
- * La navegación global se encuentra arriba.
- *
- * El Stack ocupa todo el espacio restante.
  */
 const styles = StyleSheet.create({
   app: {

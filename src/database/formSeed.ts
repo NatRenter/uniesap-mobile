@@ -1,6 +1,34 @@
 import type { FormDefinition } from "@/types/form";
 
-export const forms: FormDefinition[] = [
+/*
+ * ============================================================================
+ * FORM SEED
+ * ============================================================================
+ *
+ * Este archivo contiene formularios iniciales de desarrollo.
+ *
+ * Se utilizarán únicamente cuando la persistencia de formularios
+ * todavía esté vacía.
+ *
+ * Flujo:
+ *
+ * FormSeed
+ *    ↓
+ * FormRepository
+ *    ↓
+ * SQLite / localStorage
+ *
+ * IMPORTANTE:
+ *
+ * Las pantallas NO deben importar directamente este archivo.
+ *
+ * Los formularios podrán existir:
+ *
+ * - solo dentro de UNIESAP;
+ * - vinculados con Kobo;
+ * - y posteriormente vinculados con otros proveedores.
+ */
+export const initialForms: FormDefinition[] = [
   {
     id: "form-001",
 
@@ -12,9 +40,17 @@ export const forms: FormDefinition[] = [
 
     status: "active",
 
+    /*
+     * Integración opcional con Kobo.
+     *
+     * El formulario sigue perteneciendo a UNIESAP;
+     * Kobo solamente funciona como proveedor externo.
+     */
     integration: {
       provider: "kobo",
+
       assetUid: "mock-asset-risk",
+
       versionUid: "mock-version-risk-001",
     },
 
@@ -28,6 +64,12 @@ export const forms: FormDefinition[] = [
 
         required: true,
 
+        /*
+         * Nombre técnico del campo externo.
+         *
+         * Este dato solamente se usa cuando
+         * el formulario se sincroniza con Kobo.
+         */
         integration: {
           koboFieldName: "datos_generales/responsable",
         },
@@ -86,7 +128,9 @@ export const forms: FormDefinition[] = [
 
     integration: {
       provider: "kobo",
+
       assetUid: "mock-asset-extinguishers",
+
       versionUid: "mock-version-extinguishers-001",
     },
 
@@ -115,19 +159,22 @@ export const forms: FormDefinition[] = [
         required: true,
 
         /*
-         * Estas opciones son necesarias para
-         * que CaptureScreen pueda renderizar
-         * correctamente una pregunta select.
+         * Las opciones quedan dentro de la definición
+         * del formulario.
+         *
+         * CaptureScreen podrá renderizarlas directamente.
          */
         options: [
           {
             label: "Buen estado",
             value: "good",
           },
+
           {
             label: "Requiere atención",
             value: "attention",
           },
+
           {
             label: "Fuera de servicio",
             value: "out_of_service",
@@ -164,6 +211,12 @@ export const forms: FormDefinition[] = [
 
     status: "active",
 
+    /*
+     * Este formulario no tiene integración externa.
+     *
+     * Eso demuestra que FormDefinition no depende
+     * obligatoriamente de Kobo.
+     */
     questions: [
       {
         id: "question-008",
@@ -179,18 +232,22 @@ export const forms: FormDefinition[] = [
             label: "Prohibición",
             value: "prohibition",
           },
+
           {
             label: "Obligación",
             value: "mandatory",
           },
+
           {
             label: "Advertencia",
             value: "warning",
           },
+
           {
             label: "Condición segura",
             value: "safe_condition",
           },
+
           {
             label: "Equipo contra incendio",
             value: "fire_equipment",
@@ -220,11 +277,3 @@ export const forms: FormDefinition[] = [
     ],
   },
 ];
-
-export function getFormById(id: string) {
-  return forms.find((form) => form.id === id);
-}
-
-export function getFormsByIds(ids: string[]) {
-  return forms.filter((form) => ids.includes(form.id));
-}
