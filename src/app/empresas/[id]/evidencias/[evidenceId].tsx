@@ -26,7 +26,7 @@ export default function EvidenceDetailsScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * Detectamos el tamaÃ±o general de la pantalla.
+   * Detectamos el tamaño general de la pantalla.
    *
    * En este archivo solamente necesitamos distinguir
    * escritorio del resto de dispositivos.
@@ -36,7 +36,7 @@ export default function EvidenceDetailsScreen() {
   const isDesktop = !isPhone && !isTablet;
 
   /*
-   * ParÃ¡metros dinÃ¡micos de:
+   * Parámetros dinámicos de:
    *
    * /empresas/[id]/evidencias/[evidenceId]
    */
@@ -54,7 +54,7 @@ export default function EvidenceDetailsScreen() {
   const evidence = getEvidenceById(evidenceId);
 
   /*
-   * Estado controlado para rutas invÃ¡lidas.
+   * Estado controlado para rutas inválidas.
    */
   if (!company || !evidence) {
     return (
@@ -66,7 +66,7 @@ export default function EvidenceDetailsScreen() {
               fontWeight: "600",
             }}
           >
-            â€¹ Volver
+            ‹ Volver
           </Text>
         </Pressable>
 
@@ -90,7 +90,7 @@ export default function EvidenceDetailsScreen() {
               },
             ]}
           >
-            No fue posible encontrar la informaciÃ³n de esta evidencia.
+            No fue posible encontrar la información de esta evidencia.
           </Text>
         </View>
       </Screen>
@@ -101,10 +101,10 @@ export default function EvidenceDetailsScreen() {
    * Resolvemos las relaciones de la evidencia.
    *
    * Evidence
-   *    â†“
+   *    ↓
    * Inspection
-   *    â”œâ”€â”€ Property
-   *    â””â”€â”€ Form
+   *    ├── Property
+   *    └── Form
    */
   const inspection = getInspectionById(evidence.inspectionId);
 
@@ -128,11 +128,11 @@ export default function EvidenceDetailsScreen() {
     evidence.status === "synced" ? colors.success : colors.warning;
 
   /*
-   * Convertimos el tipo tÃ©cnico de evidencia
+   * Convertimos el tipo técnico de evidencia
    * a una etiqueta visual.
    */
   const evidenceTypeLabel =
-    evidence.type === "photo" ? "FotografÃ­a" : "Documento";
+    evidence.type === "photo" ? "Fotografía" : "Documento";
 
   return (
     <Screen padded={false}>
@@ -145,12 +145,12 @@ export default function EvidenceDetailsScreen() {
          *
          * - padding horizontal
          * - espacio superior
-         * - ancho mÃ¡ximo
+         * - ancho máximo
          * - centrado en pantallas grandes
          */}
         <ResponsiveContainer>
           {/* ====================================================== */}
-          {/* NAVEGACIÃ“N */}
+          {/* NAVEGACIÓN */}
           {/* ====================================================== */}
 
           <Pressable
@@ -172,7 +172,7 @@ export default function EvidenceDetailsScreen() {
                 },
               ]}
             >
-              â€¹ Evidencias
+              ‹ Evidencias
             </Text>
           </Pressable>
 
@@ -196,7 +196,7 @@ export default function EvidenceDetailsScreen() {
           </Text>
 
           {/* ====================================================== */}
-          {/* TÃTULO */}
+          {/* TÍTULO */}
           {/* ====================================================== */}
 
           <Text
@@ -252,7 +252,7 @@ export default function EvidenceDetailsScreen() {
                 },
               ]}
             >
-              â— {evidenceStatusLabel}
+              ● {evidenceStatusLabel}
             </Text>
           </View>
 
@@ -261,21 +261,21 @@ export default function EvidenceDetailsScreen() {
           {/* ====================================================== */}
 
           {/*
-           * MÃ“VIL / TABLET
+           * MÓVIL / TABLET
            *
-           * â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-           * â”‚ Vista previa    â”‚
-           * â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-           * â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-           * â”‚ InformaciÃ³n     â”‚
-           * â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+           * [-----------------]
+           * │ Vista previa    │
+           * └─────────────────┘
+           * [-----------------]
+           * │ Información     │
+           * └─────────────────┘
            *
            * DESKTOP
            *
-           * â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-           * â”‚ Vista previa       â”‚ InformaciÃ³n      â”‚
-           * â”‚                    â”‚                  â”‚
-           * â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+           * [ Vista previa ] | [ Informacion ]
+           * │ Vista previa       │ Información      │
+           * │                    │                  │
+           * └────────────────────┴──────────────────┘
            */}
           <View
             style={[styles.mainLayout, isDesktop && styles.mainLayoutDesktop]}
@@ -317,7 +317,7 @@ export default function EvidenceDetailsScreen() {
                       },
                     ]}
                   >
-                    {evidence.type === "photo" ? "â–§" : "â–¤"}
+                    {evidence.type === "photo" ? "▧" : "▤"}
                   </Text>
                 </View>
 
@@ -330,7 +330,7 @@ export default function EvidenceDetailsScreen() {
                   ]}
                 >
                   {evidence.type === "photo"
-                    ? "Vista previa de fotografÃ­a"
+                    ? "Vista previa de fotografía"
                     : "Vista previa del documento"}
                 </Text>
 
@@ -343,14 +343,14 @@ export default function EvidenceDetailsScreen() {
                   ]}
                 >
                   {evidence.remoteUri || evidence.localUri
-                    ? "El archivo asociado serÃ¡ mostrado aquÃ­."
-                    : "Este prototipo todavÃ­a no contiene el archivo fÃ­sico asociado."}
+                    ? "El archivo asociado será mostrado aquí."
+                    : "Este prototipo todavía no contiene el archivo físico asociado."}
                 </Text>
               </View>
             </View>
 
             {/* ================================================== */}
-            {/* INFORMACIÃ“N */}
+            {/* INFORMACIÓN */}
             {/* ================================================== */}
 
             <View
@@ -368,7 +368,7 @@ export default function EvidenceDetailsScreen() {
                   },
                 ]}
               >
-                InformaciÃ³n
+                Información
               </Text>
 
               <AppCard>
@@ -384,7 +384,7 @@ export default function EvidenceDetailsScreen() {
                 <Divider />
 
                 <InfoRow
-                  label="InspecciÃ³n"
+                  label="Inspección"
                   value={form?.title ?? "No disponible"}
                 />
 
@@ -412,11 +412,11 @@ export default function EvidenceDetailsScreen() {
           {/* ====================================================== */}
 
           {/*
-           * En escritorio tambiÃ©n podemos aprovechar
-           * el ancho para colocar descripciÃ³n e
-           * inspecciÃ³n relacionada lado a lado.
+           * En escritorio también podemos aprovechar
+           * el ancho para colocar descripción e
+           * inspección relacionada lado a lado.
            *
-           * En mÃ³vil/tablet continÃºan verticalmente.
+           * En móvil/tablet continúan verticalmente.
            */}
           <View
             style={[
@@ -426,7 +426,7 @@ export default function EvidenceDetailsScreen() {
             ]}
           >
             {/* ================================================== */}
-            {/* DESCRIPCIÃ“N */}
+            {/* DESCRIPCIÓN */}
             {/* ================================================== */}
 
             {evidence.description && (
@@ -445,7 +445,7 @@ export default function EvidenceDetailsScreen() {
                     },
                   ]}
                 >
-                  DescripciÃ³n
+                  Descripción
                 </Text>
 
                 <AppCard style={styles.secondaryCard}>
@@ -464,7 +464,7 @@ export default function EvidenceDetailsScreen() {
             )}
 
             {/* ================================================== */}
-            {/* INSPECCIÃ“N RELACIONADA */}
+            {/* INSPECCIÓN RELACIONADA */}
             {/* ================================================== */}
 
             {inspection && (
@@ -483,7 +483,7 @@ export default function EvidenceDetailsScreen() {
                     },
                   ]}
                 >
-                  InspecciÃ³n relacionada
+                  Inspección relacionada
                 </Text>
 
                 <Pressable
@@ -520,7 +520,7 @@ export default function EvidenceDetailsScreen() {
                             },
                           ]}
                         >
-                          âœ“
+                          ✓
                         </Text>
                       </View>
 
@@ -534,7 +534,7 @@ export default function EvidenceDetailsScreen() {
                           ]}
                           numberOfLines={2}
                         >
-                          {form?.title ?? "InspecciÃ³n"}
+                          {form?.title ?? "Inspección"}
                         </Text>
 
                         <Text
@@ -558,7 +558,7 @@ export default function EvidenceDetailsScreen() {
                           },
                         ]}
                       >
-                        â€º
+                        ›
                       </Text>
                     </View>
                   </AppCard>
@@ -575,8 +575,8 @@ export default function EvidenceDetailsScreen() {
             {/*
              * Estos botones se mantienen visualmente preparados.
              *
-             * El archivo original todavÃ­a no implementaba
-             * la apertura o comparticiÃ³n fÃ­sica del archivo.
+             * El archivo original todavía no implementaba
+             * la apertura o compartición física del archivo.
              */}
             <View style={styles.actionButton}>
               <AppButton variant="secondary">Abrir archivo</AppButton>
@@ -599,7 +599,7 @@ export default function EvidenceDetailsScreen() {
               },
             ]}
           >
-            El almacenamiento y apertura real del archivo se implementarÃ¡n en
+            El almacenamiento y apertura real del archivo se implementarán en
             una etapa posterior.
           </Text>
         </ResponsiveContainer>
@@ -618,7 +618,7 @@ export default function EvidenceDetailsScreen() {
  * Etiqueta
  * Valor
  *
- * dentro de la tarjeta de informaciÃ³n.
+ * dentro de la tarjeta de información.
  */
 function InfoRow({
   label,
@@ -782,8 +782,8 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * MÃ³vil y tablet:
-   * preview e informaciÃ³n se mantienen verticales.
+   * Móvil y tablet:
+   * preview e información se mantienen verticales.
    */
   mainLayout: {
     width: "100%",
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
 
   /*
    * Desktop:
-   * cambia a distribuciÃ³n horizontal.
+   * cambia a distribución horizontal.
    */
   mainLayoutDesktop: {
     flexDirection: "row",
@@ -825,8 +825,8 @@ const styles = StyleSheet.create({
 
   /*
    * La vista previa mantiene una altura
-   * suficientemente grande para que mÃ¡s adelante
-   * podamos mostrar fotografÃ­as/documentos reales.
+   * suficientemente grande para que más adelante
+   * podamos mostrar fotografías/documentos reales.
    */
   preview: {
     minHeight: 300,
@@ -910,8 +910,8 @@ const styles = StyleSheet.create({
   /*
    * Segundo bloque responsive:
    *
-   * MÃ³vil/tablet â†’ vertical
-   * Desktop      â†’ horizontal
+   * Móvil/tablet → vertical
+   * Desktop      → horizontal
    */
   secondaryLayout: {
     width: "100%",
@@ -939,7 +939,7 @@ const styles = StyleSheet.create({
 
   /*
    * Ayuda a mantener una apariencia similar
-   * cuando descripciÃ³n e inspecciÃ³n aparecen
+   * cuando descripción e inspección aparecen
    * una al lado de la otra.
    */
   secondaryCard: {
@@ -1053,4 +1053,3 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 });
-

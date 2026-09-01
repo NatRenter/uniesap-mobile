@@ -29,11 +29,11 @@ export default function ReportDetailsScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * Para esta pantalla Ãºnicamente necesitamos saber
-   * cuÃ¡ndo estamos en telÃ©fono.
+   * Para esta pantalla únicamente necesitamos saber
+   * cuándo estamos en teléfono.
    *
-   * TelÃ©fono:
-   *   distribuciÃ³n vertical.
+   * Teléfono:
+   *   distribución vertical.
    *
    * Tablet / Desktop:
    *   aprovechamos el espacio horizontal.
@@ -41,7 +41,7 @@ export default function ReportDetailsScreen() {
   const { isPhone } = useResponsive();
 
   /*
-   * ParÃ¡metros dinÃ¡micos provenientes de:
+   * Parámetros dinámicos provenientes de:
    *
    * /empresas/[id]/reportes/[reportId]
    */
@@ -72,7 +72,7 @@ export default function ReportDetailsScreen() {
               fontWeight: "600",
             }}
           >
-            â€¹ Volver
+            ‹ Volver
           </Text>
         </Pressable>
 
@@ -96,7 +96,7 @@ export default function ReportDetailsScreen() {
               },
             ]}
           >
-            No fue posible encontrar la informaciÃ³n de este reporte.
+            No fue posible encontrar la información de este reporte.
           </Text>
         </View>
       </Screen>
@@ -109,28 +109,28 @@ export default function ReportDetailsScreen() {
 
   /*
    * Report
-   *    â†“ inspectionId
+   *    ↓ inspectionId
    * Inspection
    */
   const inspection = getInspectionById(report.inspectionId);
 
   /*
    * Report
-   *    â†“ propertyId
+   *    ↓ propertyId
    * Property
    */
   const property = getPropertyById(report.propertyId);
 
   /*
    * Inspection
-   *    â†“ formId
+   *    ↓ formId
    * Form
    */
   const form = inspection ? getFormById(inspection.formId) : undefined;
 
   /*
    * Recuperamos las evidencias correspondientes
-   * a la inspecciÃ³n utilizada para generar el reporte.
+   * a la inspección utilizada para generar el reporte.
    */
   const evidences = getEvidencesByInspectionId(report.inspectionId);
 
@@ -149,7 +149,7 @@ export default function ReportDetailsScreen() {
    * Texto utilizado en la tarjeta de archivo.
    *
    * Cuando conectemos el generador real,
-   * fileUri serÃ¡ uno de los puntos importantes
+   * fileUri será uno de los puntos importantes
    * para localizar el archivo generado.
    */
   const fileAvailabilityLabel = report.fileUri
@@ -172,13 +172,13 @@ export default function ReportDetailsScreen() {
          * ResponsiveContainer se encarga de:
          *
          * - padding horizontal
-         * - separaciÃ³n superior
-         * - ancho mÃ¡ximo
+         * - separación superior
+         * - ancho máximo
          * - centrado del contenido
          */}
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÃ“N                                                   */}
+          {/* NAVEGACIÓN                                                   */}
           {/* ============================================================ */}
 
           <Pressable
@@ -200,7 +200,7 @@ export default function ReportDetailsScreen() {
                 },
               ]}
             >
-              â€¹ Reportes
+              ‹ Reportes
             </Text>
           </Pressable>
 
@@ -267,7 +267,7 @@ export default function ReportDetailsScreen() {
                 },
               ]}
             >
-              â— {statusLabel}
+              ● {statusLabel}
             </Text>
           </View>
 
@@ -276,15 +276,15 @@ export default function ReportDetailsScreen() {
           {/* ============================================================ */}
 
           {/*
-           * TELÃ‰FONO
+           * TELÉFONO
            *
            * Archivo
-           * â†“
-           * InformaciÃ³n
+           * ↓
+           * Información
            *
            * TABLET / DESKTOP
            *
-           * Archivo | InformaciÃ³n
+           * Archivo | Información
            */}
           <View style={[styles.mainLayout, !isPhone && styles.mainLayoutWide]}>
             {/* ========================================================== */}
@@ -337,7 +337,7 @@ export default function ReportDetailsScreen() {
                       },
                     ]}
                   >
-                    {report.format === "excel" ? "â–¦" : "â–¤"}
+                    {report.format === "excel" ? "▦" : "▤"}
                   </Text>
                 </View>
 
@@ -379,8 +379,8 @@ export default function ReportDetailsScreen() {
                   ]}
                 >
                   {report.fileUri
-                    ? "El archivo generado estÃ¡ disponible."
-                    : "La vista previa del archivo generado se mostrarÃ¡ en este espacio."}
+                    ? "El archivo generado está disponible."
+                    : "La vista previa del archivo generado se mostrará en este espacio."}
                 </Text>
 
                 <View
@@ -401,14 +401,14 @@ export default function ReportDetailsScreen() {
                       },
                     ]}
                   >
-                    â— {fileAvailabilityLabel}
+                    ● {fileAvailabilityLabel}
                   </Text>
                 </View>
               </View>
             </View>
 
             {/* ========================================================== */}
-            {/* INFORMACIÃ“N                                                */}
+            {/* INFORMACIÓN                                                */}
             {/* ========================================================== */}
 
             <View
@@ -426,7 +426,7 @@ export default function ReportDetailsScreen() {
                   },
                 ]}
               >
-                InformaciÃ³n
+                Información
               </Text>
 
               <AppCard style={styles.informationCard}>
@@ -442,7 +442,7 @@ export default function ReportDetailsScreen() {
                 <Divider />
 
                 <InfoRow
-                  label="InspecciÃ³n"
+                  label="Inspección"
                   value={form?.title ?? "No disponible"}
                 />
 
@@ -453,7 +453,7 @@ export default function ReportDetailsScreen() {
                 <Divider />
 
                 <InfoRow
-                  label="Fecha de generaciÃ³n"
+                  label="Fecha de generación"
                   value={formatDate(report.createdAt)}
                 />
 
@@ -473,7 +473,7 @@ export default function ReportDetailsScreen() {
           </View>
 
           {/* ============================================================ */}
-          {/* INFORMACIÃ“N RELACIONADA                                      */}
+          {/* INFORMACIÓN RELACIONADA                                      */}
           {/* ============================================================ */}
 
           <View style={styles.relatedArea}>
@@ -485,7 +485,7 @@ export default function ReportDetailsScreen() {
                 },
               ]}
             >
-              InformaciÃ³n relacionada
+              Información relacionada
             </Text>
 
             <View
@@ -496,7 +496,7 @@ export default function ReportDetailsScreen() {
               ]}
             >
               {/* ======================================================== */}
-              {/* INSPECCIÃ“N RELACIONADA                                   */}
+              {/* INSPECCIÓN RELACIONADA                                   */}
               {/* ======================================================== */}
 
               {inspection && (
@@ -515,7 +515,7 @@ export default function ReportDetailsScreen() {
                       },
                     ]}
                   >
-                    InspecciÃ³n relacionada
+                    Inspección relacionada
                   </Text>
 
                   <Pressable
@@ -552,7 +552,7 @@ export default function ReportDetailsScreen() {
                               },
                             ]}
                           >
-                            âœ“
+                            ✓
                           </Text>
                         </View>
 
@@ -566,7 +566,7 @@ export default function ReportDetailsScreen() {
                             ]}
                             numberOfLines={2}
                           >
-                            {form?.title ?? "InspecciÃ³n"}
+                            {form?.title ?? "Inspección"}
                           </Text>
 
                           <Text
@@ -601,7 +601,7 @@ export default function ReportDetailsScreen() {
                             },
                           ]}
                         >
-                          â€º
+                          ›
                         </Text>
                       </View>
                     </AppCard>
@@ -663,7 +663,7 @@ export default function ReportDetailsScreen() {
                             },
                           ]}
                         >
-                          â—«
+                          ●«
                         </Text>
                       </View>
 
@@ -716,7 +716,7 @@ export default function ReportDetailsScreen() {
                           },
                         ]}
                       >
-                        â€º
+                        ›
                       </Text>
                     </View>
                   </AppCard>
@@ -730,12 +730,12 @@ export default function ReportDetailsScreen() {
           {/* ============================================================ */}
 
           {/*
-           * TodavÃ­a son acciones visuales.
+           * Todavía son acciones visuales.
            *
            * Cuando exista fileUri real podremos conectar:
            *
-           * Abrir reporte â†’ visor/archivo
-           * Compartir     â†’ Share API
+           * Abrir reporte → visor/archivo
+           * Compartir     → Share API
            */}
           <View style={[styles.actions, !isPhone && styles.actionsWide]}>
             <View style={styles.actionButton}>
@@ -759,7 +759,7 @@ export default function ReportDetailsScreen() {
               },
             ]}
           >
-            La generaciÃ³n y apertura del archivo real se implementarÃ¡n en una
+            La generación y apertura del archivo real se implementarán en una
             etapa posterior.
           </Text>
         </ResponsiveContainer>
@@ -946,7 +946,7 @@ const styles = StyleSheet.create({
   /*
    * Tablet y escritorio:
    *
-   * Archivo | InformaciÃ³n
+   * Archivo | Información
    */
   mainLayoutWide: {
     flexDirection: "row",
@@ -1073,7 +1073,7 @@ const styles = StyleSheet.create({
   },
 
   /* -------------------------------------------------------------------- */
-  /*                              INFORMACIÃ“N                              */
+  /*                              INFORMACIÓN                              */
   /* -------------------------------------------------------------------- */
 
   informationCard: {
@@ -1099,7 +1099,7 @@ const styles = StyleSheet.create({
   },
 
   /* -------------------------------------------------------------------- */
-  /*                         INFORMACIÃ“N RELACIONADA                        */
+  /*                         INFORMACIÓN RELACIONADA                        */
   /* -------------------------------------------------------------------- */
 
   relatedArea: {
@@ -1123,7 +1123,7 @@ const styles = StyleSheet.create({
   /*
    * Tablet y escritorio:
    *
-   * InspecciÃ³n | Evidencias
+   * Inspección | Evidencias
    */
   relatedLayoutWide: {
     flexDirection: "row",
@@ -1214,7 +1214,7 @@ const styles = StyleSheet.create({
   /* -------------------------------------------------------------------- */
 
   /*
-   * MÃ³vil:
+   * Móvil:
    *
    * [ Abrir reporte ]
    * [ Compartir     ]
@@ -1272,4 +1272,3 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 });
-

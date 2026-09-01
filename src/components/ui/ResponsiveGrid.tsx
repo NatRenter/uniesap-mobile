@@ -9,23 +9,12 @@ import { useResponsive } from "@/hooks/useResponsive";
 type ResponsiveGridProps = {
   children: ReactNode;
 
-  /*
-   * Número de columnas según
-   * el tamaño de pantalla.
-   */
   phoneColumns?: number;
   tabletColumns?: number;
   desktopColumns?: number;
 
-  /*
-   * Separación entre elementos.
-   */
   gap?: number;
 
-  /*
-   * Estilos adicionales para
-   * el contenedor principal.
-   */
   style?: StyleProp<ViewStyle>;
 };
 
@@ -42,25 +31,21 @@ export function ResponsiveGrid({
 }: ResponsiveGridProps) {
   const { isPhone, isTablet } = useResponsive();
 
-  const columns = isPhone
-    ? phoneColumns
-    : isTablet
-      ? tabletColumns
-      : desktopColumns;
-
-  /*
-   * Calculamos el ancho porcentual
-   * de cada elemento.
-   *
-   * Ejemplo:
-   *
-   * 1 columna  = 100%
-   * 2 columnas = 50%
-   * 3 columnas = 33.33%
-   */
-  const itemWidth = `${100 / columns}%` as const;
+  const columns = Math.max(
+    1,
+    isPhone ? phoneColumns : isTablet ? tabletColumns : desktopColumns,
+  );
 
   const items = Children.toArray(children);
+
+  /*
+   * No utilizamos "gap" directamente para conservar
+   * compatibilidad consistente entre Native y Web.
+   *
+   * Cada celda recibe la mitad del espacio horizontal
+   * y el grid compensa ese espacio con margen negativo.
+   */
+  const itemWidth = `${100 / columns}%` as const;
 
   return (
     <View
@@ -68,6 +53,7 @@ export function ResponsiveGrid({
         styles.grid,
         {
           marginHorizontal: -(gap / 2),
+          marginBottom: -gap,
         },
         style,
       ]}
@@ -77,13 +63,10 @@ export function ResponsiveGrid({
           key={index}
           style={[
             styles.item,
-
             {
               width: itemWidth,
-
               paddingHorizontal: gap / 2,
-
-              marginBottom: gap,
+              paddingBottom: gap,
             },
           ]}
         >
@@ -96,12 +79,17 @@ export function ResponsiveGrid({
 
 const styles = StyleSheet.create({
   grid: {
-    flexDirection: "row",
+    width: "100%",
+    minWidth: 0,
 
+    flexDirection: "row",
     flexWrap: "wrap",
+
+    alignItems: "stretch",
   },
 
   item: {
     minWidth: 0,
+    flexShrink: 0,
   },
 });

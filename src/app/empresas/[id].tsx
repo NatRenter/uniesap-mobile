@@ -8,11 +8,11 @@ import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
 import { Screen } from "@/components/ui/Screen";
 
+import { getCompanyById } from "@/repositories/companyRepository";
 import { getEvidencesByCompanyId } from "@/repositories/evidenceRepository";
 import { getInspectionsByCompanyId } from "@/repositories/inspectionRepository";
-import { getReportsByCompanyId } from "@/repositories/reportRepository";
-import { getCompanyById } from "@/repositories/companyRepository";
 import { getPropertiesByCompanyId } from "@/repositories/propertyRepository";
+import { getReportsByCompanyId } from "@/repositories/reportRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
@@ -243,6 +243,8 @@ export default function CompanyDetailsScreen() {
                     color: colors.text,
                   },
                 ]}
+                numberOfLines={2}
+                ellipsizeMode="tail"
               >
                 {company.name}
               </Text>
@@ -254,6 +256,8 @@ export default function CompanyDetailsScreen() {
                     color: colors.textSecondary,
                   },
                 ]}
+                numberOfLines={2}
+                ellipsizeMode="tail"
               >
                 {companyLocation}
               </Text>
@@ -289,15 +293,18 @@ export default function CompanyDetailsScreen() {
           {/*
            * RESPONSIVE GRID
            *
-           * Móvil:   3 columnas
+           * Móvil:   1 columna
            * Tablet:  3 columnas
            * Desktop: 3 columnas
            *
-           * En este caso mantenemos tres porque
-           * solamente tenemos tres indicadores.
+           * En móvil priorizamos legibilidad y evitamos
+           * comprimir los indicadores en pantallas estrechas.
+           *
+           * A partir de tablet existen dimensiones suficientes
+           * para mantener los tres indicadores en una fila.
            */}
           <ResponsiveGrid
-            phoneColumns={3}
+            phoneColumns={1}
             tabletColumns={3}
             desktopColumns={3}
             gap={Spacing.sm}

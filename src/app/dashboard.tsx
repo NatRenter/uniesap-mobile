@@ -18,8 +18,8 @@ import { Screen } from "@/components/ui/Screen";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
-import { getFormById } from "@/repositories/formRepository";
 import { getCompanyById } from "@/repositories/companyRepository";
+import { getFormById } from "@/repositories/formRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
@@ -1223,11 +1223,16 @@ const styles = StyleSheet.create({
   },
 
   section: {
+    width: "100%",
+    minWidth: 0,
     marginBottom: Spacing.xl,
   },
 
   sectionHeader: {
+    width: "100%",
+    minWidth: 0,
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
 
@@ -1237,6 +1242,10 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 180,
+    minWidth: 0,
     fontSize: FontSize.cardTitle,
     fontWeight: "700",
 
@@ -1244,6 +1253,7 @@ const styles = StyleSheet.create({
   },
 
   link: {
+    flexShrink: 0,
     fontSize: FontSize.small,
     fontWeight: "600",
 
@@ -1252,6 +1262,7 @@ const styles = StyleSheet.create({
 
   statCard: {
     width: "100%",
+    minWidth: 0,
   },
 
   statValue: {
@@ -1267,6 +1278,7 @@ const styles = StyleSheet.create({
 
   activeCompanyCard: {
     width: "100%",
+    minWidth: 0,
 
     overflow: "hidden",
   },
@@ -1276,10 +1288,14 @@ const styles = StyleSheet.create({
   },
 
   activeCompanyContent: {
+    width: "100%",
+    minWidth: 0,
     padding: Spacing.lg,
   },
 
   activeCompanyHeader: {
+    width: "100%",
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
 
@@ -1322,6 +1338,8 @@ const styles = StyleSheet.create({
   },
 
   currentWork: {
+    width: "100%",
+    minWidth: 0,
     borderRadius: Radius.md,
 
     padding: Spacing.md,
@@ -1343,6 +1361,8 @@ const styles = StyleSheet.create({
   },
 
   currentStatusRow: {
+    width: "100%",
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
@@ -1367,6 +1387,8 @@ const styles = StyleSheet.create({
   },
 
   continueButton: {
+    width: "100%",
+    minWidth: 0,
     minHeight: 48,
 
     alignItems: "center",
@@ -1398,6 +1420,8 @@ const styles = StyleSheet.create({
   },
 
   noActiveContent: {
+    width: "100%",
+    minWidth: 0,
     alignItems: "center",
 
     paddingVertical: Spacing.lg,
@@ -1459,6 +1483,7 @@ const styles = StyleSheet.create({
 
   actionCard: {
     width: "100%",
+    minWidth: 0,
     minHeight: 72,
 
     flexDirection: "row",
@@ -1506,6 +1531,8 @@ const styles = StyleSheet.create({
   },
 
   activity: {
+    width: "100%",
+    minWidth: 0,
     minHeight: 64,
 
     flexDirection: "row",

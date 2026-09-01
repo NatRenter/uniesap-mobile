@@ -8,14 +8,7 @@ import { useResponsive } from "@/hooks/useResponsive";
 
 type ResponsiveContainerProps = PropsWithChildren<{
   style?: StyleProp<ViewStyle>;
-
   maxWidth?: number;
-
-  /*
-   * Permite quitar el espacio superior
-   * en alguna pantalla específica
-   * si fuera necesario.
-   */
   paddedTop?: boolean;
 }>;
 
@@ -33,12 +26,6 @@ export function ResponsiveContainer({
       ? Spacing.xl
       : Spacing.xxl;
 
-  /*
-   * Espacio superior adaptable.
-   *
-   * Móvil: mantiene un margen cómodo.
-   * Tablet/Web: aumenta ligeramente.
-   */
   const topPadding = isPhone ? Spacing.lg : isTablet ? Spacing.xl : Spacing.xl;
 
   const resolvedMaxWidth =
@@ -48,15 +35,11 @@ export function ResponsiveContainer({
     <View
       style={[
         styles.container,
-
         {
           maxWidth: resolvedMaxWidth,
-
           paddingHorizontal: horizontalPadding,
-
           paddingTop: paddedTop ? topPadding : 0,
         },
-
         style,
       ]}
     >
@@ -68,7 +51,7 @@ export function ResponsiveContainer({
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-
+    minWidth: 0,
     alignSelf: "center",
   },
 });

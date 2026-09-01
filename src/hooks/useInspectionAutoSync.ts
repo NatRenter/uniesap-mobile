@@ -10,49 +10,76 @@ import {
   processInspectionSyncQueue,
 } from "@/services/inspectionSyncQueueService";
 
+import { subscribeToInspectionSyncRequests } from "@/services/inspectionSyncTriggerService";
+
 /*
  * ============================================================================
  * SINCRONIZACIÓN AUTOMÁTICA DE INSPECCIONES
  * ============================================================================
  *
- * Este hook conecta:
+ * Este hook conecta tres fuentes de activación con una única cola:
  *
- * conectividad
- *      ↓
- * cola de sincronización
+ * 1. ARRANQUE ONLINE
  *
+ *    La aplicación termina de hidratar sus repositorios y descubre que
+ *    ya existe conectividad.
  *
- * Comportamiento:
+ *          ↓
  *
- * ARRANQUE ONLINE
- *      ↓
- * procesa pending una sola vez
+ *    procesa inspecciones pending.
  *
  *
- * OFFLINE
- *      ↓
- * ONLINE
- *      ↓
- * procesa pending
+ * 2. OFFLINE → ONLINE
+ *
+ *    El usuario capturó información sin Internet y después recupera
+ *    conectividad.
+ *
+ *          ↓
+ *
+ *    procesa inspecciones pending.
+ *
+ *
+ * 3. NUEVO PENDING MIENTRAS YA ESTAMOS ONLINE
+ *
+ *    El usuario finaliza una inspección cuando el dispositivo ya tenía
+ *    Internet.
+ *
+ *    Como NetInfo no observa una transición de red, CaptureScreen emite
+ *    una señal mediante inspectionSyncTriggerService.
+ *
+ *          ↓
+ *
+ *    este hook vuelve a revisar la cola.
  *
  *
  * IMPORTANTE:
  *
- * Tanto la comprobación inicial como NetInfo pueden informar
- * prácticamente al mismo tiempo que existe conexión.
+ * La UI nunca llama directamente a:
  *
- * Por eso toda transición de red pasa ahora por:
+ * - syncInspection();
+ * - Kobo;
+ * - attachments.
  *
- * handleNetworkState()
+ * Toda sincronización real continúa pasando por:
  *
- * De esta forma solo el primer evento válido puede disparar
- * el procesamiento.
+ * InspectionSyncQueueService
+ *        ↓
+ * InspectionSyncService
+ *        ↓
+ * KoboInspectionService
+ *
+ * Esto mantiene:
+ *
+ * - protección contra procesos simultáneos;
+ * - reintentos;
+ * - recuperación de sincronizaciones interrumpidas;
+ * - manejo de evidencias/attachments;
+ * - una única ruta de sincronización.
  */
 
 export type UseInspectionAutoSyncOptions = {
   /*
-   * Permite instalar el hook antes de que
-   * los repositorios estén preparados.
+   * Permite instalar el hook antes de que los repositorios estén preparados.
    *
    * Android:
    *
@@ -76,13 +103,13 @@ export function useInspectionAutoSync({
    * ==========================================================================
    *
    * null
-   *   → todavía no conocemos el estado
+   *   → todavía no conocemos el estado.
    *
    * false
-   *   → offline
+   *   → offline.
    *
    * true
-   *   → online
+   *   → online.
    */
   const previousOnlineState = useRef<boolean | null>(null);
 
@@ -106,6 +133,24 @@ export function useInspectionAutoSync({
     let active = true;
 
     /*
+     * Evita que el propio hook ejecute dos ciclos de AutoSync al mismo tiempo.
+     *
+     * InspectionSyncQueueService ya protege su proceso global con
+     * activeQueueProcess, pero esta bandera evita además:
+     *
+     * - consultas redundantes;
+     * - logs duplicados;
+     * - ciclos paralelos dentro del hook.
+     */
+    let processing = false;
+
+    /*
+     * Si entra una nueva solicitud mientras ya estamos procesando,
+     * recordamos que debemos revisar la cola una vez más al terminar.
+     */
+    let processAgain = false;
+
+    /*
      * ========================================================================
      * PROCESAR TRABAJO PENDIENTE
      * ========================================================================
@@ -117,59 +162,110 @@ export function useInspectionAutoSync({
       }
 
       /*
-       * Los errores anteriores NO se reintentan
-       * automáticamente todavía.
+       * El AutoSync únicamente procesa la cola cuando conocemos
+       * explícitamente que existe conectividad.
        *
-       * Las sincronizaciones interrumpidas sí
-       * pueden recuperarse.
+       * Si todavía estamos en null, la comprobación inicial de red
+       * terminará llamando handleNetworkState() y procesará la cola.
        */
-      const pendingCount = getInspectionSyncQueueCount({
-        includeErrors: false,
-
-        includeInterrupted: true,
-      });
-
-      if (pendingCount === 0) {
+      if (previousOnlineState.current !== true) {
         return;
       }
 
-      console.log(
-        `Conectividad disponible. Procesando ${pendingCount} inspección(es) pendiente(s).`,
-      );
+      /*
+       * Si ya existe un ciclo ejecutándose no iniciamos otro.
+       *
+       * Solamente dejamos una marca para repetir la revisión
+       * cuando finalice el ciclo actual.
+       */
+      if (processing) {
+        processAgain = true;
+
+        return;
+      }
+
+      processing = true;
 
       try {
-        const result = await processInspectionSyncQueue({
-          includeErrors: false,
+        do {
+          /*
+           * Consumimos la solicitud acumulada.
+           *
+           * Si durante este ciclo aparece otra inspección pending,
+           * requestInspectionSync() volverá a colocar processAgain = true.
+           */
+          processAgain = false;
 
-          includeInterrupted: true,
-        });
+          if (!active || previousOnlineState.current !== true) {
+            return;
+          }
 
-        if (!active) {
-          return;
-        }
+          /*
+           * Los errores anteriores NO se reintentan automáticamente.
+           *
+           * Las sincronizaciones interrumpidas sí pueden recuperarse.
+           */
+          const pendingCount = getInspectionSyncQueueCount({
+            includeErrors: false,
+            includeInterrupted: true,
+          });
 
-        console.log("Sincronización automática finalizada:", {
-          candidatos: result.totalCandidates,
+          if (pendingCount === 0) {
+            return;
+          }
 
-          sincronizadas: result.synced,
+          console.log(
+            `Conectividad disponible. Procesando ${pendingCount} inspección(es) pendiente(s).`,
+          );
 
-          errores: result.failed,
+          const result = await processInspectionSyncQueue({
+            includeErrors: false,
+            includeInterrupted: true,
+          });
 
-          omitidas: result.skipped,
-        });
+          if (!active) {
+            return;
+          }
+
+          console.log("Sincronización automática finalizada:", {
+            candidatos: result.totalCandidates,
+            sincronizadas: result.synced,
+            errores: result.failed,
+            omitidas: result.skipped,
+          });
+
+          /*
+           * NO repetimos la cola únicamente porque quede algún candidato.
+           *
+           * Algunos candidatos pueden ser omitidos por reglas internas
+           * y repetir indefinidamente produciría un ciclo innecesario.
+           *
+           * Solamente repetimos si mientras estábamos procesando llegó
+           * explícitamente una nueva señal de trabajo.
+           */
+        } while (
+          active &&
+          previousOnlineState.current === true &&
+          processAgain
+        );
       } catch (error) {
         /*
-         * Los errores individuales de Kobo son
-         * tratados normalmente por la cola.
+         * Los errores individuales de Kobo normalmente son tratados
+         * por la propia cola.
          *
-         * Este bloque captura fallos inesperados
-         * relacionados con repositorios,
-         * almacenamiento o infraestructura.
+         * Este bloque captura fallos inesperados relacionados con:
+         *
+         * - repositorios;
+         * - persistencia;
+         * - infraestructura;
+         * - ejecución de la cola.
          */
         console.error(
           "Error inesperado durante la sincronización automática:",
           error,
         );
+      } finally {
+        processing = false;
       }
     }
 
@@ -177,8 +273,6 @@ export function useInspectionAutoSync({
      * ========================================================================
      * ESTADO DE CONECTIVIDAD
      * ========================================================================
-     *
-     * ESTA ES LA PARTE IMPORTANTE DEL CAMBIO.
      *
      * Tanto:
      *
@@ -188,16 +282,11 @@ export function useInspectionAutoSync({
      *
      * subscribeToNetworkAvailability()
      *
-     * utilizan esta misma función.
+     * utilizan el mismo manejador.
      *
-     * Debido a que actualizamos previousOnlineState
-     * ANTES de lanzar cualquier proceso async,
-     * un segundo evento online inmediatamente posterior
-     * ya encontrará:
-     *
-     * previous === true
-     *
-     * y no iniciará otro procesamiento.
+     * Actualizamos previousOnlineState ANTES de iniciar cualquier proceso
+     * async para evitar que la comprobación inicial y el primer evento
+     * de NetInfo disparen dos sincronizaciones.
      */
 
     function handleNetworkState(online: boolean) {
@@ -208,9 +297,7 @@ export function useInspectionAutoSync({
       const previous = previousOnlineState.current;
 
       /*
-       * Actualizamos primero.
-       *
-       * Esto es esencial para evitar la carrera entre:
+       * Actualizamos primero para cerrar la posible carrera entre:
        *
        * comprobación inicial
        *      +
@@ -241,11 +328,13 @@ export function useInspectionAutoSync({
        * SIN CAMBIO REAL
        * ----------------------------------------------------------------------
        *
-       * true → true
-       *
+       * true  → true
        * false → false
        *
        * No hacemos nada.
+       *
+       * Las inspecciones nuevas creadas mientras permanecemos true → true
+       * son cubiertas por inspectionSyncTriggerService.
        */
 
       if (previous === online) {
@@ -288,9 +377,10 @@ export function useInspectionAutoSync({
         const online = await getNetworkAvailability();
 
         /*
-         * Ya no procesamos la cola directamente aquí.
-         *
          * Todo pasa por handleNetworkState().
+         *
+         * De esta forma la comprobación inicial y NetInfo comparten
+         * exactamente las mismas reglas.
          */
         handleNetworkState(online);
       } catch (error) {
@@ -314,13 +404,52 @@ export function useInspectionAutoSync({
      * ========================================================================
      * CAMBIOS DE CONECTIVIDAD
      * ========================================================================
-     *
-     * NetInfo también utiliza exactamente
-     * el mismo manejador.
      */
 
-    const unsubscribe = subscribeToNetworkAvailability((online) => {
+    const unsubscribeNetwork = subscribeToNetworkAvailability((online) => {
       handleNetworkState(online);
+    });
+
+    /*
+     * ========================================================================
+     * NUEVO TRABAJO PENDIENTE
+     * ========================================================================
+     *
+     * Cubre este caso:
+     *
+     * Internet ya disponible
+     *          ↓
+     * usuario finaliza inspección
+     *          ↓
+     * inspection.syncStatus = pending
+     *          ↓
+     * la red nunca cambió
+     *          ↓
+     * NetInfo no tiene una transición que anunciar
+     *          ↓
+     * requestInspectionSync()
+     *          ↓
+     * procesamos la cola.
+     *
+     * Si estamos offline, la señal se ignora de forma segura porque
+     * la inspección ya quedó persistida. La transición posterior
+     * offline → online se encargará de recuperarla.
+     */
+
+    const unsubscribeSyncRequests = subscribeToInspectionSyncRequests(() => {
+      if (!active) {
+        return;
+      }
+
+      if (previousOnlineState.current !== true) {
+        return;
+      }
+
+      console.log(
+        "Nueva inspección pendiente detectada. Solicitando sincronización automática.",
+      );
+
+      void processPendingInspections();
     });
 
     /*
@@ -332,7 +461,8 @@ export function useInspectionAutoSync({
     return () => {
       active = false;
 
-      unsubscribe();
+      unsubscribeNetwork();
+      unsubscribeSyncRequests();
     };
   }, [enabled]);
 }

@@ -3,13 +3,14 @@ import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Stack, usePathname } from "expo-router";
+
 import { StatusBar } from "expo-status-bar";
 
 import AppTabs from "@/components/app-tabs";
 
 /*
  * ============================================================================
- * PERSISTENCIA SQLITE - EMPRESAS
+ * SQLITE - EMPRESAS
  * ============================================================================
  */
 import {
@@ -21,7 +22,39 @@ import {
 
 /*
  * ============================================================================
- * PERSISTENCIA SQLITE - EVIDENCIAS
+ * SQLITE - PERFIL DE USUARIO
+ * ============================================================================
+ *
+ * Persistencia nativa del perfil.
+ *
+ * UserProfileRepository
+ *        ↓
+ * UserProfileDatabase
+ *        ↓
+ * SQLite / user_profile
+ */
+import {
+  saveUserProfileToDatabase,
+  selectUserProfile,
+} from "@/database/userProfileDatabase";
+
+/*
+ * ============================================================================
+ * REPOSITORY - PERFIL DE USUARIO
+ * ============================================================================
+ *
+ * El repository mantiene el perfil utilizado por la interfaz
+ * y delega la persistencia al adaptador configurado durante
+ * el arranque.
+ */
+import {
+  configureUserProfileRepositoryPersistence,
+  hydrateUserProfileRepository,
+} from "@/repositories/userProfileRepository";
+
+/*
+ * ============================================================================
+ * SQLITE - EVIDENCIAS
  * ============================================================================
  */
 import {
@@ -33,11 +66,8 @@ import {
 
 /*
  * ============================================================================
- * PERSISTENCIA SQLITE - FORMULARIOS
+ * SQLITE - FORMULARIOS
  * ============================================================================
- *
- * FormDatabase es el adaptador físico entre
- * FormRepository y SQLite.
  */
 import {
   deleteFormFromDatabase,
@@ -48,7 +78,50 @@ import {
 
 /*
  * ============================================================================
- * PERSISTENCIA SQLITE - REPORTES
+ * SQLITE - INICIALIZACIÓN
+ * ============================================================================
+ */
+import { initializeDatabase } from "@/database/initializeDatabase.native";
+
+/*
+ * ============================================================================
+ * SQLITE - INMUEBLES
+ * ============================================================================
+ *
+ * PropertyDatabase administra el CRUD normal de:
+ *
+ * properties
+ *
+ * Las relaciones Property ↔ Form se delegan internamente a:
+ *
+ * PropertyFormDatabase
+ */
+import {
+  deletePropertyFromDatabase,
+  insertProperty,
+  replaceProperty,
+  selectAllProperties,
+} from "@/database/propertyDatabase";
+
+/*
+ * ============================================================================
+ * SQLITE - MIGRACIONES PROPERTY ↔ FORM
+ * ============================================================================
+ *
+ * Estas funciones solamente mantienen compatibilidad con instalaciones
+ * anteriores de UNIESAP.
+ *
+ * Internamente realizan todas las comprobaciones necesarias antes de
+ * modificar el esquema.
+ */
+import {
+  migrateLegacyPropertyFormsIfNeeded,
+  removeLegacyPropertyFormColumnIfNeeded,
+} from "@/database/propertyMigrationDatabase";
+
+/*
+ * ============================================================================
+ * SQLITE - REPORTES
  * ============================================================================
  */
 import {
@@ -58,26 +131,8 @@ import {
   selectAllReports,
 } from "@/database/reportDatabase";
 
-/*
- * ============================================================================
- * INICIALIZACIÓN SQLITE
- * ============================================================================
- */
-import { initializeDatabase } from "@/database/initializeDatabase.native";
-
-/*
- * ============================================================================
- * PERSISTENCIA SQLITE - INMUEBLES
- * ============================================================================
- */
-import {
-  deletePropertyFromDatabase,
-  insertProperty,
-  replaceProperty,
-  selectAllProperties,
-} from "@/database/propertyDatabase";
-
 import { useAppTheme } from "@/hooks/useAppTheme";
+
 import { useInspectionAutoSync } from "@/hooks/useInspectionAutoSync";
 
 /*
@@ -142,51 +197,77 @@ import {
  * ROOT LAYOUT - ANDROID / IOS
  * ============================================================================
  *
- * Responsabilidades principales:
+ * Esta es la raíz de inicialización de UNIESAP para plataformas nativas.
+ *
+ * ============================================================================
+ * RESPONSABILIDADES
+ * ============================================================================
  *
  * 1. Inicializar SQLite.
- * 2. Ejecutar migraciones.
- * 3. Configurar adapters de persistencia.
- * 4. Hidratar empresas.
- * 5. Hidratar inmuebles.
- * 6. Hidratar formularios.
- * 7. Hidratar inspecciones.
- * 8. Hidratar evidencias.
- * 9. Hidratar reportes.
- * 10. Activar sincronización automática.
- * 11. Renderizar Expo Router.
+ * 2. Configurar los adaptadores de persistencia.
+ * 3. Hidratar repositories.
+ * 4. Ejecutar migraciones necesarias.
+ * 5. Habilitar la navegación.
+ * 6. Habilitar Auto Sync cuando la base esté preparada.
  *
- * Arquitectura:
+ * ============================================================================
+ * LO QUE YA NO HACEMOS AQUÍ
+ * ============================================================================
  *
- * UI
- *  ↓
- * Repository
- *  ↓
- * Database Adapter
- *  ↓
- * SQLite
+ * Los diagnósticos detallados de:
+ *
+ * - Property ↔ Form;
+ * - columnas SQLite;
+ * - relaciones huérfanas;
+ * - estado de form_ids_json;
+ *
+ * pertenecen ahora a las herramientas de:
+ *
+ * Perfil
+ *   ↓
+ * Opciones de desarrollador
+ *   ↓
+ * Diagnóstico SQLite
+ *
+ * ============================================================================
+ * ORDEN DE INICIALIZACIÓN
+ * ============================================================================
+ *
+ * SQLite / esquema
+ *      ↓
+ * configurar repositories
+ *      ↓
+ * Company
+ *      ↓
+ * Form
+ *      ↓
+ * migración legacy Property ↔ Form
+ *      ↓
+ * retirada legacy de form_ids_json
+ *      ↓
+ * Property
+ *      ↓
+ * Inspection / Evidence / Report
+ *      ↓
+ * aplicación preparada
  */
 export default function RootLayout() {
   const pathname = usePathname();
 
   const { colors, isDark } = useAppTheme();
 
-  /*
-   * null  → inicializando
-   * true  → almacenamiento listo
-   * false → error
-   */
   const [databaseReady, setDatabaseReady] = useState<boolean | null>(null);
 
   const [databaseError, setDatabaseError] = useState<string | null>(null);
 
   /*
    * ==========================================================================
-   * SINCRONIZACIÓN AUTOMÁTICA
+   * AUTO SYNC
    * ==========================================================================
    *
-   * No permitimos AutoSync hasta que toda la persistencia
-   * local esté preparada.
+   * La sincronización automática solamente puede comenzar
+   * después de que toda la persistencia local haya terminado
+   * correctamente de inicializarse.
    */
   useInspectionAutoSync({
     enabled: databaseReady === true,
@@ -194,7 +275,7 @@ export default function RootLayout() {
 
   /*
    * ==========================================================================
-   * INICIALIZACIÓN DE ALMACENAMIENTO
+   * INICIALIZACIÓN
    * ==========================================================================
    */
   useEffect(() => {
@@ -204,42 +285,45 @@ export default function RootLayout() {
       try {
         /*
          * ====================================================================
-         * PASO 1 - SQLITE + MIGRACIONES
+         * 1. SQLITE + ESQUEMA
          * ====================================================================
-         *
-         * initializeDatabase() prepara la base de datos
-         * y ejecuta runDatabaseMigrations().
-         *
-         * Aquí deben existir ya:
-         *
-         * companies
-         * properties
-         * forms
-         * inspections
-         * inspection_responses
-         * evidences
-         * reports
-         * user_profile
-         * mock_kobo_submissions
-         * mock_kobo_attachments
          */
         await initializeDatabase();
 
         /*
          * ====================================================================
-         * PASO 2 - COMPANY REPOSITORY
+         * CONFIGURAR USER PROFILE REPOSITORY
+         * ====================================================================
+         *
+         * En Native:
+         *
+         * UserProfileRepository
+         *        ↓
+         * UserProfileDatabase
+         *        ↓
+         * SQLite
+         *
+         * load:
+         * recupera el registro "current-user".
+         *
+         * save:
+         * inserta o reemplaza el perfil completo.
+         */
+        configureUserProfileRepositoryPersistence({
+          load: selectUserProfile,
+
+          save: saveUserProfileToDatabase,
+        });
+
+        /*
+         * ====================================================================
+         * 2. CONFIGURAR COMPANY REPOSITORY
          * ====================================================================
          */
         configureCompanyRepositoryPersistence({
           async loadAll() {
             const companies = await selectAllCompanies();
 
-            /*
-             * null significa que la persistencia está vacía.
-             *
-             * El repository podrá insertar entonces
-             * sus datos seed iniciales.
-             */
             return companies.length === 0 ? null : companies;
           },
 
@@ -252,30 +336,8 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * PASO 3 - PROPERTY REPOSITORY
+         * 3. CONFIGURAR FORM REPOSITORY
          * ====================================================================
-         */
-        configurePropertyRepositoryPersistence({
-          async loadAll() {
-            const properties = await selectAllProperties();
-
-            return properties.length === 0 ? null : properties;
-          },
-
-          insert: insertProperty,
-
-          replace: replaceProperty,
-
-          delete: deletePropertyFromDatabase,
-        });
-
-        /*
-         * ====================================================================
-         * PASO 4 - FORM REPOSITORY
-         * ====================================================================
-         *
-         * A partir de aquí los formularios pueden vivir
-         * físicamente dentro de SQLite.
          */
         configureFormRepositoryPersistence({
           async loadAll() {
@@ -293,7 +355,32 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * PASO 5 - EVIDENCE REPOSITORY
+         * 4. CONFIGURAR PROPERTY REPOSITORY
+         * ====================================================================
+         *
+         * PropertyDatabase se encarga internamente de reconstruir:
+         *
+         * Property.formIds
+         *
+         * utilizando PropertyFormDatabase.
+         */
+        configurePropertyRepositoryPersistence({
+          async loadAll() {
+            const properties = await selectAllProperties();
+
+            return properties.length === 0 ? null : properties;
+          },
+
+          insert: insertProperty,
+
+          replace: replaceProperty,
+
+          delete: deletePropertyFromDatabase,
+        });
+
+        /*
+         * ====================================================================
+         * 5. CONFIGURAR EVIDENCE REPOSITORY
          * ====================================================================
          */
         configureEvidenceRepositoryPersistence({
@@ -308,7 +395,7 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * PASO 6 - REPORT REPOSITORY
+         * 6. CONFIGURAR REPORT REPOSITORY
          * ====================================================================
          */
         configureReportRepositoryPersistence({
@@ -323,30 +410,114 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * PASO 7 - HIDRATACIÓN
+         * 7. COMPANY
          * ====================================================================
-         *
-         * Primero hidratamos Company porque Property depende
-         * de Company mediante:
-         *
-         * properties.company_id → companies.id
          */
         await hydrateCompanyRepository();
 
         /*
-         * Property puede hidratarse después de Company.
+         * ====================================================================
+         * USER PROFILE
+         * ====================================================================
+         *
+         * Recupera el perfil persistido desde SQLite.
+         *
+         * Si todavía no existe:
+         *
+         * createInitialProfile()
+         *        ↓
+         * saveUserProfileToDatabase()
+         *        ↓
+         * user_profile
+         *
+         * Si ya existe:
+         *
+         * SQLite
+         *        ↓
+         * selectUserProfile()
+         *        ↓
+         * currentProfile
+         *
+         * Esto debe ocurrir antes de mostrar Dashboard o Perfil,
+         * porque ambas pantallas consumen UserProfileRepository.
+         */
+        await hydrateUserProfileRepository();
+
+        /*
+         * ====================================================================
+         * FORM
+         * ====================================================================
+         */
+        await hydrateFormRepository();
+
+        /*
+         * ====================================================================
+         * 8. FORM
+         * ====================================================================
+         *
+         * Los formularios deben existir antes de ejecutar
+         * cualquier migración Property ↔ Form.
+         */
+        await hydrateFormRepository();
+
+        /*
+         * ====================================================================
+         * 9. MIGRACIÓN LEGACY PROPERTY ↔ FORM
+         * ====================================================================
+         *
+         * Instalaciones antiguas:
+         *
+         * properties.form_ids_json
+         *           ↓
+         * property_forms
+         *
+         * Instalaciones modernas:
+         *
+         * migration_history
+         *           ↓
+         * operación omitida
+         *
+         * La propia migración contiene sus verificaciones internas.
+         */
+        await migrateLegacyPropertyFormsIfNeeded();
+
+        /*
+         * ====================================================================
+         * 10. RETIRAR FORM_IDS_JSON
+         * ====================================================================
+         *
+         * Esta operación también es idempotente.
+         *
+         * Si la migración ya fue aplicada:
+         *
+         * no modifica la base.
+         *
+         * Si se trata de una instalación antigua:
+         *
+         * verifica integridad antes de retirar la columna.
+         */
+        await removeLegacyPropertyFormColumnIfNeeded();
+
+        /*
+         * ====================================================================
+         * 11. PROPERTY
+         * ====================================================================
+         *
+         * PropertyRepository se hidrata después de las migraciones.
+         *
+         * A partir de aquí Property.formIds proviene exclusivamente
+         * de property_forms.
          */
         await hydratePropertyRepository();
 
         /*
-         * Los demás repositories ya pueden hidratarse.
+         * ====================================================================
+         * 12. RESTO DE REPOSITORIES
+         * ====================================================================
          *
-         * FormRepository se encuentra aquí antes de permitir
-         * que la interfaz se renderice.
+         * Estos repositories ya pueden hidratarse en paralelo.
          */
         await Promise.all([
-          hydrateFormRepository(),
-
           hydrateInspectionRepository(),
 
           hydrateEvidenceRepository(),
@@ -354,6 +525,11 @@ export default function RootLayout() {
           hydrateReportRepository(),
         ]);
 
+        /*
+         * ====================================================================
+         * 13. INICIALIZACIÓN COMPLETADA
+         * ====================================================================
+         */
         if (!active) {
           return;
         }
@@ -362,6 +538,10 @@ export default function RootLayout() {
 
         setDatabaseReady(true);
       } catch (error) {
+        /*
+         * Si el componente se desmontó durante la inicialización,
+         * ignoramos el resultado.
+         */
         if (!active) {
           return;
         }
@@ -371,6 +551,12 @@ export default function RootLayout() {
             ? error.message
             : "Error desconocido inicializando la base de datos.";
 
+        /*
+         * Este log sí se conserva.
+         *
+         * Los errores de inicialización son relevantes incluso
+         * fuera de las herramientas de desarrollador.
+         */
         console.error("Error inicializando almacenamiento local:", error);
 
         setDatabaseError(message);
@@ -388,7 +574,7 @@ export default function RootLayout() {
 
   /*
    * ==========================================================================
-   * ESTADO DE CARGA
+   * CARGANDO
    * ==========================================================================
    */
   if (databaseReady === null) {
@@ -396,6 +582,7 @@ export default function RootLayout() {
       <View
         style={[
           styles.center,
+
           {
             backgroundColor: colors.background,
           },
@@ -406,6 +593,7 @@ export default function RootLayout() {
         <Text
           style={[
             styles.loadingTitle,
+
             {
               color: colors.text,
             },
@@ -417,6 +605,7 @@ export default function RootLayout() {
         <Text
           style={[
             styles.loadingText,
+
             {
               color: colors.textSecondary,
             },
@@ -430,7 +619,7 @@ export default function RootLayout() {
 
   /*
    * ==========================================================================
-   * ERROR DE INICIALIZACIÓN
+   * ERROR
    * ==========================================================================
    */
   if (databaseReady === false) {
@@ -438,6 +627,7 @@ export default function RootLayout() {
       <View
         style={[
           styles.center,
+
           {
             backgroundColor: colors.background,
           },
@@ -448,6 +638,7 @@ export default function RootLayout() {
         <Text
           style={[
             styles.errorTitle,
+
             {
               color: colors.error,
             },
@@ -459,6 +650,7 @@ export default function RootLayout() {
         <Text
           style={[
             styles.loadingText,
+
             {
               color: colors.textSecondary,
             },
@@ -472,7 +664,7 @@ export default function RootLayout() {
 
   /*
    * ==========================================================================
-   * NAVEGACIÓN GLOBAL
+   * NAVEGACIÓN
    * ==========================================================================
    */
   const showGlobalNavigation = pathname !== "/" && pathname !== "/login";
@@ -481,6 +673,7 @@ export default function RootLayout() {
     <View
       style={[
         styles.app,
+
         {
           backgroundColor: colors.background,
         },

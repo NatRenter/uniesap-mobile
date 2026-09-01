@@ -243,6 +243,8 @@ function CompanyCard({
                   color: colors.text,
                 },
               ]}
+              numberOfLines={2}
+              ellipsizeMode="tail"
             >
               {name}
             </Text>
@@ -254,6 +256,7 @@ function CompanyCard({
                   color: colors.textSecondary,
                 },
               ]}
+              numberOfLines={2}
             >
               {properties} inmueble{properties === 1 ? "" : "s"} registrado
               {properties === 1 ? "" : "s"}

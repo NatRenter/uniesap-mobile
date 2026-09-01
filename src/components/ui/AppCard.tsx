@@ -75,6 +75,7 @@ export function AppCard({ children, style, padded = true }: AppCardProps) {
 const styles = StyleSheet.create({
   card: {
     width: "100%",
+    minWidth: 0,
 
     borderWidth: 1,
 

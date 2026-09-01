@@ -48,7 +48,7 @@ export default function InspectionDetailsScreen() {
   }>();
 
   /*
-   * Estado del reintento de sincronizaciÃ³n.
+   * Estado del reintento de sincronización.
    */
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -56,11 +56,11 @@ export default function InspectionDetailsScreen() {
 
   /*
    * Utilizamos este contador solamente para
-   * forzar una nueva lectura visual despuÃ©s
+   * forzar una nueva lectura visual después
    * de modificar el repositorio en memoria.
    *
    * Cuando migremos a una base reactiva/SQLite
-   * esta tÃ©cnica dejarÃ¡ de ser necesaria.
+   * esta técnica dejará de ser necesaria.
    */
   const [refreshVersion, setRefreshVersion] = useState(0);
 
@@ -90,7 +90,7 @@ export default function InspectionDetailsScreen() {
               fontWeight: "600",
             }}
           >
-            â€¹ Volver
+            ‹ Volver
           </Text>
         </Pressable>
 
@@ -103,7 +103,7 @@ export default function InspectionDetailsScreen() {
               },
             ]}
           >
-            InspecciÃ³n no encontrada
+            Inspección no encontrada
           </Text>
 
           <Text
@@ -114,7 +114,7 @@ export default function InspectionDetailsScreen() {
               },
             ]}
           >
-            No fue posible encontrar la informaciÃ³n de esta inspecciÃ³n.
+            No fue posible encontrar la información de esta inspección.
           </Text>
         </View>
       </Screen>
@@ -128,7 +128,7 @@ export default function InspectionDetailsScreen() {
   const inspectionEvidences = getEvidencesByInspectionId(inspection.id);
 
   /* ---------------------------------------------------------------------- */
-  /*                        ESTADO DE INSPECCIÃ“N                             */
+  /*                        ESTADO DE INSPECCIÓN                             */
   /* ---------------------------------------------------------------------- */
 
   const statusLabel =
@@ -146,7 +146,7 @@ export default function InspectionDetailsScreen() {
         : colors.textMuted;
 
   /* ---------------------------------------------------------------------- */
-  /*                       ESTADO DE SINCRONIZACIÃ“N                          */
+  /*                       ESTADO DE SINCRONIZACIÓN                          */
   /* ---------------------------------------------------------------------- */
 
   const syncStatus = inspection.integration?.syncStatus ?? "local";
@@ -156,9 +156,9 @@ export default function InspectionDetailsScreen() {
   /*
    * Solamente permitimos reintento cuando:
    *
-   * - ocurriÃ³ un error
+   * - ocurrió un error
    * - existe formulario
-   * - el formulario estÃ¡ integrado con Kobo
+   * - el formulario está integrado con Kobo
    */
   const canRetrySync =
     syncStatus === "error" && form?.integration?.provider === "kobo";
@@ -168,11 +168,7 @@ export default function InspectionDetailsScreen() {
   /* ---------------------------------------------------------------------- */
 
   const handleRetrySync = async () => {
-    if (
-      isRetrying ||
-      !form ||
-      !canRetrySync
-    ) {
+    if (isRetrying || !form || !canRetrySync) {
       return;
     }
 
@@ -181,53 +177,31 @@ export default function InspectionDetailsScreen() {
 
     try {
       /*
-       * Toda la lÃ³gica de sincronizaciÃ³n vive ahora
+       * Toda la lógica de sincronización vive ahora
        * dentro de InspectionSyncService.
        *
-       * Esta pantalla Ãºnicamente solicita el reintento.
+       * Esta pantalla únicamente solicita el reintento.
        */
-      const result =
-        await syncInspection(
-          inspection.id,
-        );
+      const result = await syncInspection(inspection.id);
 
-      if (
-        result.status ===
-        "error"
-      ) {
-        setRetryError(
-          result.error,
-        );
+      if (result.status === "error") {
+        setRetryError(result.error);
       } else {
-        console.log(
-          "Reintento de sincronizaciÃ³n procesado:",
-          result,
-        );
+        console.log("Reintento de sincronización procesado:", result);
       }
 
       /*
        * El repositorio mantiene una copia hidratada en memoria.
-       * Forzamos un render para volver a leer la inspecciÃ³n
-       * y mostrar synced/error/syncing segÃºn corresponda.
+       * Forzamos un render para volver a leer la inspección
+       * y mostrar synced/error/syncing según corresponda.
        */
-      setRefreshVersion(
-        (value) =>
-          value + 1,
-      );
+      setRefreshVersion((value) => value + 1);
     } catch (error) {
-      const message =
-        getErrorMessage(
-          error,
-        );
+      const message = getErrorMessage(error);
 
-      setRetryError(
-        message,
-      );
+      setRetryError(message);
 
-      setRefreshVersion(
-        (value) =>
-          value + 1,
-      );
+      setRefreshVersion((value) => value + 1);
     } finally {
       setIsRetrying(false);
     }
@@ -241,13 +215,13 @@ export default function InspectionDetailsScreen() {
       >
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÃ“N CONTEXTUAL                                        */}
+          {/* NAVEGACIÓN CONTEXTUAL                                        */}
           {/* ============================================================ */}
 
           <ContextHeader
             /*
-             * Una inspecciÃ³n se abre desde el listado de inspecciones.
-             * El destino anterior es explÃ­cito para no depender del historial.
+             * Una inspección se abre desde el listado de inspecciones.
+             * El destino anterior es explícito para no depender del historial.
              */
             backLabel="Inspecciones"
             onBack={() =>
@@ -259,16 +233,14 @@ export default function InspectionDetailsScreen() {
                 },
               })
             }
-
             /*
              * La empresa permanece visible como contexto superior.
              */
             contextLabel={company.name}
             contextColor={company.branding.primaryColor}
-
             /*
-             * El formulario identifica la inspecciÃ³n actual
-             * y el inmueble aparece como descripciÃ³n.
+             * El formulario identifica la inspección actual
+             * y el inmueble aparece como descripción.
              */
             title={form?.title ?? "Formulario no disponible"}
             subtitle={property?.name ?? "Inmueble no disponible"}
@@ -295,7 +267,7 @@ export default function InspectionDetailsScreen() {
                   },
                 ]}
               >
-                â— {statusLabel}
+                ● {statusLabel}
               </Text>
             </View>
 
@@ -315,19 +287,19 @@ export default function InspectionDetailsScreen() {
                   },
                 ]}
               >
-                â— {syncInfo.label}
+                ● {syncInfo.label}
               </Text>
             </View>
           </View>
 
           {/* ============================================================ */}
-          {/* INFORMACIÃ“N / EVIDENCIAS                                     */}
+          {/* INFORMACIÓN / EVIDENCIAS                                     */}
           {/* ============================================================ */}
 
           <View
             style={[styles.topContent, isDesktop && styles.topContentDesktop]}
           >
-            {/* INFORMACIÃ“N */}
+            {/* INFORMACIÓN */}
 
             <View
               style={[
@@ -344,7 +316,7 @@ export default function InspectionDetailsScreen() {
                   },
                 ]}
               >
-                InformaciÃ³n
+                Información
               </Text>
 
               <AppCard>
@@ -367,7 +339,7 @@ export default function InspectionDetailsScreen() {
                 <Divider />
 
                 <InfoRow
-                  label="VersiÃ³n"
+                  label="Versión"
                   value={form ? `v${form.version}` : "No disponible"}
                 />
 
@@ -441,7 +413,7 @@ export default function InspectionDetailsScreen() {
                           },
                         ]}
                       >
-                        â—«
+                        ◫
                       </Text>
                     </View>
 
@@ -478,7 +450,7 @@ export default function InspectionDetailsScreen() {
                         },
                       ]}
                     >
-                      â€º
+                      ›
                     </Text>
                   </View>
                 </AppCard>
@@ -487,7 +459,7 @@ export default function InspectionDetailsScreen() {
           </View>
 
           {/* ============================================================ */}
-          {/* SINCRONIZACIÃ“N KOBO                                          */}
+          {/* SINCRONIZACIÓN KOBO                                          */}
           {/* ============================================================ */}
 
           <View style={styles.section}>
@@ -499,7 +471,7 @@ export default function InspectionDetailsScreen() {
                 },
               ]}
             >
-              SincronizaciÃ³n
+              Sincronización
             </Text>
 
             <AppCard>
@@ -579,7 +551,7 @@ export default function InspectionDetailsScreen() {
                       <Divider />
 
                       <InfoRow
-                        label="Ãšltima sincronizaciÃ³n"
+                        label="Última sincronización"
                         value={formatDateTime(
                           inspection.integration.kobo.syncedAt,
                         )}
@@ -601,7 +573,7 @@ export default function InspectionDetailsScreen() {
                       },
                     ]}
                   >
-                    Ãšltimo error
+                    Último error
                   </Text>
 
                   <Text
@@ -635,7 +607,7 @@ export default function InspectionDetailsScreen() {
                   <AppButton onPress={handleRetrySync}>
                     {isRetrying
                       ? "Sincronizando..."
-                      : "Reintentar sincronizaciÃ³n"}
+                      : "Reintentar sincronización"}
                   </AppButton>
                 </View>
               )}
@@ -757,7 +729,7 @@ export default function InspectionDetailsScreen() {
                     },
                   ]}
                 >
-                  Esta inspecciÃ³n todavÃ­a no contiene respuestas registradas.
+                  Esta inspección todavía no contiene respuestas registradas.
                 </Text>
               </AppCard>
             )}
@@ -771,34 +743,30 @@ export default function InspectionDetailsScreen() {
             {inspection.status !== "completed" && (
               <View style={styles.actionButton}>
                 {/*
-                 * Continuamos la inspecciÃ³n existente.
+                 * Continuamos la inspección existente.
                  *
                  * CaptureScreen recibe inspectionId, reconstruye
                  * las respuestas guardadas y actualiza esa misma
-                 * inspecciÃ³n en lugar de crear un duplicado.
+                 * inspección en lugar de crear un duplicado.
                  */}
                 <AppButton
                   onPress={() =>
                     router.navigate({
-                      pathname:
-                        "/empresas/[id]/inmuebles/[propertyId]/captura",
+                      pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
 
                       params: {
                         id,
 
-                        propertyId:
-                          inspection.propertyId,
+                        propertyId: inspection.propertyId,
 
-                        formId:
-                          inspection.formId,
+                        formId: inspection.formId,
 
                         /*
-                         * Este parÃ¡metro indica a CaptureScreen que
-                         * debe cargar y actualizar la inspecciÃ³n existente,
+                         * Este parámetro indica a CaptureScreen que
+                         * debe cargar y actualizar la inspección existente,
                          * no crear una nueva.
                          */
-                        inspectionId:
-                          inspection.id,
+                        inspectionId: inspection.id,
                       },
                     })
                   }
@@ -836,8 +804,8 @@ export default function InspectionDetailsScreen() {
               },
             ]}
           >
-            La inspecciÃ³n utiliza el modelo centralizado de UNIESAP y conserva
-            su estado de sincronizaciÃ³n con Kobo.
+            La inspección utiliza el modelo centralizado de UNIESAP y conserva
+            su estado de sincronización con Kobo.
           </Text>
         </ResponsiveContainer>
       </ScrollView>
@@ -861,7 +829,7 @@ function InfoRow({
   const { colors } = useAppTheme();
 
   return (
-    <View>
+    <View style={styles.infoRow}>
       <Text
         style={[
           styles.infoLabel,
@@ -926,7 +894,7 @@ function getSyncStatusInfo(
         label: "Sincronizada con Kobo",
 
         description:
-          "La inspecciÃ³n fue enviada correctamente y tiene una referencia Kobo asociada.",
+          "La inspección fue enviada correctamente y tiene una referencia Kobo asociada.",
 
         color: colors.success,
       };
@@ -936,27 +904,27 @@ function getSyncStatusInfo(
         label: "Sincronizando con Kobo",
 
         description:
-          "UNIESAP estÃ¡ enviando actualmente esta inspecciÃ³n al servicio Kobo.",
+          "UNIESAP está enviando actualmente esta inspección al servicio Kobo.",
 
         color: colors.primary,
       };
 
     case "pending":
       return {
-        label: "Pendiente de sincronizaciÃ³n",
+        label: "Pendiente de sincronización",
 
         description:
-          "La inspecciÃ³n estÃ¡ guardada en UNIESAP y espera completar su sincronizaciÃ³n.",
+          "La inspección está guardada en UNIESAP y espera completar su sincronización.",
 
         color: colors.warning,
       };
 
     case "error":
       return {
-        label: "Error de sincronizaciÃ³n",
+        label: "Error de sincronización",
 
         description:
-          "La inspecciÃ³n permanece guardada en UNIESAP y puede volver a intentarse.",
+          "La inspección permanece guardada en UNIESAP y puede volver a intentarse.",
 
         color: colors.error,
       };
@@ -967,7 +935,7 @@ function getSyncStatusInfo(
         label: "Guardada localmente",
 
         description:
-          "La inspecciÃ³n estÃ¡ almacenada en UNIESAP y todavÃ­a no tiene una submission Kobo.",
+          "La inspección está almacenada en UNIESAP y todavía no tiene una submission Kobo.",
 
         color: colors.textMuted,
       };
@@ -980,7 +948,7 @@ function formatResponseValue(value: string | number | boolean | null) {
   }
 
   if (typeof value === "boolean") {
-    return value ? "SÃ­" : "No";
+    return value ? "Sí" : "No";
   }
 
   return String(value);
@@ -997,16 +965,16 @@ function getQuestionTypeLabel(
       return "Texto largo";
 
     case "number":
-      return "NÃºmero";
+      return "Número";
 
     case "boolean":
-      return "SÃ­ / No";
+      return "Sí / No";
 
     case "select":
-      return "SelecciÃ³n";
+      return "Selección";
 
     case "photo":
-      return "FotografÃ­a";
+      return "Fotografía";
 
     default:
       return type;
@@ -1063,7 +1031,7 @@ function getErrorMessage(error: unknown) {
     return error;
   }
 
-  return "OcurriÃ³ un error desconocido.";
+  return "Ocurrió un error desconocido.";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1149,6 +1117,7 @@ const styles = StyleSheet.create({
 
   topContent: {
     width: "100%",
+    minWidth: 0,
 
     gap: Spacing.xl,
 
@@ -1163,6 +1132,7 @@ const styles = StyleSheet.create({
 
   topColumn: {
     width: "100%",
+    minWidth: 0,
   },
 
   informationColumnDesktop: {
@@ -1182,6 +1152,9 @@ const styles = StyleSheet.create({
   },
 
   section: {
+    width: "100%",
+    minWidth: 0,
+
     marginBottom: Spacing.xl,
   },
 
@@ -1193,6 +1166,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
 
+  infoRow: {
+    width: "100%",
+    minWidth: 0,
+  },
+
   infoLabel: {
     fontSize: FontSize.caption,
 
@@ -1200,6 +1178,8 @@ const styles = StyleSheet.create({
   },
 
   infoValue: {
+    minWidth: 0,
+
     fontSize: FontSize.small,
 
     fontWeight: "600",
@@ -1214,6 +1194,9 @@ const styles = StyleSheet.create({
   /* SYNC */
 
   syncHeader: {
+    width: "100%",
+    minWidth: 0,
+
     flexDirection: "row",
 
     alignItems: "flex-start",
@@ -1286,6 +1269,9 @@ const styles = StyleSheet.create({
   },
 
   retryAction: {
+    width: "100%",
+    minWidth: 0,
+
     marginTop: Spacing.lg,
   },
 
@@ -1293,14 +1279,18 @@ const styles = StyleSheet.create({
 
   responseCard: {
     width: "100%",
+    minWidth: 0,
 
     minHeight: 150,
   },
 
   responseHeader: {
+    width: "100%",
+    minWidth: 0,
+
     flexDirection: "row",
 
-    alignItems: "center",
+    alignItems: "flex-start",
 
     marginBottom: Spacing.md,
   },
@@ -1309,6 +1299,8 @@ const styles = StyleSheet.create({
     width: 32,
 
     height: 32,
+
+    flexShrink: 0,
 
     borderRadius: Radius.full,
 
@@ -1336,6 +1328,8 @@ const styles = StyleSheet.create({
   },
 
   responseValue: {
+    minWidth: 0,
+
     fontSize: FontSize.body,
 
     fontWeight: "700",
@@ -1350,6 +1344,9 @@ const styles = StyleSheet.create({
   /* EVIDENCE */
 
   evidenceRow: {
+    width: "100%",
+    minWidth: 0,
+
     flexDirection: "row",
 
     alignItems: "center",
@@ -1359,6 +1356,8 @@ const styles = StyleSheet.create({
     width: 48,
 
     height: 48,
+
+    flexShrink: 0,
 
     borderRadius: Radius.md,
 
@@ -1394,6 +1393,8 @@ const styles = StyleSheet.create({
   },
 
   arrow: {
+    flexShrink: 0,
+
     fontSize: 28,
 
     marginLeft: Spacing.sm,
@@ -1402,6 +1403,9 @@ const styles = StyleSheet.create({
   /* ACTIONS */
 
   actions: {
+    width: "100%",
+    minWidth: 0,
+
     flexDirection: "row",
 
     flexWrap: "wrap",
@@ -1411,8 +1415,8 @@ const styles = StyleSheet.create({
 
   actionButton: {
     flexGrow: 1,
-
-    minWidth: 220,
+    flexBasis: 220,
+    minWidth: 0,
   },
 
   prototypeNotice: {
@@ -1459,4 +1463,3 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 });
-

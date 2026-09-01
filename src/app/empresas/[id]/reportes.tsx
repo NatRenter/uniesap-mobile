@@ -30,7 +30,7 @@ export default function ReportsScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * Recuperamos el ID dinÃ¡mico de:
+   * Recuperamos el ID dinámico de:
    *
    * /empresas/[id]/reportes
    */
@@ -57,7 +57,7 @@ export default function ReportsScreen() {
               fontWeight: "600",
             }}
           >
-            â€¹ Empresas
+            ‹ Empresas
           </Text>
         </Pressable>
 
@@ -84,9 +84,9 @@ export default function ReportsScreen() {
   const companyReports = getReportsByCompanyId(company.id);
 
   /*
-   * Calculamos automÃ¡ticamente los indicadores.
+   * Calculamos automáticamente los indicadores.
    *
-   * De esta forma los nÃºmeros del resumen
+   * De esta forma los números del resumen
    * siempre dependen de los datos reales.
    */
   const generated = companyReports.filter(
@@ -108,12 +108,12 @@ export default function ReportsScreen() {
          *
          * - padding horizontal
          * - espacio superior
-         * - ancho mÃ¡ximo
+         * - ancho máximo
          * - centrado en tablet y web
          */}
         <ResponsiveContainer>
           {/* ====================================================== */}
-          {/* NAVEGACIÃ“N CONTEXTUAL */}
+          {/* NAVEGACIÓN CONTEXTUAL */}
           {/* ====================================================== */}
 
           <ContextHeader
@@ -148,7 +148,7 @@ export default function ReportsScreen() {
            * Pendientes
            *
            * Por ello conservamos tres columnas en
-           * mÃ³vil, tablet y escritorio.
+           * móvil, tablet y escritorio.
            */}
           <ResponsiveGrid
             phoneColumns={3}
@@ -171,7 +171,7 @@ export default function ReportsScreen() {
           </ResponsiveGrid>
 
           {/* ====================================================== */}
-          {/* ACCIÃ“N PRINCIPAL */}
+          {/* ACCIÓN PRINCIPAL */}
           {/* ====================================================== */}
 
           <View style={styles.generateButton}>
@@ -210,9 +210,9 @@ export default function ReportsScreen() {
              * Sustituimos la lista vertical fija
              * por nuestro grid responsive.
              *
-             * MÃ³vil   â†’ 1 reporte por fila
-             * Tablet  â†’ 2 reportes por fila
-             * Desktop â†’ 3 reportes por fila
+             * Móvil   → 1 reporte por fila
+             * Tablet  → 2 reportes por fila
+             * Desktop → 3 reportes por fila
              */}
             <ResponsiveGrid
               phoneColumns={1}
@@ -225,9 +225,9 @@ export default function ReportsScreen() {
                  * Resolvemos las relaciones del reporte.
                  *
                  * Report
-                 *   â”œâ”€â”€ Inspection
-                 *   â”‚      â””â”€â”€ Form
-                 *   â””â”€â”€ Property
+                 * ----------------------------------------
+                 * ----------------------------------------
+                 * ----------------------------------------
                  */
                 const inspection = getInspectionById(report.inspectionId);
 
@@ -244,7 +244,7 @@ export default function ReportsScreen() {
                     companyRouteId={id}
                     title={report.title}
                     property={property?.name ?? "Inmueble no disponible"}
-                    inspection={form?.title ?? "InspecciÃ³n no disponible"}
+                    inspection={form?.title ?? "Inspección no disponible"}
                     date={report.createdAt}
                     format={report.format}
                     status={report.status}
@@ -254,7 +254,7 @@ export default function ReportsScreen() {
             </ResponsiveGrid>
 
             {/* ================================================== */}
-            {/* ESTADO VACÃO */}
+            {/* ESTADO VACÍO */}
             {/* ================================================== */}
 
             {companyReports.length === 0 && (
@@ -278,7 +278,7 @@ export default function ReportsScreen() {
                     },
                   ]}
                 >
-                  TodavÃ­a no se han generado reportes para esta empresa.
+                  Todavía no se han generado reportes para esta empresa.
                 </Text>
               </AppCard>
             )}
@@ -298,7 +298,7 @@ export default function ReportsScreen() {
  * los indicadores superiores.
  *
  * warning permite destacar visualmente
- * valores que requieren atenciÃ³n.
+ * valores que requieren atención.
  */
 function SummaryCard({
   value,
@@ -346,7 +346,7 @@ function SummaryCard({
 /*
  * Representa un reporte dentro del historial.
  *
- * Recibe la informaciÃ³n ya resuelta para mantener
+ * Recibe la información ya resuelta para mantener
  * el componente independiente de la capa de datos.
  */
 function ReportCard({
@@ -377,13 +377,13 @@ function ReportCard({
   const statusLabel = status === "generated" ? "Generado" : "Pendiente";
 
   /*
-   * Reporte generado â†’ verde
-   * Reporte pendiente â†’ advertencia
+   * Reporte generado → verde
+   * Reporte pendiente → advertencia
    */
   const statusColor = status === "generated" ? colors.success : colors.warning;
 
   /*
-   * Traducimos tambiÃ©n el formato.
+   * Traducimos también el formato.
    *
    * Actualmente el modelo admite Excel y PDF.
    */
@@ -403,7 +403,7 @@ function ReportCard({
       }
       style={({ pressed }) => ({
         /*
-         * Feedback visual tanto para mÃ³vil
+         * Feedback visual tanto para móvil
          * como para web.
          */
         opacity: pressed ? 0.7 : 1,
@@ -429,7 +429,7 @@ function ReportCard({
                 },
               ]}
             >
-              â–¤
+              ▤
             </Text>
           </View>
 
@@ -467,7 +467,7 @@ function ReportCard({
               },
             ]}
           >
-            â€º
+            ›
           </Text>
         </View>
 
@@ -482,7 +482,7 @@ function ReportCard({
           ]}
         />
 
-        {/* INSPECCIÃ“N */}
+        {/* INSPECCIÓN */}
 
         <Text
           style={[
@@ -507,7 +507,7 @@ function ReportCard({
               },
             ]}
           >
-            {formatDate(date)} Â· {formatLabel}
+            {formatDate(date)} · {formatLabel}
           </Text>
 
           <Text
@@ -518,7 +518,7 @@ function ReportCard({
               },
             ]}
           >
-            â— {statusLabel}
+            ● {statusLabel}
           </Text>
         </View>
       </AppCard>
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
    * ResponsiveContainer controla el padding
    * horizontal y superior.
    *
-   * AquÃ­ Ãºnicamente necesitamos espacio inferior.
+   * Aquí únicamente necesitamos espacio inferior.
    */
   scrollContent: {
     paddingBottom: Spacing.xxxl,
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * Separamos visualmente el botÃ³n del resumen.
+   * Separamos visualmente el botón del resumen.
    */
   generateButton: {
     marginTop: Spacing.xl,
@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
     width: "100%",
 
     /*
-     * La altura mÃ­nima ayuda a mantener
+     * La altura mínima ayuda a mantener
      * uniformidad cuando aparecen varias
      * tarjetas en la misma fila.
      */
@@ -736,7 +736,7 @@ const styles = StyleSheet.create({
 
   /*
    * Los metadatos pueden envolverse si el
-   * espacio horizontal es muy pequeÃ±o.
+   * espacio horizontal es muy pequeño.
    */
   meta: {
     flexDirection: "row",
@@ -792,4 +792,3 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
-

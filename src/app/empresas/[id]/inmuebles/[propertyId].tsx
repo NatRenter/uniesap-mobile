@@ -5,20 +5,27 @@ import { router, useLocalSearchParams } from "expo-router";
 import { ContextHeader } from "@/components/navigation/ContextHeader";
 
 import { AppButton } from "@/components/ui/AppButton";
+
 import { AppCard } from "@/components/ui/AppCard";
+
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
+
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
+
 import { Screen } from "@/components/ui/Screen";
 
 import { getFormsByIds } from "@/repositories/formRepository";
+
 import { getInspectionsByPropertyId } from "@/repositories/inspectionRepository";
 
 import { getCompanyById } from "@/repositories/companyRepository";
+
 import { getPropertyById } from "@/repositories/propertyRepository";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
+
 import { useResponsive } from "@/hooks/useResponsive";
 
 import type {
@@ -26,23 +33,39 @@ import type {
   InspectionSyncStatus,
 } from "@/types/inspection";
 
+/*
+ * ============================================================================
+ * DETALLE DEL INMUEBLE
+ * ============================================================================
+ *
+ * Pantalla principal de contexto para un inmueble.
+ *
+ * Desde aquí se puede acceder a:
+ *
+ * - nueva inspección;
+ * - captura mediante formularios asignados;
+ * - administración de formularios;
+ * - inspecciones recientes;
+ * - información del inmueble.
+ */
 export default function PropertyDetailsScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * ResponsiveGrid resuelve la mayoría de
-   * distribuciones responsive.
+   * ResponsiveGrid resuelve la mayoría de distribuciones.
    *
-   * Aquí solamente necesitamos saber cuándo
-   * estamos en escritorio para utilizar
-   * dos columnas en la parte inferior.
+   * Aquí solamente necesitamos conocer
+   * cuándo estamos en escritorio para organizar
+   * la parte inferior en dos columnas.
    */
   const { isPhone, isTablet } = useResponsive();
 
   const isDesktop = !isPhone && !isTablet;
 
   /*
-   * Ruta:
+   * ==========================================================================
+   * RUTA
+   * ==========================================================================
    *
    * /empresas/[id]/inmuebles/[propertyId]
    */
@@ -52,16 +75,20 @@ export default function PropertyDetailsScreen() {
   }>();
 
   /*
-   * Obtenemos empresa e inmueble.
+   * ==========================================================================
+   * DATOS PRINCIPALES
+   * ==========================================================================
    */
   const company = getCompanyById(id);
 
   const property = getPropertyById(propertyId);
 
   /*
-   * Controlamos rutas inválidas.
+   * ==========================================================================
+   * RUTA INVÁLIDA
+   * ==========================================================================
    */
-  if (!company || !property) {
+  if (!company || !property || property.companyId !== company.id) {
     return (
       <Screen>
         <Pressable onPress={() => router.back()}>
@@ -80,6 +107,7 @@ export default function PropertyDetailsScreen() {
           <Text
             style={[
               styles.notFoundTitle,
+
               {
                 color: colors.text,
               },
@@ -91,6 +119,7 @@ export default function PropertyDetailsScreen() {
           <Text
             style={[
               styles.notFoundDescription,
+
               {
                 color: colors.textSecondary,
               },
@@ -104,34 +133,34 @@ export default function PropertyDetailsScreen() {
   }
 
   /*
-   * Formularios asignados al inmueble.
+   * ==========================================================================
+   * FORMULARIOS ASIGNADOS
+   * ==========================================================================
+   *
+   * Property.formIds ya procede preferentemente
+   * de la relación SQL property_forms en Android/iOS.
+   *
+   * FormRepository resuelve después
+   * las definiciones completas.
    */
   const propertyForms = getFormsByIds(property.formIds);
 
   /*
-   * Inspecciones provenientes de nuestra
-   * fuente centralizada.
-   *
-   * Esto ya incluye tanto las inspecciones mock
-   * como las nuevas capturas creadas por
-   * inspectionRepository.
+   * ==========================================================================
+   * INSPECCIONES
+   * ==========================================================================
    */
   const propertyInspections = getInspectionsByPropertyId(property.id);
 
   /*
-   * Consideramos pendientes las inspecciones
-   * cuyo flujo de captura todavía no terminó.
+   * Inspecciones todavía no finalizadas.
    */
   const pendingInspections = propertyInspections.filter(
     (inspection) => inspection.status !== "completed",
   ).length;
 
   /*
-   * Además calculamos cuántas inspecciones
-   * tienen problemas de sincronización.
-   *
-   * Esto será útil posteriormente para mostrar
-   * alertas a nivel inmueble.
+   * Inspecciones con error Kobo.
    */
   const syncErrors = propertyInspections.filter(
     (inspection) => inspection.integration?.syncStatus === "error",
@@ -151,36 +180,24 @@ export default function PropertyDetailsScreen() {
           {/* ============================================================ */}
 
           <ContextHeader
-            /*
-             * El nivel anterior del inmueble
-             * es el listado de inmuebles de la empresa.
-             */
             backLabel="Inmuebles"
             onBack={() =>
               router.navigate({
                 pathname: "/empresas/[id]/inmuebles",
 
                 params: {
-                  id,
+                  id: company.id,
                 },
               })
             }
-            /*
-             * Conservamos visible el nombre de la empresa
-             * para evitar perder el contexto.
-             */
             contextLabel={company.name}
             contextColor={company.branding.primaryColor}
-            /*
-             * El inmueble es la identidad principal
-             * de esta pantalla.
-             */
             title={property.name}
             subtitle={`${location} · ${property.type}`}
           />
 
           {/* ============================================================ */}
-          {/* RESUMEN                                                      */}
+          {/* RESUMEN                                                       */}
           {/* ============================================================ */}
 
           <ResponsiveGrid
@@ -216,6 +233,7 @@ export default function PropertyDetailsScreen() {
                 <View
                   style={[
                     styles.syncWarningIcon,
+
                     {
                       backgroundColor: `${colors.error}20`,
                     },
@@ -236,6 +254,7 @@ export default function PropertyDetailsScreen() {
                   <Text
                     style={[
                       styles.syncWarningTitle,
+
                       {
                         color: colors.error,
                       },
@@ -247,6 +266,7 @@ export default function PropertyDetailsScreen() {
                   <Text
                     style={[
                       styles.syncWarningDescription,
+
                       {
                         color: colors.textSecondary,
                       },
@@ -274,8 +294,9 @@ export default function PropertyDetailsScreen() {
                     "/empresas/[id]/inmuebles/[propertyId]/nueva-inspeccion",
 
                   params: {
-                    id,
-                    propertyId,
+                    id: company.id,
+
+                    propertyId: property.id,
                   },
                 })
               }
@@ -289,20 +310,58 @@ export default function PropertyDetailsScreen() {
           {/* ============================================================ */}
 
           <View style={styles.section}>
-            <Text
-              style={[
-                styles.sectionTitle,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Formularios asignados
-            </Text>
+            {/*
+             * El encabezado ahora incluye un acceso
+             * a la nueva pantalla de administración.
+             */}
+            <View style={styles.sectionHeaderRow}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                Formularios asignados
+              </Text>
+
+              <Pressable
+                onPress={() =>
+                  router.navigate({
+                    pathname:
+                      "/empresas/[id]/inmuebles/[propertyId]/formularios",
+
+                    params: {
+                      id: company.id,
+
+                      propertyId: property.id,
+                    },
+                  })
+                }
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.65 : 1,
+                })}
+              >
+                <Text
+                  style={[
+                    styles.link,
+
+                    {
+                      color: colors.primary,
+                    },
+                  ]}
+                >
+                  Administrar
+                </Text>
+              </Pressable>
+            </View>
 
             <Text
               style={[
                 styles.sectionDescription,
+
                 {
                   color: colors.textSecondary,
                 },
@@ -311,11 +370,6 @@ export default function PropertyDetailsScreen() {
               Selecciona un formulario para iniciar una nueva captura.
             </Text>
 
-            {/*
-             * Móvil   → 1 columna
-             * Tablet  → 2 columnas
-             * Desktop → 3 columnas
-             */}
             <ResponsiveGrid
               phoneColumns={1}
               tabletColumns={2}
@@ -334,9 +388,9 @@ export default function PropertyDetailsScreen() {
                       pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
 
                       params: {
-                        id,
+                        id: company.id,
 
-                        propertyId,
+                        propertyId: property.id,
 
                         formId: form.id,
                       },
@@ -351,6 +405,7 @@ export default function PropertyDetailsScreen() {
                 <Text
                   style={[
                     styles.emptyTitle,
+
                     {
                       color: colors.text,
                     },
@@ -362,6 +417,7 @@ export default function PropertyDetailsScreen() {
                 <Text
                   style={[
                     styles.emptyDescription,
+
                     {
                       color: colors.textSecondary,
                     },
@@ -369,6 +425,34 @@ export default function PropertyDetailsScreen() {
                 >
                   Este inmueble todavía no tiene formularios disponibles.
                 </Text>
+
+                <Pressable
+                  onPress={() =>
+                    router.navigate({
+                      pathname:
+                        "/empresas/[id]/inmuebles/[propertyId]/formularios",
+
+                      params: {
+                        id: company.id,
+
+                        propertyId: property.id,
+                      },
+                    })
+                  }
+                  style={styles.emptyAction}
+                >
+                  <Text
+                    style={[
+                      styles.link,
+
+                      {
+                        color: colors.primary,
+                      },
+                    ]}
+                  >
+                    Asignar formularios
+                  </Text>
+                </Pressable>
               </AppCard>
             )}
           </View>
@@ -399,6 +483,7 @@ export default function PropertyDetailsScreen() {
                 <Text
                   style={[
                     styles.sectionTitle,
+
                     {
                       color: colors.text,
                     },
@@ -407,17 +492,13 @@ export default function PropertyDetailsScreen() {
                   Inspecciones recientes
                 </Text>
 
-                {/*
-                 * Este botón ya queda conectado
-                 * al historial completo.
-                 */}
                 <Pressable
                   onPress={() =>
                     router.navigate({
                       pathname: "/empresas/[id]/inspecciones",
 
                       params: {
-                        id,
+                        id: company.id,
                       },
                     })
                   }
@@ -425,6 +506,7 @@ export default function PropertyDetailsScreen() {
                   <Text
                     style={[
                       styles.link,
+
                       {
                         color: colors.primary,
                       },
@@ -439,10 +521,6 @@ export default function PropertyDetailsScreen() {
                 <AppCard style={styles.inspectionsCard}>
                   {propertyInspections.slice(0, 3).map((inspection, index) => (
                     <View key={inspection.id}>
-                      {/*
-                       * Cada fila ahora abre el detalle
-                       * de la inspección correspondiente.
-                       */}
                       <InspectionRow
                         inspector={inspection.inspector}
                         date={inspection.date}
@@ -456,7 +534,7 @@ export default function PropertyDetailsScreen() {
                               "/empresas/[id]/inspecciones/[inspectionId]",
 
                             params: {
-                              id,
+                              id: company.id,
 
                               inspectionId: inspection.id,
                             },
@@ -468,6 +546,7 @@ export default function PropertyDetailsScreen() {
                         <View
                           style={[
                             styles.divider,
+
                             {
                               backgroundColor: colors.divider,
                             },
@@ -482,6 +561,7 @@ export default function PropertyDetailsScreen() {
                   <Text
                     style={[
                       styles.emptyTitle,
+
                       {
                         color: colors.text,
                       },
@@ -493,6 +573,7 @@ export default function PropertyDetailsScreen() {
                   <Text
                     style={[
                       styles.emptyDescription,
+
                       {
                         color: colors.textSecondary,
                       },
@@ -519,6 +600,7 @@ export default function PropertyDetailsScreen() {
               <Text
                 style={[
                   styles.sectionTitle,
+
                   {
                     color: colors.text,
                   },
@@ -595,6 +677,7 @@ function SummaryCard({
       <Text
         style={[
           styles.summaryValue,
+
           {
             color: warning ? colors.warning : colors.text,
           },
@@ -606,6 +689,7 @@ function SummaryCard({
       <Text
         style={[
           styles.summaryLabel,
+
           {
             color: colors.textSecondary,
           },
@@ -643,6 +727,7 @@ function FormCard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.formCard,
+
         {
           backgroundColor: colors.surface,
 
@@ -655,6 +740,7 @@ function FormCard({
       <View
         style={[
           styles.formIcon,
+
           {
             backgroundColor: colors.primarySoft,
           },
@@ -663,6 +749,7 @@ function FormCard({
         <Text
           style={[
             styles.formIconText,
+
             {
               color: colors.primary,
             },
@@ -677,6 +764,7 @@ function FormCard({
         <Text
           style={[
             styles.formTitle,
+
             {
               color: colors.text,
             },
@@ -689,6 +777,7 @@ function FormCard({
           <Text
             style={[
               styles.formVersion,
+
               {
                 color: colors.textMuted,
               },
@@ -700,6 +789,7 @@ function FormCard({
           <Text
             style={[
               styles.formStatus,
+
               {
                 color: disabled ? colors.textMuted : colors.success,
               },
@@ -713,6 +803,7 @@ function FormCard({
       <Text
         style={[
           styles.arrow,
+
           {
             color: colors.textMuted,
           },
@@ -728,16 +819,6 @@ function FormCard({
 /*                            INSPECTION ROW                                  */
 /* -------------------------------------------------------------------------- */
 
-/*
- * Representa una inspección dentro de la tarjeta
- * de "Inspecciones recientes".
- *
- * Ahora también conoce:
- *
- * - estado de captura
- * - estado de sincronización
- * - navegación al detalle
- */
 function InspectionRow({
   inspector,
   date,
@@ -757,14 +838,8 @@ function InspectionRow({
 }) {
   const { colors } = useAppTheme();
 
-  /*
-   * Estado funcional de la inspección.
-   */
   const inspectionInfo = getInspectionStatusInfo(status, colors);
 
-  /*
-   * Estado Kobo/local.
-   */
   const syncInfo = getSyncStatusInfo(syncStatus, colors);
 
   return (
@@ -782,6 +857,7 @@ function InspectionRow({
         <Text
           style={[
             styles.inspectionTitle,
+
             {
               color: colors.text,
             },
@@ -793,6 +869,7 @@ function InspectionRow({
         <Text
           style={[
             styles.inspectionDate,
+
             {
               color: colors.textMuted,
             },
@@ -806,6 +883,7 @@ function InspectionRow({
         <Text
           style={[
             styles.inspectionStatus,
+
             {
               color: inspectionInfo.color,
             },
@@ -818,6 +896,7 @@ function InspectionRow({
           <View
             style={[
               styles.syncDot,
+
               {
                 backgroundColor: syncInfo.color,
               },
@@ -827,6 +906,7 @@ function InspectionRow({
           <Text
             style={[
               styles.syncStateText,
+
               {
                 color: syncInfo.color,
               },
@@ -840,6 +920,7 @@ function InspectionRow({
       <Text
         style={[
           styles.inspectionArrow,
+
           {
             color: colors.textMuted,
           },
@@ -863,6 +944,7 @@ function InformationRow({ label, value }: { label: string; value: string }) {
       <Text
         style={[
           styles.infoLabel,
+
           {
             color: colors.textMuted,
           },
@@ -874,6 +956,7 @@ function InformationRow({ label, value }: { label: string; value: string }) {
       <Text
         style={[
           styles.infoValue,
+
           {
             color: colors.text,
           },
@@ -896,6 +979,7 @@ function Divider() {
     <View
       style={[
         styles.divider,
+
         {
           backgroundColor: colors.divider,
         },
@@ -910,6 +994,7 @@ function Divider() {
 
 function getInspectionStatusInfo(
   status: InspectionStatus,
+
   colors: {
     success: string;
     warning: string;
@@ -941,12 +1026,9 @@ function getInspectionStatusInfo(
   }
 }
 
-/*
- * Traducimos el estado técnico de sincronización
- * a una etiqueta corta para las filas recientes.
- */
 function getSyncStatusInfo(
   status: InspectionSyncStatus,
+
   colors: {
     success: string;
     warning: string;
@@ -959,24 +1041,28 @@ function getSyncStatusInfo(
     case "synced":
       return {
         label: "Sincronizada",
+
         color: colors.success,
       };
 
     case "syncing":
       return {
         label: "Sincronizando",
+
         color: colors.primary,
       };
 
     case "pending":
       return {
         label: "Pendiente",
+
         color: colors.warning,
       };
 
     case "error":
       return {
         label: "Error Kobo",
+
         color: colors.error,
       };
 
@@ -984,20 +1070,12 @@ function getSyncStatusInfo(
     default:
       return {
         label: "Local",
+
         color: colors.textMuted,
       };
   }
 }
 
-/*
- * Ahora soportamos tanto las fechas antiguas:
- *
- * 2026-08-20
- *
- * como las generadas por el repositorio:
- *
- * 2026-08-20T20:25:00.000Z
- */
 function formatDate(value: string) {
   const date = new Date(value);
 
@@ -1005,13 +1083,17 @@ function formatDate(value: string) {
     return value;
   }
 
-  return date.toLocaleDateString("es-MX", {
-    day: "2-digit",
+  return date.toLocaleDateString(
+    "es-MX",
 
-    month: "2-digit",
+    {
+      day: "2-digit",
 
-    year: "numeric",
-  });
+      month: "2-digit",
+
+      year: "numeric",
+    },
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1019,114 +1101,13 @@ function formatDate(value: string) {
 /* -------------------------------------------------------------------------- */
 
 const styles = StyleSheet.create({
-  /*
-   * ResponsiveContainer controla el padding
-   * superior y horizontal.
-   */
   scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
 
-  /* -------------------------------------------------------------------- */
-  /* NAVEGACIÓN                                                           */
-  /* -------------------------------------------------------------------- */
-
-  topNavigation: {
-    flexDirection: "row",
-
-    justifyContent: "space-between",
-
-    alignItems: "center",
-
-    marginBottom: Spacing.lg,
-  },
-
-  backText: {
-    fontSize: FontSize.small,
-
-    fontWeight: "600",
-  },
-
-  editText: {
-    fontSize: FontSize.small,
-
-    fontWeight: "600",
-  },
-
-  /* -------------------------------------------------------------------- */
-  /* HEADER                                                               */
-  /* -------------------------------------------------------------------- */
-
-  overline: {
-    fontSize: FontSize.caption,
-
-    fontWeight: "700",
-
-    letterSpacing: 1,
-
-    marginBottom: Spacing.md,
-  },
-
-  header: {
-    flexDirection: "row",
-
-    alignItems: "center",
-
-    marginBottom: Spacing.xl,
-  },
-
-  propertyIcon: {
-    width: 72,
-
-    height: 72,
-
-    flexShrink: 0,
-
-    borderRadius: Radius.lg,
-
-    alignItems: "center",
-
-    justifyContent: "center",
-
-    marginRight: Spacing.md,
-  },
-
-  propertyIconText: {
-    fontSize: FontSize.h2,
-
-    fontWeight: "600",
-  },
-
-  headerInfo: {
-    flex: 1,
-
-    minWidth: 0,
-  },
-
-  title: {
-    fontSize: FontSize.h2,
-
-    fontWeight: "700",
-
-    marginBottom: Spacing.xs,
-  },
-
-  subtitle: {
-    fontSize: FontSize.small,
-
-    marginBottom: Spacing.xs,
-  },
-
-  propertyType: {
-    fontSize: FontSize.caption,
-  },
-
-  /* -------------------------------------------------------------------- */
-  /* SUMMARY                                                              */
-  /* -------------------------------------------------------------------- */
-
   summaryCard: {
     width: "100%",
+    minWidth: 0,
 
     minHeight: 100,
   },
@@ -1143,15 +1124,14 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
   },
 
-  /* -------------------------------------------------------------------- */
-  /* SYNC WARNING                                                         */
-  /* -------------------------------------------------------------------- */
-
   syncWarningCard: {
     marginTop: Spacing.md,
   },
 
   syncWarningRow: {
+    width: "100%",
+    minWidth: 0,
+
     flexDirection: "row",
 
     alignItems: "center",
@@ -1193,26 +1173,22 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  /* -------------------------------------------------------------------- */
-  /* MAIN ACTION                                                          */
-  /* -------------------------------------------------------------------- */
-
   mainAction: {
     marginTop: Spacing.sm,
 
     marginBottom: Spacing.xl,
   },
 
-  /* -------------------------------------------------------------------- */
-  /* SECTIONS                                                             */
-  /* -------------------------------------------------------------------- */
-
   section: {
     marginBottom: Spacing.xl,
   },
 
   sectionHeaderRow: {
+    width: "100%",
+    minWidth: 0,
+
     flexDirection: "row",
+    flexWrap: "wrap",
 
     justifyContent: "space-between",
 
@@ -1224,7 +1200,10 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
+    flexGrow: 1,
     flexShrink: 1,
+    flexBasis: 220,
+    minWidth: 0,
 
     fontSize: FontSize.cardTitle,
 
@@ -1242,17 +1221,16 @@ const styles = StyleSheet.create({
   },
 
   link: {
+    flexShrink: 0,
+
     fontSize: FontSize.small,
 
     fontWeight: "600",
   },
 
-  /* -------------------------------------------------------------------- */
-  /* FORM CARD                                                            */
-  /* -------------------------------------------------------------------- */
-
   formCard: {
     width: "100%",
+    minWidth: 0,
 
     minHeight: 88,
 
@@ -1320,17 +1298,16 @@ const styles = StyleSheet.create({
   },
 
   arrow: {
+    flexShrink: 0,
+
     fontSize: 28,
 
     marginLeft: Spacing.sm,
   },
 
-  /* -------------------------------------------------------------------- */
-  /* BOTTOM LAYOUT                                                        */
-  /* -------------------------------------------------------------------- */
-
   bottomLayout: {
     width: "100%",
+    minWidth: 0,
 
     gap: Spacing.xl,
   },
@@ -1343,6 +1320,7 @@ const styles = StyleSheet.create({
 
   bottomColumn: {
     width: "100%",
+    minWidth: 0,
   },
 
   bottomColumnDesktop: {
@@ -1353,15 +1331,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
 
-  /* -------------------------------------------------------------------- */
-  /* INSPECTIONS                                                          */
-  /* -------------------------------------------------------------------- */
-
   inspectionsCard: {
     paddingVertical: Spacing.xs,
   },
 
   inspectionRow: {
+    width: "100%",
+    minWidth: 0,
     minHeight: 76,
 
     flexDirection: "row",
@@ -1390,6 +1366,9 @@ const styles = StyleSheet.create({
   },
 
   inspectionStates: {
+    flexShrink: 1,
+    minWidth: 0,
+
     alignItems: "flex-end",
 
     marginLeft: Spacing.sm,
@@ -1404,6 +1383,8 @@ const styles = StyleSheet.create({
   },
 
   syncStateRow: {
+    minWidth: 0,
+
     flexDirection: "row",
 
     alignItems: "center",
@@ -1420,6 +1401,8 @@ const styles = StyleSheet.create({
   },
 
   syncStateText: {
+    flexShrink: 1,
+
     fontSize: FontSize.caption,
 
     fontWeight: "600",
@@ -1433,11 +1416,10 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.sm,
   },
 
-  /* -------------------------------------------------------------------- */
-  /* INFORMATION                                                          */
-  /* -------------------------------------------------------------------- */
-
   informationRow: {
+    width: "100%",
+    minWidth: 0,
+
     paddingVertical: Spacing.sm,
   },
 
@@ -1448,6 +1430,8 @@ const styles = StyleSheet.create({
   },
 
   infoValue: {
+    minWidth: 0,
+
     fontSize: FontSize.small,
 
     fontWeight: "600",
@@ -1459,11 +1443,10 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.sm,
   },
 
-  /* -------------------------------------------------------------------- */
-  /* EMPTY                                                                */
-  /* -------------------------------------------------------------------- */
-
   emptyCard: {
+    width: "100%",
+    minWidth: 0,
+
     marginTop: Spacing.md,
   },
 
@@ -1481,9 +1464,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  /* -------------------------------------------------------------------- */
-  /* NOT FOUND                                                            */
-  /* -------------------------------------------------------------------- */
+  emptyAction: {
+    alignSelf: "flex-start",
+
+    marginTop: Spacing.md,
+  },
 
   notFound: {
     flex: 1,

@@ -2,9 +2,14 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router } from "expo-router";
 
+import { ContextHeader } from "@/components/navigation/ContextHeader";
+
 import { AppCard } from "@/components/ui/AppCard";
+
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
+
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
+
 import { Screen } from "@/components/ui/Screen";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
@@ -16,15 +21,35 @@ import { useAppTheme } from "@/hooks/useAppTheme";
  * OPCIONES DE DESARROLLADOR
  * ============================================================================
  *
- * Las herramientas técnicas dejan de estar expuestas en el Dashboard.
+ * Esta pantalla concentra herramientas técnicas que NO forman parte
+ * del flujo normal del usuario.
  *
- * Desde aquí se puede acceder a:
+ * Actualmente incluye:
  *
- * - sync-test;
- * - evidence-test;
- * - kobo-test.
+ * - pruebas de sincronización;
+ * - pruebas de evidencias;
+ * - pruebas de Kobo;
+ * - diagnóstico SQLite.
  *
- * En producción podremos ocultar o proteger esta sección posteriormente.
+ * ============================================================================
+ * OBJETIVO
+ * ============================================================================
+ *
+ * Mantener las herramientas internas separadas de:
+ *
+ * - Dashboard;
+ * - Empresas;
+ * - Inmuebles;
+ * - Inspecciones;
+ * - Evidencias;
+ * - Reportes.
+ *
+ * De esta forma las herramientas de diagnóstico quedan
+ * localizadas dentro de:
+ *
+ * Perfil
+ *    ↓
+ * Opciones de desarrollador
  */
 export default function DeveloperOptionsScreen() {
   const { colors } = useAppTheme();
@@ -37,104 +62,137 @@ export default function DeveloperOptionsScreen() {
       >
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÓN CONTEXTUAL                                        */}
+          {/* HEADER                                                       */}
           {/* ============================================================ */}
 
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.backButton,
-              {
-                opacity: pressed ? 0.7 : 1,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.backText,
-                {
-                  color: colors.primary,
-                },
-              ]}
-            >
-              ‹ Perfil
-            </Text>
-          </Pressable>
+          <ContextHeader
+            backLabel="Perfil"
+            onBack={() => router.navigate("/perfil")}
+            title="Opciones de desarrollador"
+            subtitle="Herramientas internas de diagnóstico, pruebas e integración."
+          />
 
-          <View style={styles.header}>
+          {/* ============================================================ */}
+          {/* INTRODUCCIÓN                                                  */}
+          {/* ============================================================ */}
+
+          <View style={styles.introduction}>
             <Text
               style={[
-                styles.title,
+                styles.introductionTitle,
+
                 {
                   color: colors.text,
                 },
               ]}
             >
-              Opciones de desarrollador
+              Herramientas internas
             </Text>
 
             <Text
               style={[
-                styles.subtitle,
+                styles.introductionDescription,
+
                 {
                   color: colors.textSecondary,
                 },
               ]}
             >
-              Herramientas internas para diagnosticar persistencia,
-              sincronización y Kobo.
+              Estas opciones están destinadas únicamente al desarrollo,
+              diagnóstico y validación técnica de UNIESAP.
             </Text>
           </View>
 
-          <View
-            style={[
-              styles.warning,
-              {
-                backgroundColor: colors.primarySoft,
-                borderColor: colors.warning,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.warningText,
-                {
-                  color: colors.textSecondary,
-                },
-              ]}
-            >
-              Estas funciones son técnicas. No forman parte del flujo normal del
-              usuario.
-            </Text>
-          </View>
+          {/* ============================================================ */}
+          {/* HERRAMIENTAS                                                 */}
+          {/* ============================================================ */}
 
           <ResponsiveGrid
             phoneColumns={1}
             tabletColumns={2}
-            desktopColumns={3}
+            desktopColumns={2}
             gap={Spacing.md}
           >
+            {/* ========================================================== */}
+            {/* SINCRONIZACIÓN                                             */}
+            {/* ========================================================== */}
+
             <DeveloperCard
-              title="Diagnóstico de sincronización"
-              description="Cola, estados, reintentos y pruebas de idempotencia."
-              environment="WEB localStorage · ANDROID SQLite"
+              icon="↻"
+              title="Pruebas de sincronización"
+              description="Revisar cola, estados de sincronización y comportamiento offline."
+              status="Desarrollo"
               onPress={() => router.navigate("/sync-test")}
             />
 
+            {/* ========================================================== */}
+            {/* EVIDENCIAS                                                  */}
+            {/* ========================================================== */}
+
             <DeveloperCard
-              title="Prueba de evidencias"
-              description="Creación, persistencia y eliminación de evidencias."
-              environment="WEB localStorage · ANDROID SQLite"
+              icon="▣"
+              title="Pruebas de evidencias"
+              description="Crear, consultar y validar evidencias locales y fotografías."
+              status="Desarrollo"
               onPress={() => router.navigate("/evidence-test")}
             />
 
+            {/* ========================================================== */}
+            {/* KOBO                                                        */}
+            {/* ========================================================== */}
+
             <DeveloperCard
-              title="Pruebas Kobo"
-              description="Herramientas de importación y exportación del servicio Kobo."
-              environment="Mock / integración"
+              icon="K"
+              title="Pruebas de Kobo"
+              description="Verificar integración, mapeo y comunicación con KoboToolbox."
+              status="Integración"
               onPress={() => router.navigate("/kobo-test")}
             />
+
+            {/* ========================================================== */}
+            {/* SQLITE                                                      */}
+            {/* ========================================================== */}
+
+            <DeveloperCard
+              icon="DB"
+              title="Diagnóstico SQLite"
+              description="Revisar esquema local, columnas de properties y relaciones Property ↔ Form."
+              status="Diagnóstico"
+              onPress={() => router.navigate("/property-schema-test")}
+            />
           </ResponsiveGrid>
+
+          {/* ============================================================ */}
+          {/* INFORMACIÓN                                                   */}
+          {/* ============================================================ */}
+
+          <AppCard style={styles.informationCard}>
+            <Text
+              style={[
+                styles.informationTitle,
+
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Uso interno
+            </Text>
+
+            <Text
+              style={[
+                styles.informationDescription,
+
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Estas herramientas pueden mostrar información técnica, modificar
+              datos de prueba o ejecutar operaciones internas. No forman parte
+              del flujo normal de producción.
+            </Text>
+          </AppCard>
         </ResponsiveContainer>
       </ScrollView>
     </Screen>
@@ -142,17 +200,43 @@ export default function DeveloperOptionsScreen() {
 }
 
 /*
- * Tarjeta de una herramienta interna.
+ * ============================================================================
+ * DEVELOPER CARD
+ * ============================================================================
+ *
+ * AppCard actualmente es un contenedor visual.
+ *
+ * No recibe:
+ *
+ * onPress
+ *
+ * Por esa razón utilizamos:
+ *
+ * Pressable
+ *    ↓
+ * AppCard
+ *
+ * De esta forma:
+ *
+ * - mantenemos AppCard sin modificaciones;
+ * - conservamos el diseño existente;
+ * - agregamos interacción únicamente aquí.
  */
 function DeveloperCard({
+  icon,
   title,
   description,
-  environment,
+  status,
   onPress,
 }: {
+  icon: string;
+
   title: string;
+
   description: string;
-  environment: string;
+
+  status: string;
+
   onPress: () => void;
 }) {
   const { colors } = useAppTheme();
@@ -160,48 +244,99 @@ function DeveloperCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => ({
-        opacity: pressed ? 0.75 : 1,
-      })}
+      style={({ pressed }) => [
+        styles.developerPressable,
+
+        {
+          /*
+           * Feedback visual al presionar.
+           *
+           * No modificamos colores del tema;
+           * simplemente reducimos ligeramente
+           * la opacidad.
+           */
+          opacity: pressed ? 0.72 : 1,
+        },
+      ]}
     >
-      <AppCard style={styles.card}>
-        <Text
-          style={[
-            styles.cardTitle,
-            {
-              color: colors.text,
-            },
-          ]}
-        >
-          {title}
-        </Text>
+      <AppCard style={styles.developerCard}>
+        <View style={styles.cardContent}>
+          {/* ========================================================== */}
+          {/* ICONO                                                       */}
+          {/* ========================================================== */}
 
-        <Text
-          style={[
-            styles.cardDescription,
-            {
-              color: colors.textSecondary,
-            },
-          ]}
-        >
-          {description}
-        </Text>
-
-        <View style={styles.cardFooter}>
-          <Text
+          <View
             style={[
-              styles.environment,
+              styles.iconContainer,
+
               {
-                color: colors.primary,
+                backgroundColor: colors.primarySoft,
               },
             ]}
           >
-            {environment}
-          </Text>
+            <Text
+              style={[
+                styles.iconText,
+
+                {
+                  color: colors.primary,
+                },
+              ]}
+            >
+              {icon}
+            </Text>
+          </View>
+
+          {/* ========================================================== */}
+          {/* INFORMACIÓN                                                 */}
+          {/* ========================================================== */}
+
+          <View style={styles.cardInformation}>
+            <Text
+              style={[
+                styles.cardTitle,
+
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              {title}
+            </Text>
+
+            <Text
+              style={[
+                styles.cardDescription,
+
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              {description}
+            </Text>
+
+            <Text
+              style={[
+                styles.cardStatus,
+
+                {
+                  color: colors.primary,
+                },
+              ]}
+            >
+              {status}
+            </Text>
+          </View>
+
+          {/* ========================================================== */}
+          {/* INDICADOR                                                   */}
+          {/* ========================================================== */}
 
           <Text
             style={[
               styles.arrow,
+
               {
                 color: colors.textMuted,
               },
@@ -225,81 +360,108 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xxxl,
   },
 
-  backButton: {
-    alignSelf: "flex-start",
-
-    marginBottom: Spacing.lg,
+  /*
+   * ================================================================
+   * INTRODUCCIÓN
+   * ================================================================
+   */
+  introduction: {
+    marginBottom: Spacing.xl,
   },
 
-  backText: {
-    fontSize: FontSize.small,
-    fontWeight: "700",
-  },
+  introductionTitle: {
+    fontSize: FontSize.h2,
 
-  header: {
-    marginBottom: Spacing.lg,
-  },
-
-  title: {
-    fontSize: FontSize.h1,
     fontWeight: "700",
 
     marginBottom: Spacing.sm,
   },
 
-  subtitle: {
+  introductionDescription: {
     maxWidth: 720,
 
     fontSize: FontSize.body,
+
     lineHeight: 24,
   },
 
-  warning: {
-    borderWidth: 1,
+  /*
+   * ================================================================
+   * PRESSABLE
+   * ================================================================
+   *
+   * El Pressable ocupa todo el espacio disponible
+   * dentro de ResponsiveGrid.
+   */
+  developerPressable: {
+    width: "100%",
+  },
+
+  /*
+   * ================================================================
+   * TARJETAS
+   * ================================================================
+   */
+  developerCard: {
+    width: "100%",
+
+    minHeight: 150,
+  },
+
+  cardContent: {
+    flexDirection: "row",
+
+    alignItems: "flex-start",
+  },
+
+  iconContainer: {
+    width: 48,
+
+    height: 48,
+
+    flexShrink: 0,
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
     borderRadius: Radius.md,
 
-    padding: Spacing.md,
-
-    marginBottom: Spacing.lg,
+    marginRight: Spacing.md,
   },
 
-  warningText: {
-    fontSize: FontSize.small,
-    lineHeight: 20,
+  iconText: {
+    fontSize: FontSize.body,
+
+    fontWeight: "700",
   },
 
-  card: {
-    width: "100%",
-    minHeight: 170,
+  cardInformation: {
+    flex: 1,
+
+    minWidth: 0,
   },
 
   cardTitle: {
     fontSize: FontSize.cardTitle,
+
     fontWeight: "700",
 
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
 
   cardDescription: {
-    flex: 1,
-
     fontSize: FontSize.small,
+
     lineHeight: 20,
 
     marginBottom: Spacing.md,
   },
 
-  cardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  environment: {
-    flex: 1,
-    minWidth: 0,
-
+  cardStatus: {
     fontSize: FontSize.caption,
-    fontWeight: "700",
+
+    fontWeight: "600",
   },
 
   arrow: {
@@ -308,5 +470,28 @@ const styles = StyleSheet.create({
     fontSize: 28,
 
     marginLeft: Spacing.sm,
+  },
+
+  /*
+   * ================================================================
+   * INFORMACIÓN
+   * ================================================================
+   */
+  informationCard: {
+    marginTop: Spacing.xl,
+  },
+
+  informationTitle: {
+    fontSize: FontSize.body,
+
+    fontWeight: "700",
+
+    marginBottom: Spacing.sm,
+  },
+
+  informationDescription: {
+    fontSize: FontSize.small,
+
+    lineHeight: 21,
   },
 });

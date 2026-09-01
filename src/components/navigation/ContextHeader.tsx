@@ -1,9 +1,9 @@
 import {
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    type ViewStyle,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
 } from "react-native";
 
 import { FontSize, Spacing } from "@/constants/theme";
@@ -229,14 +229,18 @@ export function ContextHeader({
 const styles = StyleSheet.create({
   container: {
     width: "100%",
+    minWidth: 0,
 
     marginBottom: Spacing.lg,
   },
 
   topRow: {
+    width: "100%",
+    minWidth: 0,
     minHeight: 32,
 
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
 
@@ -246,6 +250,7 @@ const styles = StyleSheet.create({
   },
 
   navigationButton: {
+    minWidth: 0,
     flexShrink: 1,
   },
 
@@ -268,6 +273,8 @@ const styles = StyleSheet.create({
   },
 
   title: {
+    minWidth: 0,
+
     fontSize: FontSize.h1,
     fontWeight: "700",
 

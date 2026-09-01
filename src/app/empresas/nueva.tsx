@@ -908,6 +908,9 @@ const styles = StyleSheet.create({
   },
 
   header: {
+    width: "100%",
+    minWidth: 0,
+
     marginBottom: Spacing.xl,
   },
 
@@ -949,6 +952,7 @@ const styles = StyleSheet.create({
    */
   mainLayout: {
     width: "100%",
+    minWidth: 0,
 
     gap: Spacing.xl,
   },
@@ -966,6 +970,7 @@ const styles = StyleSheet.create({
 
   formColumn: {
     width: "100%",
+    minWidth: 0,
   },
 
   /*
@@ -981,6 +986,7 @@ const styles = StyleSheet.create({
 
   visualColumn: {
     width: "100%",
+    minWidth: 0,
   },
 
   /*
@@ -1000,10 +1006,16 @@ const styles = StyleSheet.create({
   /* -------------------------------------------------------------------- */
 
   sectionSpacing: {
+    width: "100%",
+    minWidth: 0,
+
     marginTop: Spacing.xl,
   },
 
   sectionHeader: {
+    width: "100%",
+    minWidth: 0,
+
     marginBottom: Spacing.lg,
   },
 
@@ -1076,6 +1088,7 @@ const styles = StyleSheet.create({
 
   customColorCard: {
     width: "100%",
+    minWidth: 0,
 
     marginTop: Spacing.lg,
   },
@@ -1095,6 +1108,9 @@ const styles = StyleSheet.create({
   },
 
   customColorRow: {
+    width: "100%",
+    minWidth: 0,
+
     flexDirection: "row",
 
     alignItems: "center",
@@ -1127,10 +1143,15 @@ const styles = StyleSheet.create({
   /* -------------------------------------------------------------------- */
 
   logoSection: {
+    width: "100%",
+    minWidth: 0,
+
     marginTop: Spacing.xl,
   },
 
   logoUploader: {
+    width: "100%",
+    minWidth: 0,
     minHeight: 92,
 
     flexDirection: "row",
@@ -1193,11 +1214,15 @@ const styles = StyleSheet.create({
   /* -------------------------------------------------------------------- */
 
   previewSection: {
+    width: "100%",
+    minWidth: 0,
+
     marginTop: Spacing.xl,
   },
 
   previewCard: {
     width: "100%",
+    minWidth: 0,
 
     padding: 0,
 
@@ -1209,6 +1234,9 @@ const styles = StyleSheet.create({
   },
 
   previewContent: {
+    width: "100%",
+    minWidth: 0,
+
     flexDirection: "row",
 
     alignItems: "center",
@@ -1281,6 +1309,9 @@ const styles = StyleSheet.create({
    * [ Cancelar        ]
    */
   actions: {
+    width: "100%",
+    minWidth: 0,
+
     gap: Spacing.sm,
 
     marginTop: Spacing.xl,
@@ -1293,15 +1324,21 @@ const styles = StyleSheet.create({
    */
   actionsWide: {
     flexDirection: "row",
+    flexWrap: "wrap",
 
     justifyContent: "flex-end",
   },
 
   actionButton: {
-    minWidth: 200,
+    flexGrow: 1,
+    flexBasis: 200,
+    minWidth: 0,
   },
 
   saveError: {
+    width: "100%",
+    minWidth: 0,
+
     textAlign: "center",
 
     fontSize: FontSize.small,
@@ -1312,6 +1349,9 @@ const styles = StyleSheet.create({
   },
 
   prototypeNotice: {
+    width: "100%",
+    minWidth: 0,
+
     textAlign: "center",
 
     fontSize: FontSize.caption,

@@ -41,3 +41,19 @@ example
 # generated native folders
 /ios
 /android
+
+# ============================================================
+# UNIESAP - archivos locales de diagnóstico
+# ============================================================
+diagnostico-uniesap/
+archivos-posiblemente-sin-uso.txt
+auditoria-uniesap.txt
+bloque-a-empresas-inmuebles.txt
+dependencias-uniesap.txt
+
+# ============================================================
+# Variables de entorno / secretos
+# ============================================================
+.env
+.env.*
+!.env.example

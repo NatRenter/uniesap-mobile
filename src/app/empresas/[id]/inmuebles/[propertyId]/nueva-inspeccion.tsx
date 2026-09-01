@@ -19,12 +19,12 @@ export default function NewInspectionScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * Para iniciar una inspecciÃ³n necesitamos conocer:
+   * Para iniciar una inspección necesitamos conocer:
    *
    * - empresa
    * - inmueble
    *
-   * El formulario se seleccionarÃ¡ dentro de esta pantalla.
+   * El formulario se seleccionará dentro de esta pantalla.
    */
   const { id, propertyId } = useLocalSearchParams<{
     id: string;
@@ -37,7 +37,7 @@ export default function NewInspectionScreen() {
 
   /*
    * Estado controlado en caso de recibir
-   * parÃ¡metros incorrectos desde la navegaciÃ³n.
+   * parámetros incorrectos desde la navegación.
    */
   if (!company || !property) {
     return (
@@ -49,7 +49,7 @@ export default function NewInspectionScreen() {
               fontWeight: "600",
             }}
           >
-            â€¹ Volver
+            ‹ Volver
           </Text>
         </Pressable>
 
@@ -73,7 +73,7 @@ export default function NewInspectionScreen() {
               },
             ]}
           >
-            No fue posible preparar una nueva inspecciÃ³n.
+            No fue posible preparar una nueva inspección.
           </Text>
         </View>
       </Screen>
@@ -94,14 +94,14 @@ export default function NewInspectionScreen() {
       >
         <ResponsiveContainer>
           {/* ---------------------------------------------------------------------- */}
-          {/* NAVEGACIÃ“N CONTEXTUAL                                                   */}
+          {/* NAVEGACIÓN CONTEXTUAL                                                   */}
           {/* ---------------------------------------------------------------------- */}
           {/*
-           * Regresa explÃ­citamente al inmueble actual.
+           * Regresa explícitamente al inmueble actual.
            *
-           * No utilizamos router.back() porque queremos que la navegaciÃ³n
+           * No utilizamos router.back() porque queremos que la navegación
            * sea predecible aunque el usuario haya llegado a esta pantalla
-           * desde otro punto de la aplicaciÃ³n.
+           * desde otro punto de la aplicación.
            */}
           <Pressable
             onPress={() =>
@@ -124,7 +124,7 @@ export default function NewInspectionScreen() {
               ]}
               numberOfLines={1}
             >
-              â€¹ {property.name}
+              ‹ {property.name}
             </Text>
           </Pressable>
 
@@ -151,7 +151,7 @@ export default function NewInspectionScreen() {
               },
             ]}
           >
-            Nueva inspecciÃ³n
+            Nueva inspección
           </Text>
 
           <Text
@@ -232,7 +232,7 @@ export default function NewInspectionScreen() {
 
                     /*
                      * Captura recibe los tres IDs
-                     * necesarios para construir la inspecciÃ³n.
+                     * necesarios para construir la inspección.
                      */
                     params: {
                       id,
@@ -263,7 +263,7 @@ export default function NewInspectionScreen() {
                           },
                         ]}
                       >
-                        â‰¡
+                        ≡
                       </Text>
                     </View>
 
@@ -301,7 +301,7 @@ export default function NewInspectionScreen() {
                         },
                       ]}
                     >
-                      â€º
+                      ›
                     </Text>
                   </View>
 
@@ -337,7 +337,7 @@ export default function NewInspectionScreen() {
                         },
                       ]}
                     >
-                      â— {form.status === "active" ? "Disponible" : "Inactivo"}
+                      ● {form.status === "active" ? "Disponible" : "Inactivo"}
                     </Text>
                   </View>
                 </AppCard>
@@ -368,7 +368,7 @@ export default function NewInspectionScreen() {
                   },
                 ]}
               >
-                Este inmueble todavÃ­a no tiene formularios asignados.
+                Este inmueble todavía no tiene formularios asignados.
               </Text>
             </AppCard>
           )}
@@ -575,4 +575,3 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 });
-
