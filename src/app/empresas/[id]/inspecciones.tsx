@@ -18,6 +18,8 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 
+import { formatDate } from "@/utils/dateUtils";
+
 export default function CompanyInspectionsScreen() {
   /*
    * Obtiene los colores del tema actual.
@@ -509,30 +511,6 @@ function InspectionCard({
 /* -------------------------------------------------------------------------- */
 /*                                UTILIDADES                                  */
 /* -------------------------------------------------------------------------- */
-
-/*
- * Convierte:
- *
- * 2026-08-20
- *
- * en:
- *
- * 20/08/2026
- *
- * Si el valor no tiene el formato esperado,
- * regresamos el texto original.
- */
-function formatDate(date: string) {
-  const parts = date.split("-");
-
-  if (parts.length !== 3) {
-    return date;
-  }
-
-  const [year, month, day] = parts;
-
-  return `${day}/${month}/${year}`;
-}
 
 /* -------------------------------------------------------------------------- */
 /*                                   STYLES                                   */

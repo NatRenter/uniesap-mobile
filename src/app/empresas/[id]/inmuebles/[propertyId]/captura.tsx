@@ -35,6 +35,7 @@ import {
   pickEvidencePhoto,
 } from "@/services/evidenceMediaService";
 
+import { getCurrentInspectorName } from "@/services/currentUserService";
 import { requestInspectionSync } from "@/services/inspectionSyncTriggerService";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
@@ -384,7 +385,7 @@ export default function CaptureScreen() {
   const ensureDraftInspection = async (): Promise<string> => {
     const responses = buildResponses();
 
-    const inspector = resolveInspectorName(form.questions, responses);
+    const inspector = getCurrentInspectorName();
 
     if (createdInspectionId) {
       const currentInspection = getInspectionById(createdInspectionId);
@@ -705,7 +706,7 @@ export default function CaptureScreen() {
     try {
       const responses = buildResponses();
 
-      const inspector = resolveInspectorName(form.questions, responses);
+      const inspector = getCurrentInspectorName();
 
       /*
        * Un borrador se almacena solamente
@@ -803,7 +804,7 @@ export default function CaptureScreen() {
 
     const responses = buildResponses();
 
-    const inspector = resolveInspectorName(form.questions, responses);
+    const inspector = getCurrentInspectorName();
 
     /*
      * Si estamos continuando un borrador utilizamos
@@ -2120,42 +2121,6 @@ function isAnswered(value: InspectionResponseValue | undefined) {
    * false cuenta como respuesta válida.
    */
   return true;
-}
-
-/*
- * Mientras todavía no existe autenticación real,
- * intentamos obtener el responsable desde las
- * respuestas del propio formulario.
- *
- * Si el formulario no tiene ese campo utilizamos
- * un valor temporal genérico.
- */
-function resolveInspectorName(
-  questions: FormQuestion[],
-  responses: InspectionResponse[],
-): string {
-  const responsibleQuestion =
-    questions.find(
-      (question) =>
-        question.integration?.koboFieldName === "datos_generales/responsable",
-    ) ??
-    questions.find((question) =>
-      question.label.toLowerCase().includes("responsable"),
-    );
-
-  if (!responsibleQuestion) {
-    return "Usuario UNIESAP";
-  }
-
-  const response = responses.find(
-    (item) => item.questionId === responsibleQuestion.id,
-  );
-
-  if (typeof response?.value === "string" && response.value.trim().length > 0) {
-    return response.value.trim();
-  }
-
-  return "Usuario UNIESAP";
 }
 
 function getErrorMessage(error: unknown): string {

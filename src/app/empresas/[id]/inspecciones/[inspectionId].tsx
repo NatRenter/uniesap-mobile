@@ -24,6 +24,7 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useResponsive } from "@/hooks/useResponsive";
+import { formatDate, formatDateTime } from "@/utils/dateUtils";
 
 import type { InspectionSyncStatus } from "@/types/inspection";
 
@@ -979,47 +980,6 @@ function getQuestionTypeLabel(
     default:
       return type;
   }
-}
-
-/*
- * Funciona tanto con:
- *
- * 2026-08-20
- *
- * como con:
- *
- * 2026-08-20T20:15:42.000Z
- */
-function formatDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleDateString("es-MX", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString("es-MX", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-
-    hour: "2-digit",
-
-    minute: "2-digit",
-  });
 }
 
 function getErrorMessage(error: unknown) {

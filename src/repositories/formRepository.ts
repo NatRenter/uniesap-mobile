@@ -1,9 +1,9 @@
 import { initialForms } from "@/database/formSeed";
 
 import type {
-    FormDefinition,
-    FormIntegration,
-    FormQuestion,
+  FormDefinition,
+  FormIntegration,
+  FormQuestion,
 } from "@/types/form";
 
 /*
@@ -141,14 +141,48 @@ async function hydrateInternal(): Promise<void> {
 
   /*
    * Storage existente:
-   * sustituimos el seed por la información persistida.
+   *
+   * Antes de reemplazar el estado en memoria ejecutamos una
+   * migración ligera de metadatos provenientes del seed.
+   *
+   * ¿Por qué es necesaria?
+   *
+   * Los formularios iniciales se persistieron anteriormente
+   * en SQLite/localStorage. Por lo tanto, modificar únicamente
+   * formSeed.ts NO actualiza automáticamente esas copias.
+   *
+   * Esta migración NO sobrescribe contenido existente.
+   *
+   * Solamente completa metadatos de integración que:
+   *
+   * - ahora existen en el seed;
+   * - todavía no existen en la copia persistida.
+   *
+   * Ejemplo actual:
+   *
+   * form-003 / Señalización
+   *
+   * Antes:
+   * integration = undefined
+   *
+   * Ahora:
+   * integration.provider = "kobo"
+   *
+   * También completa koboFieldName faltantes en preguntas
+   * conocidas del seed.
    */
+  const migratedPersisted = await migrateSeedIntegrationMetadata(
+    persisted,
+
+    adapter,
+  );
+
   formRepositoryItems.splice(
     0,
 
     formRepositoryItems.length,
 
-    ...persisted.map(cloneForm),
+    ...migratedPersisted.map(cloneForm),
   );
 
   hydrated = true;
@@ -156,6 +190,181 @@ async function hydrateInternal(): Promise<void> {
   console.log(
     `Repositorio de formularios hidratado con ${formRepositoryItems.length} registro(s).`,
   );
+}
+
+/*
+ * ============================================================================
+ * MIGRACIÓN DE METADATOS DEL SEED
+ * ============================================================================
+ *
+ * Los formularios del seed solamente se insertan cuando la persistencia
+ * está vacía.
+ *
+ * Una vez que SQLite/localStorage contiene formularios, cambiar el seed
+ * no modifica automáticamente esos registros.
+ *
+ * Esta función permite evolucionar de forma segura metadatos técnicos
+ * de formularios iniciales sin borrar datos del usuario.
+ *
+ * REGLAS:
+ *
+ * 1. Nunca modifica IDs.
+ * 2. Nunca elimina preguntas persistidas.
+ * 3. Nunca reemplaza una integración existente.
+ * 4. Solamente completa integration del formulario cuando falta.
+ * 5. Solamente completa question.integration cuando falta.
+ * 6. Persiste exclusivamente formularios que realmente cambiaron.
+ *
+ * De esta manera podemos activar la integración Kobo de Señalización
+ * sin reinstalar la aplicación ni borrar SQLite.
+ */
+async function migrateSeedIntegrationMetadata(
+  persistedForms: FormDefinition[],
+
+  adapter: FormPersistenceAdapter,
+): Promise<FormDefinition[]> {
+  const migratedForms: FormDefinition[] = [];
+
+  for (const persistedForm of persistedForms) {
+    const seedForm = initialForms.find(
+      (candidate) => candidate.id === persistedForm.id,
+    );
+
+    /*
+     * Los formularios creados posteriormente por el usuario
+     * pueden no existir en initialForms.
+     *
+     * En ese caso los conservamos exactamente como están.
+     */
+    if (!seedForm) {
+      migratedForms.push(cloneForm(persistedForm));
+
+      continue;
+    }
+
+    const migration = mergeMissingSeedIntegrationMetadata(
+      persistedForm,
+
+      seedForm,
+    );
+
+    /*
+     * Solo escribimos en persistencia cuando existe
+     * una diferencia real.
+     */
+    if (migration.changed) {
+      await adapter.replace(migration.form);
+
+      console.log(
+        `Metadatos de integración actualizados para formulario ${migration.form.id} (${migration.form.title}).`,
+      );
+    }
+
+    migratedForms.push(cloneForm(migration.form));
+  }
+
+  return migratedForms;
+}
+
+/*
+ * ============================================================================
+ * COMPLETAR INTEGRACIÓN FALTANTE
+ * ============================================================================
+ *
+ * Une únicamente información técnica ausente.
+ *
+ * NO hace un reemplazo general del formulario persistido.
+ */
+function mergeMissingSeedIntegrationMetadata(
+  persistedForm: FormDefinition,
+
+  seedForm: FormDefinition,
+): {
+  form: FormDefinition;
+  changed: boolean;
+} {
+  let changed = false;
+
+  /*
+   * Trabajamos siempre sobre una copia profunda.
+   */
+  let mergedForm = cloneForm(persistedForm);
+
+  /*
+   * --------------------------------------------------------------------------
+   * INTEGRACIÓN DEL FORMULARIO
+   * --------------------------------------------------------------------------
+   *
+   * Si el formulario persistido ya tiene integración:
+   *
+   * la respetamos.
+   *
+   * Si no tiene integración y el seed sí:
+   *
+   * la incorporamos.
+   */
+  if (!mergedForm.integration && seedForm.integration) {
+    mergedForm = {
+      ...mergedForm,
+
+      integration: {
+        ...seedForm.integration,
+      },
+    };
+
+    changed = true;
+  }
+
+  /*
+   * --------------------------------------------------------------------------
+   * INTEGRACIÓN DE PREGUNTAS
+   * --------------------------------------------------------------------------
+   *
+   * Relacionamos preguntas por ID estable.
+   *
+   * Ejemplo:
+   *
+   * question-008
+   * persisted → sin koboFieldName
+   * seed      → senalizacion/tipo
+   *
+   * Resultado:
+   *
+   * se completa solamente question.integration.
+   */
+  const mergedQuestions = mergedForm.questions.map((persistedQuestion) => {
+    const seedQuestion = seedForm.questions.find(
+      (candidate) => candidate.id === persistedQuestion.id,
+    );
+
+    if (persistedQuestion.integration || !seedQuestion?.integration) {
+      return cloneQuestion(persistedQuestion);
+    }
+
+    changed = true;
+
+    return {
+      ...cloneQuestion(persistedQuestion),
+
+      integration: {
+        ...seedQuestion.integration,
+      },
+    };
+  });
+
+  if (changed) {
+    mergedForm = {
+      ...mergedForm,
+
+      questions: mergedQuestions,
+    };
+  }
+
+  return {
+    form: mergedForm,
+
+    changed,
+  };
 }
 
 /*

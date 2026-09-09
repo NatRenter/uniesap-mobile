@@ -5,10 +5,8 @@ import type { FormDefinition } from "@/types/form";
  * FORM SEED
  * ============================================================================
  *
- * Este archivo contiene formularios iniciales de desarrollo.
- *
- * Se utilizarán únicamente cuando la persistencia de formularios
- * todavía esté vacía.
+ * Este archivo contiene las definiciones iniciales de formularios utilizadas
+ * durante el desarrollo de UNIESAP.
  *
  * Flujo:
  *
@@ -20,15 +18,25 @@ import type { FormDefinition } from "@/types/form";
  *
  * IMPORTANTE:
  *
- * Las pantallas NO deben importar directamente este archivo.
+ * El formulario continúa perteneciendo a UNIESAP.
  *
- * Los formularios podrán existir:
+ * La propiedad:
  *
- * - solo dentro de UNIESAP;
- * - vinculados con Kobo;
- * - y posteriormente vinculados con otros proveedores.
+ * integration.provider = "kobo"
+ *
+ * únicamente indica que una inspección finalizada puede sincronizarse con
+ * Kobo mediante InspectionSyncQueueService.
+ *
+ * Las pantallas NO deben importar este archivo directamente.
  */
+
 export const initialForms: FormDefinition[] = [
+  /*
+   * ==========================================================================
+   * FORM-001
+   * ANÁLISIS DE RIESGOS
+   * ==========================================================================
+   */
   {
     id: "form-001",
 
@@ -40,12 +48,6 @@ export const initialForms: FormDefinition[] = [
 
     status: "active",
 
-    /*
-     * Integración opcional con Kobo.
-     *
-     * El formulario sigue perteneciendo a UNIESAP;
-     * Kobo solamente funciona como proveedor externo.
-     */
     integration: {
       provider: "kobo",
 
@@ -64,12 +66,6 @@ export const initialForms: FormDefinition[] = [
 
         required: true,
 
-        /*
-         * Nombre técnico del campo externo.
-         *
-         * Este dato solamente se usa cuando
-         * el formulario se sincroniza con Kobo.
-         */
         integration: {
           koboFieldName: "datos_generales/responsable",
         },
@@ -115,6 +111,12 @@ export const initialForms: FormDefinition[] = [
     ],
   },
 
+  /*
+   * ==========================================================================
+   * FORM-002
+   * INSPECCIÓN DE EXTINTORES
+   * ==========================================================================
+   */
   {
     id: "form-002",
 
@@ -158,12 +160,6 @@ export const initialForms: FormDefinition[] = [
 
         required: true,
 
-        /*
-         * Las opciones quedan dentro de la definición
-         * del formulario.
-         *
-         * CaptureScreen podrá renderizarlas directamente.
-         */
         options: [
           {
             label: "Buen estado",
@@ -200,6 +196,33 @@ export const initialForms: FormDefinition[] = [
     ],
   },
 
+  /*
+   * ==========================================================================
+   * FORM-003
+   * SEÑALIZACIÓN
+   * ==========================================================================
+   *
+   * ANTES:
+   *
+   * Este formulario era exclusivamente local.
+   *
+   * Por eso las inspecciones terminaban con:
+   *
+   * syncStatus = "local"
+   *
+   * AHORA:
+   *
+   * También participa en la integración Kobo.
+   *
+   * Mientras utilizamos Mock Kobo los UID son identificadores de desarrollo.
+   * Cuando exista un proyecto Kobo real de señalización sustituiremos:
+   *
+   * - assetUid;
+   * - versionUid;
+   * - koboFieldName;
+   *
+   * por los valores reales del formulario desplegado.
+   */
   {
     id: "form-003",
 
@@ -211,12 +234,14 @@ export const initialForms: FormDefinition[] = [
 
     status: "active",
 
-    /*
-     * Este formulario no tiene integración externa.
-     *
-     * Eso demuestra que FormDefinition no depende
-     * obligatoriamente de Kobo.
-     */
+    integration: {
+      provider: "kobo",
+
+      assetUid: "mock-asset-signage",
+
+      versionUid: "mock-version-signage-001",
+    },
+
     questions: [
       {
         id: "question-008",
@@ -253,6 +278,16 @@ export const initialForms: FormDefinition[] = [
             value: "fire_equipment",
           },
         ],
+
+        /*
+         * Campo Mock Kobo.
+         *
+         * Posteriormente deberá coincidir exactamente con el nombre
+         * técnico existente en el formulario Kobo real.
+         */
+        integration: {
+          koboFieldName: "senalizacion/tipo",
+        },
       },
 
       {
@@ -263,6 +298,10 @@ export const initialForms: FormDefinition[] = [
         type: "text",
 
         required: true,
+
+        integration: {
+          koboFieldName: "senalizacion/ubicacion",
+        },
       },
 
       {
@@ -273,6 +312,10 @@ export const initialForms: FormDefinition[] = [
         type: "boolean",
 
         required: true,
+
+        integration: {
+          koboFieldName: "senalizacion/visible",
+        },
       },
     ],
   },

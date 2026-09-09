@@ -27,6 +27,7 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 import { useAppTheme } from "@/hooks/useAppTheme";
 
 import { useResponsive } from "@/hooks/useResponsive";
+import { formatDate } from "@/utils/dateUtils";
 
 import type {
   InspectionStatus,
@@ -1074,26 +1075,6 @@ function getSyncStatusInfo(
         color: colors.textMuted,
       };
   }
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleDateString(
-    "es-MX",
-
-    {
-      day: "2-digit",
-
-      month: "2-digit",
-
-      year: "numeric",
-    },
-  );
 }
 
 /* -------------------------------------------------------------------------- */
