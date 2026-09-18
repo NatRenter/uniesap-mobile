@@ -44,6 +44,20 @@ export type SyncQueueCandidateStatus = "pending" | "error" | "syncing";
 
 export type InspectionSyncQueueOptions = {
   /*
+   * Permite limitar la cola a inspecciones concretas.
+   *
+   * Si se omite, la cola conserva su comportamiento global.
+   * Si se proporciona, solamente procesa IDs incluidos aquí.
+   *
+   * Esto permite reutilizar la misma cola desde:
+   *
+   * - sincronización automática global;
+   * - listado de una empresa;
+   * - reintento manual de una inspección.
+   */
+  inspectionIds?: string[];
+
+  /*
    * Permite decidir si las inspecciones que anteriormente
    * fallaron deben intentarse nuevamente.
    *
@@ -127,13 +141,33 @@ let activeQueueProcess: Promise<InspectionSyncQueueResult> | null = null;
 export function getInspectionSyncQueue(
   options: InspectionSyncQueueOptions = {},
 ): Inspection[] {
-  const { includeErrors = true, includeInterrupted = true } = options;
+  const {
+    inspectionIds,
+    includeErrors = true,
+    includeInterrupted = true,
+  } = options;
 
   const inspections = getInspections();
+
+  /*
+   * Set evita búsquedas repetidas cuando se limita la cola
+   * a una empresa o a una inspección concreta.
+   */
+  const allowedInspectionIds = inspectionIds
+    ? new Set(inspectionIds)
+    : undefined;
 
   return (
     inspections
       .filter((inspection) => {
+        /*
+         * Si la llamada está acotada, descartamos cualquier
+         * inspección que no pertenezca al conjunto solicitado.
+         */
+        if (allowedInspectionIds && !allowedInspectionIds.has(inspection.id)) {
+          return false;
+        }
+
         /*
          * Los borradores y capturas todavía
          * en proceso NO deben sincronizarse.
@@ -249,8 +283,9 @@ export function getActiveInspectionSyncQueueProcess(): Promise<InspectionSyncQue
  * Esta es la función que utilizarán:
  *
  * - sync-test
- * - futuro detector de conectividad
- * - futuro sincronizador automático
+ * - sincronización automática
+ * - listado de inspecciones de una empresa
+ * - reintento manual de una inspección
  *
  * Si ya existe una ejecución activa,
  * NO generamos otra.

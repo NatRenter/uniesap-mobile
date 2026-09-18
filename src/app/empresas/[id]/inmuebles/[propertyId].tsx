@@ -30,6 +30,7 @@ import { useResponsive } from "@/hooks/useResponsive";
 import { formatDate } from "@/utils/dateUtils";
 
 import type {
+  Inspection,
   InspectionStatus,
   InspectionSyncStatus,
 } from "@/types/inspection";
@@ -529,18 +530,7 @@ export default function PropertyDetailsScreen() {
                         syncStatus={
                           inspection.integration?.syncStatus ?? "local"
                         }
-                        onPress={() =>
-                          router.navigate({
-                            pathname:
-                              "/empresas/[id]/inspecciones/[inspectionId]",
-
-                            params: {
-                              id: company.id,
-
-                              inspectionId: inspection.id,
-                            },
-                          })
-                        }
+                        onPress={() => openInspection(inspection)}
                       />
 
                       {index < Math.min(propertyInspections.length, 3) - 1 && (
@@ -819,6 +809,38 @@ function FormCard({
 /* -------------------------------------------------------------------------- */
 /*                            INSPECTION ROW                                  */
 /* -------------------------------------------------------------------------- */
+
+/*
+ * Abre el destino adecuado según el estado de la inspección.
+ *
+ * Borrador / En proceso → continuar captura.
+ * Finalizada            → consultar detalle.
+ */
+function openInspection(inspection: Inspection): void {
+  if (inspection.status !== "completed") {
+    router.navigate({
+      pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
+
+      params: {
+        id: inspection.companyId,
+        propertyId: inspection.propertyId,
+        formId: inspection.formId,
+        inspectionId: inspection.id,
+      },
+    });
+
+    return;
+  }
+
+  router.navigate({
+    pathname: "/empresas/[id]/inspecciones/[inspectionId]",
+
+    params: {
+      id: inspection.companyId,
+      inspectionId: inspection.id,
+    },
+  });
+}
 
 function InspectionRow({
   inspector,

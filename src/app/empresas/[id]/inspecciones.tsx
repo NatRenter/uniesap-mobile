@@ -1,9 +1,12 @@
+import { useState } from "react";
+
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
 
 import { ContextHeader } from "@/components/navigation/ContextHeader";
 
+import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { ResponsiveContainer } from "@/components/ui/ResponsiveContainer";
 import { ResponsiveGrid } from "@/components/ui/ResponsiveGrid";
@@ -14,11 +17,18 @@ import { getFormById } from "@/repositories/formRepository";
 import { getInspectionsByCompanyId } from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 
+import {
+  getInspectionSyncQueueCount,
+  processInspectionSyncQueue,
+} from "@/services/inspectionSyncQueueService";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 
 import { formatDate } from "@/utils/dateUtils";
+
+import type { InspectionSyncStatus } from "@/types/inspection";
 
 export default function CompanyInspectionsScreen() {
   /*
@@ -37,6 +47,18 @@ export default function CompanyInspectionsScreen() {
   const { id } = useLocalSearchParams<{
     id: string;
   }>();
+
+  /*
+   * Estado visual de la sincronización manual de esta empresa.
+   *
+   * refreshVersion obliga a releer el repositorio en memoria después
+   * de que la cola modifica una o más inspecciones.
+   */
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+
+  void refreshVersion;
 
   /*
    * Recuperamos la empresa desde la capa
@@ -102,6 +124,56 @@ export default function CompanyInspectionsScreen() {
   const drafts = companyInspections.filter(
     (inspection) => inspection.status === "draft",
   ).length;
+
+  /*
+   * La cola se limita exclusivamente a las inspecciones de esta empresa.
+   * Así el botón de esta pantalla no dispara registros de otras empresas.
+   */
+  const companyInspectionIds = companyInspections.map(
+    (inspection) => inspection.id,
+  );
+
+  const syncQueueCount = getInspectionSyncQueueCount({
+    inspectionIds: companyInspectionIds,
+    includeErrors: true,
+    includeInterrupted: true,
+  });
+
+  const syncErrorCount = companyInspections.filter(
+    (inspection) => inspection.integration?.syncStatus === "error",
+  ).length;
+
+  async function handleCompanySync() {
+    if (isSyncing || syncQueueCount === 0) {
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncMessage(null);
+
+    try {
+      const result = await processInspectionSyncQueue({
+        inspectionIds: companyInspectionIds,
+        includeErrors: true,
+        includeInterrupted: true,
+      });
+
+      if (result.failed > 0) {
+        setSyncMessage(
+          `Se procesaron ${result.processed} inspección(es): ${result.synced} sincronizada(s) y ${result.failed} con error.`,
+        );
+      } else {
+        setSyncMessage(
+          `Sincronización completada: ${result.synced} inspección(es) sincronizada(s).`,
+        );
+      }
+    } catch (error) {
+      setSyncMessage(getErrorMessage(error));
+    } finally {
+      setRefreshVersion((value) => value + 1);
+      setIsSyncing(false);
+    }
+  }
 
   return (
     <Screen padded={false}>
@@ -172,6 +244,65 @@ export default function CompanyInspectionsScreen() {
           </ResponsiveGrid>
 
           {/* ====================================================== */}
+          {/* SINCRONIZACIÓN KOBO */}
+          {/* ====================================================== */}
+
+          {(syncQueueCount > 0 || syncMessage) && (
+            <AppCard style={styles.syncCard}>
+              <View style={styles.syncCardContent}>
+                <View style={styles.syncCardInfo}>
+                  <Text
+                    style={[
+                      styles.syncCardTitle,
+                      {
+                        color: syncErrorCount > 0 ? colors.error : colors.text,
+                      },
+                    ]}
+                  >
+                    Sincronización Kobo
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.syncCardDescription,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {syncQueueCount > 0
+                      ? `${syncQueueCount} inspección(es) requieren sincronización${
+                          syncErrorCount > 0
+                            ? `; ${syncErrorCount} presentan error.`
+                            : "."
+                        }`
+                      : "No quedan inspecciones pendientes de sincronización."}
+                  </Text>
+
+                  {syncMessage ? (
+                    <Text
+                      style={[
+                        styles.syncMessage,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      {syncMessage}
+                    </Text>
+                  ) : null}
+                </View>
+
+                {syncQueueCount > 0 ? (
+                  <View style={styles.syncButton}>
+                    <AppButton onPress={handleCompanySync}>
+                      {isSyncing
+                        ? "Sincronizando..."
+                        : "Sincronizar pendientes"}
+                    </AppButton>
+                  </View>
+                ) : null}
+              </View>
+            </AppCard>
+          )}
+
+          {/* ====================================================== */}
           {/* HISTORIAL */}
           {/* ====================================================== */}
 
@@ -217,11 +348,14 @@ export default function CompanyInspectionsScreen() {
                   key={inspection.id}
                   inspectionId={inspection.id}
                   companyRouteId={id}
+                  propertyId={inspection.propertyId}
+                  formId={inspection.formId}
                   form={form?.title ?? "Formulario no disponible"}
                   property={property?.name ?? "Inmueble no disponible"}
                   date={inspection.date}
                   inspector={inspection.inspector}
                   status={inspection.status}
+                  syncStatus={inspection.integration?.syncStatus ?? "local"}
                 />
               );
             })}
@@ -326,20 +460,25 @@ function SummaryCard({
 function InspectionCard({
   inspectionId,
   companyRouteId,
+  propertyId,
+  formId,
   form,
   property,
   date,
   inspector,
   status,
+  syncStatus,
 }: {
   inspectionId: string;
   companyRouteId: string;
+  propertyId: string;
+  formId: string;
   form: string;
   property: string;
   date: string;
   inspector: string;
-
   status: "draft" | "in_progress" | "completed";
+  syncStatus: InspectionSyncStatus;
 }) {
   const { colors } = useAppTheme();
 
@@ -368,22 +507,66 @@ function InspectionCard({
         ? colors.warning
         : colors.textMuted;
 
+  const syncLabel =
+    status !== "completed"
+      ? undefined
+      : syncStatus === "synced"
+        ? "Sincronizada"
+        : syncStatus === "syncing"
+          ? "Sincronizando"
+          : syncStatus === "pending"
+            ? "Pendiente de subir"
+            : syncStatus === "error"
+              ? "Error Kobo"
+              : "Local";
+
+  const syncColor =
+    syncStatus === "synced"
+      ? colors.success
+      : syncStatus === "error"
+        ? colors.error
+        : syncStatus === "pending"
+          ? colors.warning
+          : syncStatus === "syncing"
+            ? colors.primary
+            : colors.textMuted;
+
+  const openInspection = () => {
+    /*
+     * Borrador / En proceso:
+     * regresan directamente a captura.
+     *
+     * Finalizada:
+     * abre solamente el detalle.
+     */
+    if (status !== "completed") {
+      router.navigate({
+        pathname: "/empresas/[id]/inmuebles/[propertyId]/captura",
+
+        params: {
+          id: companyRouteId,
+          propertyId,
+          formId,
+          inspectionId,
+        },
+      });
+
+      return;
+    }
+
+    router.navigate({
+      pathname: "/empresas/[id]/inspecciones/[inspectionId]",
+
+      params: {
+        id: companyRouteId,
+        inspectionId,
+      },
+    });
+  };
+
   return (
     <Pressable
-      onPress={() =>
-        router.navigate({
-          pathname: "/empresas/[id]/inspecciones/[inspectionId]",
-
-          /*
-           * Para abrir el detalle necesitamos
-           * conservar empresa + inspección.
-           */
-          params: {
-            id: companyRouteId,
-            inspectionId,
-          },
-        })
-      }
+      onPress={openInspection}
       style={({ pressed }) => ({
         /*
          * Feedback visual al tocar la tarjeta.
@@ -492,16 +675,31 @@ function InspectionCard({
             </Text>
           </View>
 
-          <Text
-            style={[
-              styles.status,
-              {
-                color: statusColor,
-              },
-            ]}
-          >
-            ● {statusLabel}
-          </Text>
+          <View style={styles.stateColumn}>
+            <Text
+              style={[
+                styles.status,
+                {
+                  color: statusColor,
+                },
+              ]}
+            >
+              ● {statusLabel}
+            </Text>
+
+            {syncLabel && (
+              <Text
+                style={[
+                  styles.syncStatus,
+                  {
+                    color: syncColor,
+                  },
+                ]}
+              >
+                {syncLabel}
+              </Text>
+            )}
+          </View>
         </View>
       </AppCard>
     </Pressable>
@@ -511,6 +709,22 @@ function InspectionCard({
 /* -------------------------------------------------------------------------- */
 /*                                UTILIDADES                                  */
 /* -------------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------------- */
+/*                                UTILIDAD DE ERROR                            */
+/* -------------------------------------------------------------------------- */
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Ocurrió un error al procesar la sincronización.";
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                   STYLES                                   */
@@ -582,6 +796,43 @@ const styles = StyleSheet.create({
 
   summaryLabel: {
     fontSize: FontSize.caption,
+  },
+
+  syncCard: {
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.xl,
+  },
+
+  syncCardContent: {
+    width: "100%",
+    minWidth: 0,
+    gap: Spacing.md,
+  },
+
+  syncCardInfo: {
+    width: "100%",
+    minWidth: 0,
+  },
+
+  syncCardTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+    marginBottom: Spacing.xs,
+  },
+
+  syncCardDescription: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+  },
+
+  syncMessage: {
+    fontSize: FontSize.caption,
+    lineHeight: 18,
+    marginTop: Spacing.sm,
+  },
+
+  syncButton: {
+    alignSelf: "flex-start",
   },
 
   sectionTitle: {
@@ -694,6 +945,16 @@ const styles = StyleSheet.create({
 
   inspector: {
     fontSize: FontSize.caption,
+  },
+
+  stateColumn: {
+    alignItems: "flex-end",
+    gap: 2,
+  },
+
+  syncStatus: {
+    fontSize: FontSize.caption,
+    fontWeight: "600",
   },
 
   status: {

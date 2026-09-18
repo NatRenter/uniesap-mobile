@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
@@ -13,6 +15,14 @@ import { getFormById } from "@/repositories/formRepository";
 import { getInspectionById } from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 import { getReportById } from "@/repositories/reportRepository";
+
+import {
+  generateReportFile,
+  openGeneratedReport,
+  shareGeneratedReport,
+} from "@/services/reportGenerationService";
+
+import { formatDate } from "@/utils/dateUtils";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
@@ -45,10 +55,26 @@ export default function ReportDetailsScreen() {
    *
    * /empresas/[id]/reportes/[reportId]
    */
-  const { id, reportId } = useLocalSearchParams<{
+  const { id, reportId, generationError } = useLocalSearchParams<{
     id: string;
     reportId: string;
+    generationError?: string;
   }>();
+
+  /*
+   * Estado local para acciones de archivo.
+   *
+   * refreshVersion fuerza un render después de que ReportRepository cambia
+   * pending → generated, ya que el repository no utiliza un store Reactivo.
+   */
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(
+    generationError ?? null,
+  );
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+
+  void refreshVersion;
 
   /*
    * Recuperamos la empresa y el reporte desde
@@ -157,10 +183,100 @@ export default function ReportDetailsScreen() {
     : "Archivo pendiente";
 
   const includedEvidenceLabel = report.includeEvidence
-    ? `${evidences.length} archivo${
+    ? `${evidences.length} evidencia${
         evidences.length !== 1 ? "s" : ""
-      } incluido${evidences.length !== 1 ? "s" : ""}`
+      } configurada${evidences.length !== 1 ? "s" : ""}`
     : "No incluidas";
+
+  const canGeneratePhysicalFile = report.format === "excel";
+  const hasGeneratedFile =
+    report.status === "generated" && Boolean(report.fileUri);
+
+  /* ---------------------------------------------------------------------- */
+  /* ACCIONES DEL ARCHIVO                                                   */
+  /* ---------------------------------------------------------------------- */
+
+  const handleGenerateFile = async () => {
+    if (isProcessingFile || !canGeneratePhysicalFile) {
+      return;
+    }
+
+    setIsProcessingFile(true);
+    setActionError(null);
+    setActionMessage(null);
+
+    try {
+      const result = await generateReportFile(report.id, {
+        downloadOnWeb: true,
+      });
+
+      setRefreshVersion((current) => current + 1);
+
+      if (result.warnings.length > 0) {
+        setActionMessage(
+          `Reporte generado. ${result.includedEvidenceCount} de ${result.requestedEvidenceCount} evidencias pudieron incluirse; consulta MANIFIESTO.txt dentro del ZIP.`,
+        );
+      } else {
+        setActionMessage("Reporte generado correctamente.");
+      }
+    } catch (error) {
+      console.error("Error generando el archivo del reporte:", error);
+
+      setActionError(getErrorMessage(error));
+    } finally {
+      setIsProcessingFile(false);
+    }
+  };
+
+  const handleOpenReport = async () => {
+    if (isProcessingFile || !canGeneratePhysicalFile) {
+      return;
+    }
+
+    setIsProcessingFile(true);
+    setActionError(null);
+    setActionMessage(null);
+
+    try {
+      await openGeneratedReport(report.id);
+
+      setRefreshVersion((current) => current + 1);
+    } catch (error) {
+      console.error("Error abriendo el reporte:", error);
+
+      setActionError(getErrorMessage(error));
+    } finally {
+      setIsProcessingFile(false);
+    }
+  };
+
+  const handleShareReport = async () => {
+    if (isProcessingFile || !canGeneratePhysicalFile) {
+      return;
+    }
+
+    setIsProcessingFile(true);
+    setActionError(null);
+    setActionMessage(null);
+
+    try {
+      const result = await shareGeneratedReport(report.id);
+
+      setRefreshVersion((current) => current + 1);
+
+      if (result.downloaded && !result.shared) {
+        setActionMessage(
+          "El navegador no permitió compartir el archivo directamente, así que se descargó como alternativa.",
+        );
+      }
+    } catch (error) {
+      console.error("Error compartiendo el reporte:", error);
+
+      setActionError(getErrorMessage(error));
+    } finally {
+      setIsProcessingFile(false);
+    }
+  };
 
   return (
     <Screen padded={false}>
@@ -267,7 +383,7 @@ export default function ReportDetailsScreen() {
                 },
               ]}
             >
-              ● {statusLabel}
+              ● {statusLabel}
             </Text>
           </View>
 
@@ -378,9 +494,13 @@ export default function ReportDetailsScreen() {
                     },
                   ]}
                 >
-                  {report.fileUri
-                    ? "El archivo generado está disponible."
-                    : "La vista previa del archivo generado se mostrará en este espacio."}
+                  {hasGeneratedFile
+                    ? report.includeEvidence
+                      ? "El paquete ZIP con Excel y evidencias está disponible."
+                      : "El archivo Excel generado está disponible."
+                    : canGeneratePhysicalFile
+                      ? "El registro existe, pero el archivo todavía debe generarse."
+                      : "El generador PDF se habilitará en una etapa posterior."}
                 </Text>
 
                 <View
@@ -401,7 +521,7 @@ export default function ReportDetailsScreen() {
                       },
                     ]}
                   >
-                    ● {fileAvailabilityLabel}
+                    ● {fileAvailabilityLabel}
                   </Text>
                 </View>
               </View>
@@ -663,7 +783,7 @@ export default function ReportDetailsScreen() {
                             },
                           ]}
                         >
-                          ●«
+                          ▣
                         </Text>
                       </View>
 
@@ -726,42 +846,98 @@ export default function ReportDetailsScreen() {
           </View>
 
           {/* ============================================================ */}
+          {/* RESULTADO DE ACCIONES                                         */}
+          {/* ============================================================ */}
+
+          {actionError && (
+            <View
+              style={[
+                styles.actionFeedback,
+                {
+                  borderColor: colors.error,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.actionFeedbackText,
+                  {
+                    color: colors.error,
+                  },
+                ]}
+              >
+                {actionError}
+              </Text>
+            </View>
+          )}
+
+          {actionMessage && (
+            <View
+              style={[
+                styles.actionFeedback,
+                {
+                  borderColor: colors.success,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.actionFeedbackText,
+                  {
+                    color: colors.success,
+                  },
+                ]}
+              >
+                {actionMessage}
+              </Text>
+            </View>
+          )}
+
+          {/* ============================================================ */}
           {/* ACCIONES                                                     */}
           {/* ============================================================ */}
 
-          {/*
-           * Todavía son acciones visuales.
-           *
-           * Cuando exista fileUri real podremos conectar:
-           *
-           * Abrir reporte → visor/archivo
-           * Compartir     → Share API
-           */}
-          <View style={[styles.actions, !isPhone && styles.actionsWide]}>
-            <View style={styles.actionButton}>
-              <AppButton>Abrir reporte</AppButton>
+          {canGeneratePhysicalFile ? (
+            <View style={[styles.actions, !isPhone && styles.actionsWide]}>
+              {!hasGeneratedFile ? (
+                <View style={styles.actionButton}>
+                  <AppButton onPress={handleGenerateFile}>
+                    {isProcessingFile
+                      ? "Generando archivo..."
+                      : report.status === "generated"
+                        ? "Regenerar archivo"
+                        : "Generar archivo"}
+                  </AppButton>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.actionButton}>
+                    <AppButton onPress={handleOpenReport}>
+                      {isProcessingFile ? "Procesando..." : "Abrir / descargar"}
+                    </AppButton>
+                  </View>
+
+                  <View style={styles.actionButton}>
+                    <AppButton variant="secondary" onPress={handleShareReport}>
+                      Compartir
+                    </AppButton>
+                  </View>
+                </>
+              )}
             </View>
-
-            <View style={styles.actionButton}>
-              <AppButton variant="secondary">Compartir</AppButton>
-            </View>
-          </View>
-
-          {/* ============================================================ */}
-          {/* AVISO                                                        */}
-          {/* ============================================================ */}
-
-          <Text
-            style={[
-              styles.prototypeNotice,
-              {
-                color: colors.textMuted,
-              },
-            ]}
-          >
-            La generación y apertura del archivo real se implementarán en una
-            etapa posterior.
-          </Text>
+          ) : (
+            <Text
+              style={[
+                styles.prototypeNotice,
+                {
+                  color: colors.textMuted,
+                },
+              ]}
+            >
+              Los reportes PDF permanecen registrados, pero su generador físico
+              todavía no está habilitado. Excel ya está disponible.
+            </Text>
+          )}
         </ResponsiveContainer>
       </ScrollView>
     </Screen>
@@ -838,30 +1014,18 @@ function Divider() {
 /* -------------------------------------------------------------------------- */
 
 /*
- * Acepta:
- *
- * 2026-08-20
- *
- * o:
- *
- * 2026-08-20T12:30:00
- *
- * y devuelve:
- *
- * 20/08/2026
+ * Convierte errores desconocidos en un mensaje seguro para la interfaz.
  */
-function formatDate(date: string) {
-  const normalized = date.includes("T") ? date.split("T")[0] : date;
-
-  const parts = normalized.split("-");
-
-  if (parts.length !== 3) {
-    return date;
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
   }
 
-  const [year, month, day] = parts;
+  if (typeof error === "string") {
+    return error;
+  }
 
-  return `${day}/${month}/${year}`;
+  return "Ocurrió un error desconocido.";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1207,6 +1371,20 @@ const styles = StyleSheet.create({
     fontSize: 28,
 
     marginLeft: Spacing.sm,
+  },
+
+  actionFeedback: {
+    width: "100%",
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+
+  actionFeedbackText: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+    fontWeight: "600",
   },
 
   /* -------------------------------------------------------------------- */

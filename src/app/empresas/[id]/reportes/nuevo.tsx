@@ -38,6 +38,10 @@ import { getPropertyById } from "@/repositories/propertyRepository";
  */
 import { createReport } from "@/repositories/reportRepository";
 
+import { generateReportFile } from "@/services/reportGenerationService";
+
+import { formatDate } from "@/utils/dateUtils";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
@@ -130,9 +134,20 @@ export default function NewReportScreen() {
    * Si la empresa no existe usamos un arreglo vacío
    * hasta terminar de ejecutar todos los Hooks.
    */
-  const companyInspections = company
+  const allCompanyInspections = company
     ? getInspectionsByCompanyId(company.id)
     : [];
+
+  /*
+   * Los reportes representan resultados cerrados.
+   * Por eso draft e in_progress no aparecen como fuentes seleccionables.
+   */
+  const companyInspections = allCompanyInspections.filter(
+    (inspection) => inspection.status === "completed",
+  );
+
+  const unfinishedInspectionCount =
+    allCompanyInspections.length - companyInspections.length;
 
   /*
    * ==========================================================================
@@ -145,9 +160,15 @@ export default function NewReportScreen() {
    * En caso contrario usamos la primera inspección
    * disponible de la empresa.
    */
+  const routeInspection = routeInspectionId
+    ? getInspectionById(routeInspectionId)
+    : undefined;
+
   const initialInspectionId =
-    routeInspectionId && getInspectionById(routeInspectionId)
-      ? routeInspectionId
+    routeInspection &&
+    routeInspection.companyId === company?.id &&
+    routeInspection.status === "completed"
+      ? routeInspection.id
       : companyInspections[0]?.id;
 
   /*
@@ -314,9 +335,6 @@ export default function NewReportScreen() {
    * Todavía no se crea físicamente Excel/PDF.
    */
   const handleGenerate = async () => {
-    /*
-     * Validamos los datos mínimos.
-     */
     if (!selectedInspection || !selectedProperty) {
       setGenerationError(
         "No fue posible determinar la inspección o el inmueble del reporte.",
@@ -325,115 +343,86 @@ export default function NewReportScreen() {
       return;
     }
 
-    /*
-     * Evita crear varios reportes
-     * mientras el primero sigue guardándose.
-     */
+    if (selectedInspection.status !== "completed") {
+      setGenerationError(
+        "Solo es posible generar reportes de inspecciones finalizadas.",
+      );
+
+      return;
+    }
+
+    if (selectedFormat !== "excel") {
+      setGenerationError(
+        "El generador PDF todavía no está disponible. Selecciona Excel.",
+      );
+
+      return;
+    }
+
     if (isGenerating) {
       return;
     }
 
-    /*
-     * Activamos estado de guardado.
-     */
     setIsGenerating(true);
-
-    /*
-     * Limpiamos cualquier error anterior.
-     */
     setGenerationError(null);
+
+    let createdReportId: string | null = null;
 
     try {
       /*
-       * Creamos el registro real del reporte.
-       *
-       * El repository se encarga de:
-       *
-       * 1. crear el ID;
-       * 2. agregarlo a memoria;
-       * 3. persistirlo;
-       * 4. hacer rollback si ocurre un error.
+       * Primero persistimos el registro como pending.
+       * Si el archivo falla, podrá reintentarse desde su detalle.
        */
       const report = await createReport({
-        /*
-         * Usamos company.id y no directamente
-         * el parámetro recibido en la URL.
-         *
-         * Así guardamos siempre el ID real actual.
-         */
         companyId: company.id,
-
-        /*
-         * Inmueble asociado a la inspección.
-         */
         propertyId: selectedProperty.id,
-
-        /*
-         * Inspección que alimentará el reporte.
-         */
         inspectionId: selectedInspection.id,
-
-        /*
-         * Nombre visible del reporte.
-         */
         title: reportTitle,
-
-        /*
-         * Excel o PDF.
-         */
-        format: selectedFormat,
-
-        /*
-         * Configuración de evidencias.
-         */
+        format: "excel",
         includeEvidence,
-
-        /*
-         * El archivo todavía no existe.
-         *
-         * Por eso comenzamos como pending.
-         */
         status: "pending",
       });
 
+      createdReportId = report.id;
+
       /*
-       * =========================================================================
-       * NAVEGACIÓN DESPUÉS DEL GUARDADO
-       * =========================================================================
-       *
-       * El reporte ya quedó persistido.
-       *
-       * Abrimos directamente su detalle
-       * usando el ID recién creado.
+       * Genera XLSX o ZIP + XLSX + evidencias.
+       * El servicio actualiza el Report a generated y guarda fileUri.
        */
+      await generateReportFile(report.id, {
+        downloadOnWeb: true,
+      });
+
       router.replace({
         pathname: "/empresas/[id]/reportes/[reportId]",
-
         params: {
           id: company.id,
           reportId: report.id,
         },
       });
     } catch (error) {
-      /*
-       * Registramos el error completo en consola
-       * para las herramientas de desarrollo.
-       */
-      console.error("Error al crear el reporte:", error);
-
-      /*
-       * Mensaje corto para el usuario.
-       */
-      setGenerationError(
+      const message =
         error instanceof Error
           ? error.message
-          : "Ocurrió un error inesperado al crear el reporte.",
-      );
+          : "Ocurrió un error inesperado al generar el reporte.";
+
+      console.error("Error al generar el reporte:", error);
+
+      if (createdReportId) {
+        router.replace({
+          pathname: "/empresas/[id]/reportes/[reportId]",
+          params: {
+            id: company.id,
+            reportId: createdReportId,
+            generationError: message,
+          },
+        });
+
+        return;
+      }
+
+      setGenerationError(message);
     } finally {
-      /*
-       * Siempre liberamos el estado,
-       * tanto en éxito como en error.
-       */
       setIsGenerating(false);
     }
   };
@@ -537,9 +526,24 @@ export default function NewReportScreen() {
                 },
               ]}
             >
-              El reporte se construirá a partir de la información capturada en
-              una inspección.
+              El reporte se construirá a partir de una inspección finalizada.
             </Text>
+
+            {unfinishedInspectionCount > 0 && (
+              <Text
+                style={[
+                  styles.filteredInspectionNotice,
+                  {
+                    color: colors.textMuted,
+                  },
+                ]}
+              >
+                {unfinishedInspectionCount} inspección
+                {unfinishedInspectionCount === 1 ? "" : "es"} todavía en
+                borrador o proceso no se muestra
+                {unfinishedInspectionCount === 1 ? "" : "n"} aquí.
+              </Text>
+            )}
 
             {/*
              * ResponsiveGrid adapta las tarjetas:
@@ -609,7 +613,7 @@ export default function NewReportScreen() {
                     },
                   ]}
                 >
-                  Sin inspecciones disponibles
+                  Sin inspecciones finalizadas
                 </Text>
 
                 <Text
@@ -620,7 +624,7 @@ export default function NewReportScreen() {
                     },
                   ]}
                 >
-                  Esta empresa todavía no tiene inspecciones registradas.
+                  Finaliza una inspección para poder generar su reporte.
                 </Text>
               </AppCard>
             )}
@@ -704,12 +708,13 @@ export default function NewReportScreen() {
 
                       <FormatOption
                         label="PDF"
-                        description="Documento"
-                        selected={selectedFormat === "pdf"}
+                        description="Próximamente"
+                        selected={false}
+                        disabled
                         onPress={() => {
-                          setGenerationError(null);
-
-                          setSelectedFormat("pdf");
+                          setGenerationError(
+                            "El generador PDF todavía no está disponible. Usa Excel por ahora.",
+                          );
                         }}
                       />
                     </View>
@@ -861,7 +866,10 @@ export default function NewReportScreen() {
                      * Posteriormente el generador físico
                      * cambiará este estado.
                      */}
-                    <InfoRow label="Estado inicial" value="Pendiente" />
+                    <InfoRow
+                      label="Resultado"
+                      value="Excel generado localmente"
+                    />
                   </AppCard>
                 </View>
               </View>
@@ -908,7 +916,7 @@ export default function NewReportScreen() {
                    * múltiples ejecuciones.
                    */}
                   <AppButton onPress={handleGenerate}>
-                    {isGenerating ? "Guardando reporte..." : "Generar reporte"}
+                    {isGenerating ? "Generando archivo..." : "Generar reporte"}
                   </AppButton>
                 </View>
 
@@ -944,8 +952,9 @@ export default function NewReportScreen() {
               },
             ]}
           >
-            El reporte se guarda en UNIESAP. La creación física del archivo
-            Excel o PDF se integrará en la siguiente etapa.
+            Excel ya se genera físicamente. Si incluyes evidencias, UNIESAP
+            entregará un ZIP con el archivo XLSX y las evidencias disponibles.
+            PDF se habilitará en una etapa posterior.
           </Text>
         </ResponsiveContainer>
       </ScrollView>
@@ -1123,11 +1132,13 @@ function FormatOption({
   label,
   description,
   selected,
+  disabled = false,
   onPress,
 }: {
   label: string;
   description: string;
   selected: boolean;
+  disabled?: boolean;
   onPress: () => void;
 }) {
   const { colors } = useAppTheme();
@@ -1135,6 +1146,7 @@ function FormatOption({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityState={{ disabled }}
       style={({ pressed }) => [
         styles.formatOption,
 
@@ -1143,7 +1155,7 @@ function FormatOption({
 
           borderColor: selected ? colors.primary : colors.border,
 
-          opacity: pressed ? 0.75 : 1,
+          opacity: disabled ? 0.55 : pressed ? 0.75 : 1,
         },
       ]}
     >
@@ -1180,7 +1192,11 @@ function FormatOption({
           },
         ]}
       >
-        {selected ? "● Seleccionado" : "○ Seleccionar"}
+        {disabled
+          ? "Próximamente"
+          : selected
+            ? "● Seleccionado"
+            : "○ Seleccionar"}
       </Text>
     </Pressable>
   );
@@ -1252,49 +1268,6 @@ function Divider() {
 /* -------------------------------------------------------------------------- */
 /*                                  HELPERS                                   */
 /* -------------------------------------------------------------------------- */
-
-/*
- * ============================================================================
- * FORMATEAR FECHA
- * ============================================================================
- *
- * Acepta:
- *
- * 2026-08-20
- *
- * o:
- *
- * 2026-08-20T12:30:00
- *
- * y devuelve:
- *
- * 20/08/2026
- */
-function formatDate(date: string) {
-  /*
-   * Si existe hora tomamos solamente
-   * la parte correspondiente a la fecha.
-   */
-  const normalized = date.includes("T") ? date.split("T")[0] : date;
-
-  const parts = normalized.split("-");
-
-  /*
-   * Si el formato no coincide,
-   * devolvemos el valor original.
-   */
-  if (parts.length !== 3) {
-    return date;
-  }
-
-  const [year, month, day] = parts;
-
-  /*
-   * year se utiliza aquí para construir
-   * el formato DD/MM/YYYY.
-   */
-  return `${day}/${month}/${year}`;
-}
 
 /* -------------------------------------------------------------------------- */
 /*                                   STYLES                                   */
@@ -1400,6 +1373,12 @@ const styles = StyleSheet.create({
 
     lineHeight: 20,
 
+    marginBottom: Spacing.md,
+  },
+
+  filteredInspectionNotice: {
+    fontSize: FontSize.caption,
+    lineHeight: 18,
     marginBottom: Spacing.md,
   },
 

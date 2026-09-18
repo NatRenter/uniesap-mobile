@@ -38,6 +38,11 @@ import {
 import { getCurrentInspectorName } from "@/services/currentUserService";
 import { requestInspectionSync } from "@/services/inspectionSyncTriggerService";
 
+import {
+  canEditInspection,
+  resolveEditableInspectionStatus,
+} from "@/utils/inspectionLifecycle";
+
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
@@ -265,6 +270,79 @@ export default function CaptureScreen() {
     );
   }
 
+  /*
+   * Una inspección finalizada no vuelve a abrirse como captura editable.
+   *
+   * La sincronización puede continuar cambiando en segundo plano, pero
+   * las respuestas y evidencias finales quedan protegidas.
+   */
+  if (existingInspection && !canEditInspection(existingInspection)) {
+    return (
+      <Screen>
+        <ResponsiveContainer>
+          <ContextHeader
+            backLabel={property.name}
+            onBack={() =>
+              router.navigate({
+                pathname: "/empresas/[id]/inmuebles/[propertyId]",
+
+                params: {
+                  id,
+                  propertyId,
+                },
+              })
+            }
+            contextLabel={company.name}
+            contextColor={company.branding.primaryColor}
+            title="Inspección finalizada"
+            subtitle={form.title}
+          />
+
+          <AppCard>
+            <Text
+              style={[
+                styles.lockedTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Esta inspección ya no puede editarse
+            </Text>
+
+            <Text
+              style={[
+                styles.lockedDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              La captura fue finalizada. Puedes consultar sus respuestas,
+              evidencias y estado de sincronización desde el detalle de la
+              inspección.
+            </Text>
+
+            <AppButton
+              onPress={() =>
+                router.navigate({
+                  pathname: "/empresas/[id]/inspecciones/[inspectionId]",
+
+                  params: {
+                    id,
+                    inspectionId: existingInspection.id,
+                  },
+                })
+              }
+            >
+              Ver detalle
+            </AppButton>
+          </AppCard>
+        </ResponsiveContainer>
+      </Screen>
+    );
+  }
+
   const isProcessing =
     processingAction !== null || photoProcessingAction !== null;
 
@@ -396,7 +474,12 @@ export default function CaptureScreen() {
         responses,
 
         status:
-          currentInspection?.status === "completed" ? "completed" : "draft",
+          currentInspection?.status === "completed"
+            ? "completed"
+            : resolveEditableInspectionStatus(
+                responses,
+                currentInspection?.evidenceIds ?? [],
+              ),
 
         integration: {
           ...currentInspection?.integration,
@@ -430,7 +513,7 @@ export default function CaptureScreen() {
 
       responses,
 
-      status: "draft",
+      status: resolveEditableInspectionStatus(responses, []),
 
       syncStatus: "local",
     });
@@ -509,6 +592,11 @@ export default function CaptureScreen() {
         inspectionForEvidenceId,
         {
           evidenceIds: nextEvidenceIds,
+
+          /*
+           * Una inspección con evidencia ya tiene actividad real.
+           */
+          status: "in_progress",
         },
       );
 
@@ -604,6 +692,11 @@ export default function CaptureScreen() {
         inspectionForEvidenceId,
         {
           evidenceIds: nextEvidenceIds,
+
+          /*
+           * Una inspección con evidencia ya tiene actividad real.
+           */
+          status: "in_progress",
         },
       );
 
@@ -722,12 +815,17 @@ export default function CaptureScreen() {
        * entra, modifica algo y vuelve a guardar.
        */
       if (createdInspectionId) {
+        const currentInspection = getInspectionById(createdInspectionId);
+
         const updatedInspection = await updateInspection(createdInspectionId, {
           inspector,
 
           responses,
 
-          status: "draft",
+          status: resolveEditableInspectionStatus(
+            responses,
+            currentInspection?.evidenceIds ?? [],
+          ),
 
           integration: {
             syncStatus: "local",
@@ -755,7 +853,7 @@ export default function CaptureScreen() {
 
           responses,
 
-          status: "draft",
+          status: resolveEditableInspectionStatus(responses, []),
 
           syncStatus: "local",
         });
@@ -2908,6 +3006,18 @@ const styles = StyleSheet.create({
   /* -------------------------------------------------------------------- */
   /* NOT FOUND                                                            */
   /* -------------------------------------------------------------------- */
+
+  lockedTitle: {
+    fontSize: FontSize.h3,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+  },
+
+  lockedDescription: {
+    fontSize: FontSize.body,
+    lineHeight: 22,
+    marginBottom: Spacing.lg,
+  },
 
   notFound: {
     flex: 1,

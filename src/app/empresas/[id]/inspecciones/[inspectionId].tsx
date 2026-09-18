@@ -18,7 +18,7 @@ import { getFormById } from "@/repositories/formRepository";
 import { getInspectionById } from "@/repositories/inspectionRepository";
 import { getPropertyById } from "@/repositories/propertyRepository";
 
-import { syncInspection } from "@/services/inspectionSyncService";
+import { processInspectionSyncQueue } from "@/services/inspectionSyncQueueService";
 
 import { FontSize, Radius, Spacing } from "@/constants/theme";
 
@@ -54,6 +54,8 @@ export default function InspectionDetailsScreen() {
   const [isRetrying, setIsRetrying] = useState(false);
 
   const [retryError, setRetryError] = useState<string | null>(null);
+
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
 
   /*
    * Utilizamos este contador solamente para
@@ -155,14 +157,19 @@ export default function InspectionDetailsScreen() {
   const syncInfo = getSyncStatusInfo(syncStatus, colors);
 
   /*
-   * Solamente permitimos reintento cuando:
+   * Permitimos una acción manual cuando la inspección:
    *
-   * - ocurrió un error
-   * - existe formulario
-   * - el formulario está integrado con Kobo
+   * - ya está finalizada;
+   * - utiliza Kobo;
+   * - continúa pendiente o terminó con error.
+   *
+   * "syncing" no muestra botón porque una ejecución ya está en curso.
+   * "synced" tampoco lo necesita porque ya terminó correctamente.
    */
   const canRetrySync =
-    syncStatus === "error" && form?.integration?.provider === "kobo";
+    inspection.status === "completed" &&
+    form?.integration?.provider === "kobo" &&
+    (syncStatus === "pending" || syncStatus === "error");
 
   /* ---------------------------------------------------------------------- */
   /*                         REINTENTAR KOBO                                 */
@@ -175,33 +182,62 @@ export default function InspectionDetailsScreen() {
 
     setIsRetrying(true);
     setRetryError(null);
+    setRetryMessage(null);
 
     try {
       /*
-       * Toda la lógica de sincronización vive ahora
-       * dentro de InspectionSyncService.
+       * La UI NO llama directamente a syncInspection() ni a Kobo.
        *
-       * Esta pantalla únicamente solicita el reintento.
+       * Solicitamos a la cola central que procese únicamente
+       * esta inspección. De esta manera seguimos conservando:
+       *
+       * - single-flight;
+       * - idempotencia;
+       * - reintentos;
+       * - attachments/evidencias;
+       * - recuperación de errores.
        */
-      const result = await syncInspection(inspection.id);
-
-      if (result.status === "error") {
-        setRetryError(result.error);
-      } else {
-        console.log("Reintento de sincronización procesado:", result);
-      }
+      const queueResult = await processInspectionSyncQueue({
+        inspectionIds: [inspection.id],
+        includeErrors: true,
+        includeInterrupted: true,
+      });
 
       /*
-       * El repositorio mantiene una copia hidratada en memoria.
-       * Forzamos un render para volver a leer la inspección
-       * y mostrar synced/error/syncing según corresponda.
+       * Volvemos a leer la inspección desde el repositorio porque
+       * la cola ya pudo cambiar pending/error → synced.
        */
+      const refreshedInspection = getInspectionById(inspection.id);
+
+      if (!refreshedInspection) {
+        throw new Error(
+          "La inspección dejó de estar disponible después de sincronizar.",
+        );
+      }
+
+      const refreshedSyncStatus =
+        refreshedInspection.integration?.syncStatus ?? "local";
+
+      if (refreshedSyncStatus === "synced") {
+        setRetryMessage("La inspección se sincronizó correctamente con Kobo.");
+      } else if (refreshedSyncStatus === "error") {
+        setRetryError(
+          refreshedInspection.integration?.lastSyncError ??
+            "La sincronización volvió a finalizar con error.",
+        );
+      } else if (queueResult.totalCandidates === 0) {
+        setRetryMessage(
+          "La inspección no necesitaba procesamiento adicional en la cola.",
+        );
+      } else {
+        setRetryMessage(
+          "La solicitud fue procesada. El estado de sincronización se actualizó.",
+        );
+      }
+
       setRefreshVersion((value) => value + 1);
     } catch (error) {
-      const message = getErrorMessage(error);
-
-      setRetryError(message);
-
+      setRetryError(getErrorMessage(error));
       setRefreshVersion((value) => value + 1);
     } finally {
       setIsRetrying(false);
@@ -590,6 +626,19 @@ export default function InspectionDetailsScreen() {
                 </>
               )}
 
+              {retryMessage && (
+                <Text
+                  style={[
+                    styles.retryMessage,
+                    {
+                      color: colors.success,
+                    },
+                  ]}
+                >
+                  {retryMessage}
+                </Text>
+              )}
+
               {retryError && (
                 <Text
                   style={[
@@ -608,7 +657,9 @@ export default function InspectionDetailsScreen() {
                   <AppButton onPress={handleRetrySync}>
                     {isRetrying
                       ? "Sincronizando..."
-                      : "Reintentar sincronización"}
+                      : syncStatus === "error"
+                        ? "Reintentar sincronización"
+                        : "Sincronizar ahora"}
                   </AppButton>
                 </View>
               )}
@@ -1218,6 +1269,14 @@ const styles = StyleSheet.create({
     fontSize: FontSize.small,
 
     lineHeight: 20,
+  },
+
+  retryMessage: {
+    fontSize: FontSize.small,
+
+    lineHeight: 20,
+
+    marginTop: Spacing.md,
   },
 
   retryError: {
