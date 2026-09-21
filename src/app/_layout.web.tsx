@@ -1,14 +1,26 @@
 import { useEffect, useState } from "react";
 
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
-import { Stack, usePathname } from "expo-router";
+import { router, Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
 import AppTabs from "@/components/app-tabs";
 
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useInspectionAutoSync } from "@/hooks/useInspectionAutoSync";
+
+/*
+ * ============================================================================
+ * REPOSITORY - AUTENTICACIÓN
+ * ============================================================================
+ */
+
+import {
+  getAuthSession,
+  hydrateAuthSessionRepository,
+  subscribeToAuthSession,
+} from "@/repositories/authSessionRepository";
 
 /*
  * ============================================================================
@@ -45,6 +57,17 @@ import {
 
 /*
  * ============================================================================
+ * REPOSITORY - PERFIL DE USUARIO
+ * ============================================================================
+ */
+
+import {
+  configureUserProfileRepositoryPersistence,
+  hydrateUserProfileRepository,
+} from "@/repositories/userProfileRepository";
+
+/*
+ * ============================================================================
  * WEB STORAGE
  * ============================================================================
  */
@@ -73,10 +96,22 @@ import {
 
 /*
  * ============================================================================
+ * WEB STORAGE - PERFIL
+ * ============================================================================
+ */
+
+import {
+  loadWebUserProfile,
+  saveWebUserProfile,
+} from "@/repositories/userProfileWebStorage";
+
+/*
+ * ============================================================================
  * TYPES
  * ============================================================================
  */
 
+import type { AuthSession } from "@/types/auth";
 import type { Company } from "@/types/company";
 import type { Evidence } from "@/types/evidence";
 import type { FormDefinition } from "@/types/form";
@@ -93,8 +128,11 @@ import type { Report } from "@/types/report";
  * 1. Configurar persistencia Web.
  * 2. Conectar repositories con localStorage.
  * 3. Hidratar repositories.
- * 4. Activar sincronización automática.
- * 5. Renderizar Expo Router.
+ * 4. Restaurar UserProfile.
+ * 5. Restaurar AuthSession.
+ * 6. Proteger rutas privadas.
+ * 7. Activar sincronización automática.
+ * 8. Renderizar Expo Router.
  *
  * Arquitectura Web:
  *
@@ -125,6 +163,30 @@ export default function WebRootLayout() {
   const [repositoryError, setRepositoryError] = useState<string | null>(null);
 
   /*
+   * Evita tomar decisiones de navegación antes de consultar
+   * la sesión persistida en Web.
+   */
+  const [authReady, setAuthReady] = useState(false);
+
+  /*
+   * Sesión disponible actualmente.
+   */
+  const [authSession, setAuthSessionState] = useState<AuthSession | null>(
+    getAuthSession(),
+  );
+
+  /*
+   * ==========================================================================
+   * OBSERVAR SESIÓN
+   * ==========================================================================
+   */
+  useEffect(() => {
+    return subscribeToAuthSession((session) => {
+      setAuthSessionState(session);
+    });
+  }, []);
+
+  /*
    * ==========================================================================
    * INICIALIZACIÓN WEB
    * ==========================================================================
@@ -136,7 +198,42 @@ export default function WebRootLayout() {
       try {
         /*
          * ====================================================================
-         * PASO 1 - EMPRESAS
+         * PASO 1 - PERFIL DE USUARIO
+         * ====================================================================
+         *
+         * Conecta UserProfileRepository con localStorage.
+         *
+         * Esto permite que:
+         *
+         * Registro
+         *   ↓
+         * updateUserProfile()
+         *   ↓
+         * UserProfileRepository
+         *   ↓
+         * localStorage
+         *
+         * y posteriormente, al volver a abrir la aplicación:
+         *
+         * localStorage
+         *   ↓
+         * UserProfileRepository
+         *   ↓
+         * Perfil
+         */
+        configureUserProfileRepositoryPersistence({
+          async load() {
+            return loadWebUserProfile();
+          },
+
+          async save(profile) {
+            saveWebUserProfile(profile);
+          },
+        });
+
+        /*
+         * ====================================================================
+         * PASO 2 - EMPRESAS
          * ====================================================================
          */
         configureCompanyRepositoryPersistence(
@@ -145,7 +242,7 @@ export default function WebRootLayout() {
 
         /*
          * ====================================================================
-         * PASO 2 - INMUEBLES
+         * PASO 3 - INMUEBLES
          * ====================================================================
          */
         configurePropertyRepositoryPersistence(
@@ -154,22 +251,14 @@ export default function WebRootLayout() {
 
         /*
          * ====================================================================
-         * PASO 3 - FORMULARIOS
+         * PASO 4 - FORMULARIOS
          * ====================================================================
-         *
-         * FormRepository queda conectado con:
-         *
-         * localStorage
-         *      ↑
-         * FormWebStorage
-         *      ↑
-         * FormRepository
          */
         configureFormRepositoryPersistence(createWebFormPersistenceAdapter());
 
         /*
          * ====================================================================
-         * PASO 4 - EVIDENCIAS
+         * PASO 5 - EVIDENCIAS
          * ====================================================================
          */
         configureEvidenceRepositoryPersistence(
@@ -178,7 +267,7 @@ export default function WebRootLayout() {
 
         /*
          * ====================================================================
-         * PASO 5 - REPORTES
+         * PASO 6 - REPORTES
          * ====================================================================
          */
         configureReportRepositoryPersistence(
@@ -187,10 +276,15 @@ export default function WebRootLayout() {
 
         /*
          * ====================================================================
-         * PASO 6 - HIDRATACIÓN
+         * PASO 7 - HIDRATACIÓN DE DATOS
          * ====================================================================
+         *
+         * Incluimos UserProfile para recuperar el perfil almacenado
+         * antes de mostrar las pantallas de la aplicación.
          */
         await Promise.all([
+          hydrateUserProfileRepository(),
+
           hydrateCompanyRepository(),
 
           hydratePropertyRepository(),
@@ -204,9 +298,22 @@ export default function WebRootLayout() {
           hydrateReportRepository(),
         ]);
 
+        /*
+         * ====================================================================
+         * PASO 8 - HIDRATACIÓN DE AUTENTICACIÓN
+         * ====================================================================
+         *
+         * En Web AuthSessionStorage utiliza localStorage.
+         */
+        await hydrateAuthSessionRepository();
+
         if (!active) {
           return;
         }
+
+        setAuthSessionState(getAuthSession());
+
+        setAuthReady(true);
 
         setRepositoryError(null);
 
@@ -240,21 +347,154 @@ export default function WebRootLayout() {
    * ==========================================================================
    * SINCRONIZACIÓN AUTOMÁTICA
    * ==========================================================================
+   *
+   * La sincronización solamente comienza después de conocer
+   * el estado de autenticación y cuando existe una sesión.
    */
   useInspectionAutoSync({
-    enabled: repositoryReady,
+    enabled: repositoryReady && authReady && authSession !== null,
   });
 
   /*
-   * Se mantiene disponible para el futuro
-   * centro de diagnóstico.
+   * ==========================================================================
+   * PROTECCIÓN DE RUTAS
+   * ==========================================================================
+   *
+   * Rutas públicas:
+   *
+   * /
+   * /login
+   * /registro
+   *
+   * Cualquier otra ruta requiere AuthSession.
    */
-  void repositoryError;
+  useEffect(() => {
+    if (!repositoryReady || !authReady) {
+      return;
+    }
+
+    const isRootRoute = pathname === "/";
+
+    const isAuthRoute = pathname === "/login" || pathname === "/registro";
+
+    /*
+     * Usuario sin sesión:
+     *
+     * cualquier ruta privada vuelve al Login.
+     */
+    if (!authSession) {
+      if (!isRootRoute && !isAuthRoute) {
+        router.replace("/login");
+      }
+
+      return;
+    }
+
+    /*
+     * Usuario autenticado:
+     *
+     * Login, Registro e Index redirigen al Dashboard.
+     */
+    if (isRootRoute || isAuthRoute) {
+      router.replace("/dashboard");
+    }
+  }, [authReady, authSession, pathname, repositoryReady]);
 
   /*
-   * Login e index no muestran navegación principal.
+   * ==========================================================================
+   * ERROR
+   * ==========================================================================
    */
-  const showGlobalNavigation = pathname !== "/" && pathname !== "/login";
+  if (repositoryError) {
+    return (
+      <View
+        style={[
+          styles.center,
+          {
+            backgroundColor: colors.background,
+          },
+        ]}
+      >
+        <StatusBar style={isDark ? "light" : "dark"} />
+
+        <Text
+          style={[
+            styles.errorTitle,
+            {
+              color: colors.error,
+            },
+          ]}
+        >
+          No fue posible iniciar UNIESAP
+        </Text>
+
+        <Text
+          style={[
+            styles.loadingText,
+            {
+              color: colors.textSecondary,
+            },
+          ]}
+        >
+          {repositoryError}
+        </Text>
+      </View>
+    );
+  }
+
+  /*
+   * ==========================================================================
+   * CARGANDO
+   * ==========================================================================
+   *
+   * Esperamos repositories + UserProfile + AuthSession.
+   */
+  if (!repositoryReady || !authReady) {
+    return (
+      <View
+        style={[
+          styles.center,
+          {
+            backgroundColor: colors.background,
+          },
+        ]}
+      >
+        <StatusBar style={isDark ? "light" : "dark"} />
+
+        <Text
+          style={[
+            styles.loadingTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          UNIESAP
+        </Text>
+
+        <Text
+          style={[
+            styles.loadingText,
+            {
+              color: colors.textSecondary,
+            },
+          ]}
+        >
+          Preparando almacenamiento y sesión...
+        </Text>
+      </View>
+    );
+  }
+
+  /*
+   * ==========================================================================
+   * NAVEGACIÓN
+   * ==========================================================================
+   */
+  const isPublicRoute =
+    pathname === "/" || pathname === "/login" || pathname === "/registro";
+
+  const showGlobalNavigation = authSession !== null && !isPublicRoute;
 
   return (
     <View
@@ -402,27 +642,13 @@ function createWebPropertyPersistenceAdapter() {
  * ============================================================================
  * ADAPTADOR WEB DE FORMULARIOS
  * ============================================================================
- *
- * Esta es la nueva pieza que permite que FormRepository
- * utilice localStorage en Web.
  */
 function createWebFormPersistenceAdapter() {
   return {
-    /*
-     * Recupera formularios persistidos.
-     *
-     * null significa que todavía no existe almacenamiento
-     * y FormRepository deberá insertar el seed.
-     */
     async loadAll(): Promise<FormDefinition[] | null> {
       return loadWebForms();
     },
 
-    /*
-     * Inserta un formulario.
-     *
-     * Se evita duplicar registros durante Fast Refresh.
-     */
     async insert(form: FormDefinition): Promise<void> {
       const current = loadWebForms() ?? [];
 
@@ -435,11 +661,6 @@ function createWebFormPersistenceAdapter() {
       saveWebForms([form, ...current]);
     },
 
-    /*
-     * Actualiza un formulario existente.
-     *
-     * Si todavía no existe, hacemos upsert.
-     */
     async replace(form: FormDefinition): Promise<void> {
       const current = loadWebForms() ?? [];
 
@@ -458,9 +679,6 @@ function createWebFormPersistenceAdapter() {
       saveWebForms(updated);
     },
 
-    /*
-     * Elimina un formulario.
-     */
     async delete(id: string): Promise<boolean> {
       const current = loadWebForms() ?? [];
 
@@ -609,5 +827,43 @@ const styles = StyleSheet.create({
 
   stack: {
     flex: 1,
+  },
+
+  center: {
+    flex: 1,
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    padding: 32,
+  },
+
+  loadingTitle: {
+    fontSize: 28,
+
+    fontWeight: "700",
+
+    marginBottom: 8,
+  },
+
+  loadingText: {
+    maxWidth: 420,
+
+    fontSize: 15,
+
+    lineHeight: 22,
+
+    textAlign: "center",
+  },
+
+  errorTitle: {
+    fontSize: 20,
+
+    fontWeight: "700",
+
+    textAlign: "center",
+
+    marginBottom: 12,
   },
 });

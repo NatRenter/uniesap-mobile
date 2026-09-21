@@ -1,47 +1,80 @@
+import { getAuthSession } from "@/repositories/authSessionRepository";
+
+import { getUserProfile } from "@/repositories/userProfileRepository";
+
+import type { UserRole } from "@/types/auth";
+
 /*
  * ============================================================================
  * USUARIO ACTUAL DE UNIESAP
  * ============================================================================
  *
- * Esta capa concentra la identidad del usuario que realiza una inspección.
+ * Esta capa concentra la identidad del usuario que trabaja actualmente
+ * dentro de UNIESAP.
  *
- * Por ahora no existe autenticación real, por lo que utilizamos un usuario
- * temporal de desarrollo. Cuando se implemente sesión/API, solamente habrá que
- * cambiar esta capa sin volver a modificar cada pantalla de captura.
+ * Las pantallas de captura NO necesitan conocer:
+ *
+ * - AuthSession;
+ * - Google;
+ * - correo/contraseña;
+ * - tokens;
+ * - proveedor de autenticación.
+ *
+ * Solamente consumen CurrentUser.
+ *
+ * Esto permite sustituir posteriormente la autenticación local
+ * por la API UNIESAP sin modificar la lógica de inspecciones.
  */
 
 export type CurrentUser = {
   id: string;
+
   name: string;
-  role: "inspector" | "admin";
+
+  email: string;
+
+  role: UserRole;
 };
 
 /*
- * Usuario temporal utilizado durante esta etapa del proyecto.
+ * Devuelve el usuario asociado a la sesión actual.
  *
- * IMPORTANTE:
- * No representa al responsable capturado dentro de un formulario.
- * Ese responsable continúa siendo solamente una respuesta de la inspección.
+ * El nombre visible procede de UserProfile porque ahí vive
+ * la información personal del usuario.
  */
-const developmentUser: CurrentUser = {
-  id: "dev-inspector-uniesap",
-  name: "Inspector UNIESAP",
-  role: "inspector",
-};
+export function getCurrentUser(): CurrentUser | null {
+  const session = getAuthSession();
 
-/*
- * Devuelve una copia para evitar modificaciones accidentales
- * sobre el usuario temporal almacenado en este módulo.
- */
-export function getCurrentUser(): CurrentUser {
-  return { ...developmentUser };
+  if (!session) {
+    return null;
+  }
+
+  const profile = getUserProfile();
+
+  const fullName = `${profile.firstName} ${profile.lastName}`.trim();
+
+  return {
+    id: session.user.id,
+
+    name: fullName || session.user.email,
+
+    email: session.user.email,
+
+    role: session.user.role,
+  };
 }
 
 /*
- * Atajo utilizado por las capturas para persistir el nombre del inspector.
+ * Devuelve el nombre que se guarda como inspector
+ * dentro de una inspección.
  *
- * En el futuro este valor procederá de la sesión autenticada.
+ * Mientras no exista sesión devolvemos un valor neutral.
+ *
+ * Más adelante, cuando todas las rutas estén completamente
+ * protegidas, una captura nunca debería ejecutarse sin sesión.
  */
 export function getCurrentInspectorName(): string {
-  return getCurrentUser().name;
+  const user = getCurrentUser();
+
+  return user?.name ?? "Usuario UNIESAP";
 }

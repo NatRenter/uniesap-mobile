@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { StyleSheet, Text, View } from "react-native";
 
-import { Stack, usePathname } from "expo-router";
+import { router, Stack, usePathname } from "expo-router";
 
 import { StatusBar } from "expo-status-bar";
 
@@ -24,14 +24,6 @@ import {
  * ============================================================================
  * SQLITE - PERFIL DE USUARIO
  * ============================================================================
- *
- * Persistencia nativa del perfil.
- *
- * UserProfileRepository
- *        ↓
- * UserProfileDatabase
- *        ↓
- * SQLite / user_profile
  */
 import {
   saveUserProfileToDatabase,
@@ -42,10 +34,6 @@ import {
  * ============================================================================
  * REPOSITORY - PERFIL DE USUARIO
  * ============================================================================
- *
- * El repository mantiene el perfil utilizado por la interfaz
- * y delega la persistencia al adaptador configurado durante
- * el arranque.
  */
 import {
   configureUserProfileRepositoryPersistence,
@@ -87,14 +75,6 @@ import { initializeDatabase } from "@/database/initializeDatabase.native";
  * ============================================================================
  * SQLITE - INMUEBLES
  * ============================================================================
- *
- * PropertyDatabase administra el CRUD normal de:
- *
- * properties
- *
- * Las relaciones Property ↔ Form se delegan internamente a:
- *
- * PropertyFormDatabase
  */
 import {
   deletePropertyFromDatabase,
@@ -107,12 +87,6 @@ import {
  * ============================================================================
  * SQLITE - MIGRACIONES PROPERTY ↔ FORM
  * ============================================================================
- *
- * Estas funciones solamente mantienen compatibilidad con instalaciones
- * anteriores de UNIESAP.
- *
- * Internamente realizan todas las comprobaciones necesarias antes de
- * modificar el esquema.
  */
 import {
   migrateLegacyPropertyFormsIfNeeded,
@@ -134,6 +108,17 @@ import {
 import { useAppTheme } from "@/hooks/useAppTheme";
 
 import { useInspectionAutoSync } from "@/hooks/useInspectionAutoSync";
+
+/*
+ * ============================================================================
+ * REPOSITORY - AUTENTICACIÓN
+ * ============================================================================
+ */
+import {
+  getAuthSession,
+  hydrateAuthSessionRepository,
+  subscribeToAuthSession,
+} from "@/repositories/authSessionRepository";
 
 /*
  * ============================================================================
@@ -192,64 +177,23 @@ import {
   hydrateReportRepository,
 } from "@/repositories/reportRepository";
 
+import type { AuthSession } from "@/types/auth";
+
 /*
  * ============================================================================
  * ROOT LAYOUT - ANDROID / IOS
  * ============================================================================
  *
- * Esta es la raíz de inicialización de UNIESAP para plataformas nativas.
- *
- * ============================================================================
- * RESPONSABILIDADES
- * ============================================================================
+ * Responsabilidades:
  *
  * 1. Inicializar SQLite.
- * 2. Configurar los adaptadores de persistencia.
+ * 2. Configurar adaptadores de persistencia.
  * 3. Hidratar repositories.
- * 4. Ejecutar migraciones necesarias.
- * 5. Habilitar la navegación.
- * 6. Habilitar Auto Sync cuando la base esté preparada.
- *
- * ============================================================================
- * LO QUE YA NO HACEMOS AQUÍ
- * ============================================================================
- *
- * Los diagnósticos detallados de:
- *
- * - Property ↔ Form;
- * - columnas SQLite;
- * - relaciones huérfanas;
- * - estado de form_ids_json;
- *
- * pertenecen ahora a las herramientas de:
- *
- * Perfil
- *   ↓
- * Opciones de desarrollador
- *   ↓
- * Diagnóstico SQLite
- *
- * ============================================================================
- * ORDEN DE INICIALIZACIÓN
- * ============================================================================
- *
- * SQLite / esquema
- *      ↓
- * configurar repositories
- *      ↓
- * Company
- *      ↓
- * Form
- *      ↓
- * migración legacy Property ↔ Form
- *      ↓
- * retirada legacy de form_ids_json
- *      ↓
- * Property
- *      ↓
- * Inspection / Evidence / Report
- *      ↓
- * aplicación preparada
+ * 4. Restaurar la sesión segura.
+ * 5. Ejecutar migraciones necesarias.
+ * 6. Proteger las rutas privadas.
+ * 7. Habilitar navegación.
+ * 8. Habilitar Auto Sync.
  */
 export default function RootLayout() {
   const pathname = usePathname();
@@ -261,17 +205,52 @@ export default function RootLayout() {
   const [databaseError, setDatabaseError] = useState<string | null>(null);
 
   /*
+   * null mientras SecureStore todavía no ha sido consultado.
+   */
+  const [authReady, setAuthReady] = useState(false);
+
+  /*
+   * Sesión actualmente disponible.
+   *
+   * El estado permite que el layout reaccione inmediatamente
+   * a registro, login, restauración y logout.
+   */
+  const [authSession, setAuthSessionState] = useState<AuthSession | null>(
+    getAuthSession(),
+  );
+
+  /*
    * ==========================================================================
    * AUTO SYNC
    * ==========================================================================
    *
-   * La sincronización automática solamente puede comenzar
-   * después de que toda la persistencia local haya terminado
-   * correctamente de inicializarse.
+   * No ejecutamos sincronización hasta que:
+   *
+   * - SQLite esté listo;
+   * - autenticación haya sido restaurada;
+   * - exista un usuario autenticado.
    */
   useInspectionAutoSync({
-    enabled: databaseReady === true,
+    enabled: databaseReady === true && authReady && authSession !== null,
   });
+
+  /*
+   * ==========================================================================
+   * OBSERVAR SESIÓN
+   * ==========================================================================
+   *
+   * AuthSessionRepository notifica cuando:
+   *
+   * - se registra un usuario;
+   * - se restaura una sesión;
+   * - se inicia sesión;
+   * - se cierra sesión.
+   */
+  useEffect(() => {
+    return subscribeToAuthSession((session) => {
+      setAuthSessionState(session);
+    });
+  }, []);
 
   /*
    * ==========================================================================
@@ -292,22 +271,8 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * CONFIGURAR USER PROFILE REPOSITORY
+         * 2. CONFIGURAR USER PROFILE REPOSITORY
          * ====================================================================
-         *
-         * En Native:
-         *
-         * UserProfileRepository
-         *        ↓
-         * UserProfileDatabase
-         *        ↓
-         * SQLite
-         *
-         * load:
-         * recupera el registro "current-user".
-         *
-         * save:
-         * inserta o reemplaza el perfil completo.
          */
         configureUserProfileRepositoryPersistence({
           load: selectUserProfile,
@@ -317,7 +282,7 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * 2. CONFIGURAR COMPANY REPOSITORY
+         * 3. CONFIGURAR COMPANY REPOSITORY
          * ====================================================================
          */
         configureCompanyRepositoryPersistence({
@@ -336,7 +301,7 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * 3. CONFIGURAR FORM REPOSITORY
+         * 4. CONFIGURAR FORM REPOSITORY
          * ====================================================================
          */
         configureFormRepositoryPersistence({
@@ -355,14 +320,8 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * 4. CONFIGURAR PROPERTY REPOSITORY
+         * 5. CONFIGURAR PROPERTY REPOSITORY
          * ====================================================================
-         *
-         * PropertyDatabase se encarga internamente de reconstruir:
-         *
-         * Property.formIds
-         *
-         * utilizando PropertyFormDatabase.
          */
         configurePropertyRepositoryPersistence({
           async loadAll() {
@@ -380,7 +339,7 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * 5. CONFIGURAR EVIDENCE REPOSITORY
+         * 6. CONFIGURAR EVIDENCE REPOSITORY
          * ====================================================================
          */
         configureEvidenceRepositoryPersistence({
@@ -395,7 +354,7 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * 6. CONFIGURAR REPORT REPOSITORY
+         * 7. CONFIGURAR REPORT REPOSITORY
          * ====================================================================
          */
         configureReportRepositoryPersistence({
@@ -410,112 +369,60 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * 7. COMPANY
+         * 8. COMPANY
          * ====================================================================
          */
         await hydrateCompanyRepository();
 
         /*
          * ====================================================================
-         * USER PROFILE
+         * 9. USER PROFILE
          * ====================================================================
-         *
-         * Recupera el perfil persistido desde SQLite.
-         *
-         * Si todavía no existe:
-         *
-         * createInitialProfile()
-         *        ↓
-         * saveUserProfileToDatabase()
-         *        ↓
-         * user_profile
-         *
-         * Si ya existe:
-         *
-         * SQLite
-         *        ↓
-         * selectUserProfile()
-         *        ↓
-         * currentProfile
-         *
-         * Esto debe ocurrir antes de mostrar Dashboard o Perfil,
-         * porque ambas pantallas consumen UserProfileRepository.
          */
         await hydrateUserProfileRepository();
 
         /*
          * ====================================================================
-         * FORM
+         * 10. FORM
          * ====================================================================
          */
         await hydrateFormRepository();
 
         /*
          * ====================================================================
-         * 8. FORM
+         * 11. FORM - HIDRATACIÓN EXISTENTE
          * ====================================================================
          *
-         * Los formularios deben existir antes de ejecutar
-         * cualquier migración Property ↔ Form.
+         * Se conserva temporalmente esta segunda hidratación tal como estaba.
+         * No la modificamos dentro del bloque de autenticación.
          */
         await hydrateFormRepository();
 
         /*
          * ====================================================================
-         * 9. MIGRACIÓN LEGACY PROPERTY ↔ FORM
+         * 12. MIGRACIÓN LEGACY PROPERTY ↔ FORM
          * ====================================================================
-         *
-         * Instalaciones antiguas:
-         *
-         * properties.form_ids_json
-         *           ↓
-         * property_forms
-         *
-         * Instalaciones modernas:
-         *
-         * migration_history
-         *           ↓
-         * operación omitida
-         *
-         * La propia migración contiene sus verificaciones internas.
          */
         await migrateLegacyPropertyFormsIfNeeded();
 
         /*
          * ====================================================================
-         * 10. RETIRAR FORM_IDS_JSON
+         * 13. RETIRAR FORM_IDS_JSON
          * ====================================================================
-         *
-         * Esta operación también es idempotente.
-         *
-         * Si la migración ya fue aplicada:
-         *
-         * no modifica la base.
-         *
-         * Si se trata de una instalación antigua:
-         *
-         * verifica integridad antes de retirar la columna.
          */
         await removeLegacyPropertyFormColumnIfNeeded();
 
         /*
          * ====================================================================
-         * 11. PROPERTY
+         * 14. PROPERTY
          * ====================================================================
-         *
-         * PropertyRepository se hidrata después de las migraciones.
-         *
-         * A partir de aquí Property.formIds proviene exclusivamente
-         * de property_forms.
          */
         await hydratePropertyRepository();
 
         /*
          * ====================================================================
-         * 12. RESTO DE REPOSITORIES
+         * 15. RESTO DE REPOSITORIES
          * ====================================================================
-         *
-         * Estos repositories ya pueden hidratarse en paralelo.
          */
         await Promise.all([
           hydrateInspectionRepository(),
@@ -527,21 +434,33 @@ export default function RootLayout() {
 
         /*
          * ====================================================================
-         * 13. INICIALIZACIÓN COMPLETADA
+         * 16. RESTAURAR AUTENTICACIÓN
          * ====================================================================
+         *
+         * En Android/iOS utiliza SecureStore.
+         *
+         * No continuamos con navegación protegida hasta conocer
+         * definitivamente si existe o no una sesión.
          */
+        await hydrateAuthSessionRepository();
+
         if (!active) {
           return;
         }
 
+        setAuthSessionState(getAuthSession());
+
+        setAuthReady(true);
+
+        /*
+         * ====================================================================
+         * 17. INICIALIZACIÓN COMPLETADA
+         * ====================================================================
+         */
         setDatabaseError(null);
 
         setDatabaseReady(true);
       } catch (error) {
-        /*
-         * Si el componente se desmontó durante la inicialización,
-         * ignoramos el resultado.
-         */
         if (!active) {
           return;
         }
@@ -551,12 +470,6 @@ export default function RootLayout() {
             ? error.message
             : "Error desconocido inicializando la base de datos.";
 
-        /*
-         * Este log sí se conserva.
-         *
-         * Los errores de inicialización son relevantes incluso
-         * fuera de las herramientas de desarrollador.
-         */
         console.error("Error inicializando almacenamiento local:", error);
 
         setDatabaseError(message);
@@ -574,10 +487,61 @@ export default function RootLayout() {
 
   /*
    * ==========================================================================
+   * PROTECCIÓN DE RUTAS
+   * ==========================================================================
+   *
+   * Rutas públicas:
+   *
+   * /
+   * /login
+   * /registro
+   *
+   * Todas las demás requieren AuthSession.
+   */
+  useEffect(() => {
+    if (databaseReady !== true || !authReady) {
+      return;
+    }
+
+    const isRootRoute = pathname === "/";
+
+    const isAuthRoute = pathname === "/login" || pathname === "/registro";
+
+    /*
+     * Usuario NO autenticado.
+     *
+     * Si intenta entrar a cualquier ruta privada,
+     * regresamos al Login.
+     */
+    if (!authSession) {
+      if (!isRootRoute && !isAuthRoute) {
+        router.replace("/login");
+      }
+
+      return;
+    }
+
+    /*
+     * Usuario autenticado.
+     *
+     * No tiene sentido volver a Login, Registro o Index.
+     */
+    if (isRootRoute || isAuthRoute) {
+      router.replace("/dashboard");
+    }
+  }, [authReady, authSession, databaseReady, pathname]);
+
+  /*
+   * ==========================================================================
    * CARGANDO
    * ==========================================================================
+   *
+   * Esperamos tanto SQLite como SecureStore.
+   *
+   * Esto evita mostrar Login durante unos milisegundos antes
+   * de descubrir que el usuario ya tenía una sesión persistida.
    */
-  if (databaseReady === null) {
+  if (databaseReady === null || !authReady) {
     return (
       <View
         style={[
@@ -611,7 +575,7 @@ export default function RootLayout() {
             },
           ]}
         >
-          Preparando almacenamiento local...
+          Preparando almacenamiento y sesión...
         </Text>
       </View>
     );
@@ -666,8 +630,17 @@ export default function RootLayout() {
    * ==========================================================================
    * NAVEGACIÓN
    * ==========================================================================
+   *
+   * La navegación global solo aparece:
+   *
+   * - después de restaurar autenticación;
+   * - cuando existe sesión;
+   * - dentro de una ruta privada.
    */
-  const showGlobalNavigation = pathname !== "/" && pathname !== "/login";
+  const isPublicRoute =
+    pathname === "/" || pathname === "/login" || pathname === "/registro";
+
+  const showGlobalNavigation = authSession !== null && !isPublicRoute;
 
   return (
     <View

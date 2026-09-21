@@ -23,22 +23,38 @@ import { FontSize, Radius, Spacing } from "@/constants/theme";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useResponsive } from "@/hooks/useResponsive";
 
+import { localAuthService } from "@/services/auth/localAuthService";
+
+/*
+ * ============================================================================
+ * LOGIN
+ * ============================================================================
+ *
+ * La pantalla ya no decide cómo funciona la autenticación.
+ *
+ * Solamente envía las credenciales al AuthService.
+ *
+ * Actualmente:
+ *
+ * Login
+ *   ↓
+ * LocalAuthService
+ *
+ * Futuro:
+ *
+ * Login
+ *   ↓
+ * AuthService
+ *   ↓
+ * API UNIESAP / proveedor real
+ */
 export default function LoginScreen() {
   const { colors } = useAppTheme();
 
-  /*
-   * Detectamos si estamos en teléfono.
-   *
-   * Móvil:
-   * una sola columna.
-   *
-   * Tablet / Web:
-   * branding + formulario en dos columnas.
-   */
   const { isPhone } = useResponsive();
 
   /* ---------------------------------------------------------------------- */
-  /*                              FORMULARIO                                */
+  /* FORMULARIO                                                             */
   /* ---------------------------------------------------------------------- */
 
   const [email, setEmail] = useState("");
@@ -48,35 +64,42 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   /* ---------------------------------------------------------------------- */
-  /*                                 LOGIN                                  */
+  /* ESTADO                                                                 */
   /* ---------------------------------------------------------------------- */
 
-  const handleLogin = () => {
-    /*
-     * PROTOTIPO
-     *
-     * Todavía no existe autenticación real.
-     *
-     * Más adelante este será el punto donde
-     * conectaremos:
-     *
-     * credentials
-     *     ↓
-     * AuthService
-     *     ↓
-     * sesión / token
-     *     ↓
-     * Dashboard
-     */
-    router.replace("/dashboard");
-  };
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [error, setError] = useState<string | null>(null);
+
+  /* ---------------------------------------------------------------------- */
+  /* LOGIN                                                                  */
+  /* ---------------------------------------------------------------------- */
+
+  async function handleLogin() {
+    if (isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    setError(null);
+
+    try {
+      await localAuthService.loginWithEmail({
+        email,
+        password,
+      });
+
+      router.replace("/dashboard");
+    } catch (loginError) {
+      setError(getErrorMessage(loginError));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <Screen padded={false}>
-      {/*
-       * Evita que el teclado cubra campos y botones,
-       * especialmente en teléfonos.
-       */}
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -87,21 +110,11 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <ResponsiveContainer>
-            {/*
-             * MÓVIL
-             *
-             * Branding
-             * Formulario
-             *
-             * TABLET / WEB
-             *
-             * Branding | Formulario
-             */}
             <View
               style={[styles.mainLayout, !isPhone && styles.mainLayoutWide]}
             >
               {/* ======================================================== */}
-              {/* BRANDING                                                  */}
+              {/* BRANDING                                                 */}
               {/* ======================================================== */}
 
               <View
@@ -140,11 +153,7 @@ export default function LoginScreen() {
                   Sistema de gestión e inspección empresarial
                 </Text>
 
-                {/*
-                 * Esta explicación adicional solamente aprovecha
-                 * el espacio de tablet/web.
-                 */}
-                {!isPhone && (
+                {!isPhone ? (
                   <Text
                     style={[
                       styles.brandDescription,
@@ -156,11 +165,11 @@ export default function LoginScreen() {
                     Gestiona empresas, inmuebles, inspecciones, evidencias y
                     reportes desde una sola plataforma.
                   </Text>
-                )}
+                ) : null}
               </View>
 
               {/* ======================================================== */}
-              {/* FORMULARIO                                                */}
+              {/* FORMULARIO                                               */}
               {/* ======================================================== */}
 
               <View
@@ -243,7 +252,6 @@ export default function LoginScreen() {
                           onPress={() => setShowPassword((value) => !value)}
                           style={({ pressed }) => [
                             styles.showPasswordButton,
-
                             {
                               opacity: pressed ? 0.7 : 1,
                             },
@@ -265,16 +273,10 @@ export default function LoginScreen() {
 
                     {/* RECUPERAR CONTRASEÑA */}
 
-                    {/*
-                     * Este control sigue siendo visual.
-                     *
-                     * Todavía no existe una ruta de recuperación
-                     * de contraseña, así que no inventamos navegación.
-                     */}
                     <Pressable
+                      disabled={isSubmitting}
                       style={({ pressed }) => [
                         styles.forgotPassword,
-
                         {
                           opacity: pressed ? 0.7 : 1,
                         },
@@ -292,9 +294,106 @@ export default function LoginScreen() {
                       </Text>
                     </Pressable>
 
+                    {/* ERROR */}
+
+                    {error ? (
+                      <View
+                        style={[
+                          styles.errorBox,
+                          {
+                            borderColor: colors.error,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.errorText,
+                            {
+                              color: colors.error,
+                            },
+                          ]}
+                        >
+                          {error}
+                        </Text>
+                      </View>
+                    ) : null}
+
                     {/* LOGIN */}
 
-                    <AppButton onPress={handleLogin}>Iniciar sesión</AppButton>
+                    <AppButton onPress={handleLogin} disabled={isSubmitting}>
+                      {isSubmitting ? "Iniciando sesión..." : "Iniciar sesión"}
+                    </AppButton>
+
+                    {/* GOOGLE */}
+
+                    <View style={styles.separator}>
+                      <View
+                        style={[
+                          styles.separatorLine,
+                          {
+                            backgroundColor: colors.divider,
+                          },
+                        ]}
+                      />
+
+                      <Text
+                        style={[
+                          styles.separatorText,
+                          {
+                            color: colors.textMuted,
+                          },
+                        ]}
+                      >
+                        o
+                      </Text>
+
+                      <View
+                        style={[
+                          styles.separatorLine,
+                          {
+                            backgroundColor: colors.divider,
+                          },
+                        ]}
+                      />
+                    </View>
+
+                    <AppButton variant="secondary" disabled>
+                      Continuar con Google · Próximamente
+                    </AppButton>
+
+                    {/* REGISTRO */}
+
+                    <View style={styles.registerRow}>
+                      <Text
+                        style={[
+                          styles.registerQuestion,
+                          {
+                            color: colors.textSecondary,
+                          },
+                        ]}
+                      >
+                        ¿No tienes una cuenta?
+                      </Text>
+
+                      <Pressable
+                        disabled={isSubmitting}
+                        onPress={() => router.navigate("/registro")}
+                        style={({ pressed }) => ({
+                          opacity: pressed ? 0.7 : 1,
+                        })}
+                      >
+                        <Text
+                          style={[
+                            styles.registerLink,
+                            {
+                              color: colors.primary,
+                            },
+                          ]}
+                        >
+                          Crear cuenta
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </AppCard>
               </View>
@@ -324,7 +423,7 @@ export default function LoginScreen() {
                   },
                 ]}
               >
-                Prototipo visual · v1.0
+                Autenticación en desarrollo · v1.0
               </Text>
             </View>
           </ResponsiveContainer>
@@ -334,36 +433,28 @@ export default function LoginScreen() {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                   STYLES                                   */
-/* -------------------------------------------------------------------------- */
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Ocurrió un error desconocido.";
+}
 
 const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
 
-  /*
-   * minHeight ayuda a mantener el login visualmente
-   * equilibrado incluso en pantallas grandes.
-   */
   scrollContent: {
     flexGrow: 1,
-
     paddingBottom: Spacing.xl,
   },
 
-  /* -------------------------------------------------------------------- */
-  /*                            LAYOUT PRINCIPAL                           */
-  /* -------------------------------------------------------------------- */
-
-  /*
-   * Móvil:
-   *
-   * Branding
-   * ↓
-   * Formulario
-   */
   mainLayout: {
     flex: 1,
 
@@ -376,11 +467,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xl,
   },
 
-  /*
-   * Tablet/Web:
-   *
-   * Branding | Formulario
-   */
   mainLayoutWide: {
     flexDirection: "row",
 
@@ -390,10 +476,6 @@ const styles = StyleSheet.create({
 
     minHeight: 620,
   },
-
-  /* -------------------------------------------------------------------- */
-  /*                               BRANDING                                */
-  /* -------------------------------------------------------------------- */
 
   brandColumn: {
     width: "100%",
@@ -455,10 +537,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
   },
 
-  /* -------------------------------------------------------------------- */
-  /*                               FORMULARIO                              */
-  /* -------------------------------------------------------------------- */
-
   formColumn: {
     width: "100%",
   },
@@ -507,10 +585,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
 
-  /* -------------------------------------------------------------------- */
-  /*                              CONTRASEÑA                               */
-  /* -------------------------------------------------------------------- */
-
   passwordWrapper: {
     position: "relative",
   },
@@ -549,9 +623,59 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  /* -------------------------------------------------------------------- */
-  /*                                FOOTER                                 */
-  /* -------------------------------------------------------------------- */
+  errorBox: {
+    borderWidth: 1,
+
+    borderRadius: Radius.md,
+
+    padding: Spacing.md,
+  },
+
+  errorText: {
+    fontSize: FontSize.small,
+
+    lineHeight: 20,
+  },
+
+  separator: {
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    gap: Spacing.md,
+  },
+
+  separatorLine: {
+    flex: 1,
+
+    height: 1,
+  },
+
+  separatorText: {
+    fontSize: FontSize.caption,
+  },
+
+  registerRow: {
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    flexWrap: "wrap",
+
+    gap: Spacing.xs,
+  },
+
+  registerQuestion: {
+    fontSize: FontSize.small,
+  },
+
+  registerLink: {
+    fontSize: FontSize.small,
+
+    fontWeight: "700",
+  },
 
   footer: {
     alignItems: "center",

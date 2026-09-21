@@ -26,6 +26,8 @@ import {
   subscribeToUserProfile,
 } from "@/repositories/userProfileRepository";
 
+import { localAuthService } from "@/services/auth/localAuthService";
+
 import type { UserProfile } from "@/types/userProfile";
 
 /*
@@ -38,7 +40,7 @@ import type { UserProfile } from "@/types/userProfile";
  * La edición se realiza en /perfil/editar para mantener
  * esta pantalla limpia y fácil de consultar.
  *
- * Roles y permisos todavía NO forman parte de esta fase.
+ * La sesión se administra mediante AuthService.
  */
 export default function ProfileScreen() {
   const { colors } = useAppTheme();
@@ -58,6 +60,18 @@ export default function ProfileScreen() {
   const fullName = `${profile.firstName} ${profile.lastName}`.trim();
 
   const initials = createInitials(profile.firstName, profile.lastName);
+
+  /*
+   * Cierra realmente la sesión antes de regresar al Login.
+   *
+   * La pantalla no manipula directamente AuthSession.
+   * Esa responsabilidad permanece dentro del AuthService.
+   */
+  async function handleLogout() {
+    await localAuthService.logout();
+
+    router.replace("/login");
+  }
 
   return (
     <Screen padded={false}>
@@ -240,7 +254,7 @@ export default function ProfileScreen() {
 
           <View style={styles.section}>
             <Pressable
-              onPress={() => router.replace("/login")}
+              onPress={handleLogout}
               style={({ pressed }) => [
                 styles.logoutButton,
                 {
