@@ -23,6 +23,19 @@ import { createUuid } from "@/utils/idUtils";
  * Para obtener inmuebles se utiliza:
  *
  * getPropertiesByCompanyId(company.id)
+ *
+ * ============================================================================
+ * SINCRONIZACIÓN
+ * ============================================================================
+ *
+ * Toda creación o modificación local deja la empresa en estado:
+ *
+ * pending
+ *
+ * y genera un operationId nuevo.
+ *
+ * Esto permitirá que posteriormente SyncService envíe únicamente los
+ * cambios pendientes a UNIESAP API.
  */
 
 export type CompanyPersistenceAdapter = {
@@ -54,6 +67,36 @@ export type CreateCompanyInput = {
 
   status?: Company["status"];
 };
+
+/*
+ * ============================================================================
+ * CAMPOS EDITABLES
+ * ============================================================================
+ *
+ * Una pantalla puede modificar datos empresariales, pero NO puede modificar:
+ *
+ * id
+ * createdAt
+ * updatedAt
+ * deletedAt
+ * sync
+ *
+ * Esos campos pertenecen al repositorio y al sistema de sincronización.
+ */
+export type UpdateCompanyInput = Partial<
+  Pick<
+    Company,
+    | "name"
+    | "legalName"
+    | "rfc"
+    | "state"
+    | "city"
+    | "phone"
+    | "email"
+    | "branding"
+    | "status"
+  >
+>;
 
 let persistenceAdapter: CompanyPersistenceAdapter | null = null;
 
@@ -152,9 +195,7 @@ async function hydrateInternal(): Promise<void> {
 
   companyRepositoryItems.splice(
     0,
-
     companyRepositoryItems.length,
-
     ...persisted.map(cloneCompany),
   );
 
@@ -198,14 +239,15 @@ export function resolveCompanyId(id: string): string {
  * CREAR EMPRESA
  * ============================================================================
  *
- * Toda empresa nueva recibe inmediatamente un UUID.
+ * Se generan DOS identificadores diferentes:
  *
- * El ID se genera ANTES de escribir en SQLite y antes
- * de cualquier futura comunicación con la API.
+ * company.id
+ *   identifica permanentemente la empresa.
  *
- * De esta forma una empresa puede crearse completamente
- * offline y conservar posteriormente la misma identidad
- * en el servidor.
+ * sync.operationId
+ *   identifica esta operación concreta de sincronización.
+ *
+ * Ambos se generan antes de cualquier comunicación con la API.
  */
 export async function createCompany(
   input: CreateCompanyInput,
@@ -252,12 +294,16 @@ export async function createCompany(
     createdAt: now,
 
     updatedAt: now,
+
+    sync: {
+      status: "pending",
+
+      serverVersion: 0,
+
+      operationId: createUuid(),
+    },
   };
 
-  /*
-   * Primero actualizamos memoria para mantener
-   * la interfaz reactiva.
-   */
   companyRepositoryItems.unshift(company);
 
   try {
@@ -265,10 +311,6 @@ export async function createCompany(
 
     return cloneCompany(company);
   } catch (error) {
-    /*
-     * Si falla persistencia hacemos rollback
-     * del cambio en memoria.
-     */
     removeCompanyFromMemory(company.id);
 
     throw error;
@@ -280,14 +322,22 @@ export async function createCompany(
  * ACTUALIZAR EMPRESA
  * ============================================================================
  *
- * id y createdAt son inmutables.
+ * Cada edición local:
  *
- * updatedAt se actualiza automáticamente.
+ * 1. conserva id;
+ * 2. conserva createdAt;
+ * 3. actualiza updatedAt;
+ * 4. conserva serverVersion;
+ * 5. genera un nuevo operationId;
+ * 6. cambia sync.status a pending;
+ * 7. limpia el error anterior.
+ *
+ * El servidor utilizará serverVersion para detectar posteriormente
+ * posibles conflictos.
  */
 export async function updateCompany(
   id: string,
-
-  changes: Partial<Company>,
+  changes: UpdateCompanyInput,
 ): Promise<Company | undefined> {
   const adapter = requirePersistenceAdapter();
 
@@ -314,8 +364,7 @@ export async function updateCompany(
     id: previous.id,
 
     /*
-     * La fecha original de creación
-     * tampoco cambia.
+     * La fecha original de creación tampoco cambia.
      */
     createdAt: previous.createdAt,
 
@@ -329,10 +378,33 @@ export async function updateCompany(
     },
 
     /*
-     * Toda edición genera nueva fecha
-     * de actividad.
+     * Toda edición local genera nueva fecha.
      */
     updatedAt: new Date().toISOString(),
+
+    /*
+     * La eliminación lógica no puede modificarse desde una pantalla
+     * mediante updateCompany().
+     */
+    ...(previous.deletedAt
+      ? {
+          deletedAt: previous.deletedAt,
+        }
+      : {}),
+
+    /*
+     * Toda modificación local vuelve a quedar pendiente.
+     *
+     * serverVersion se conserva porque representa la última versión
+     * conocida del servidor, no la versión del cambio local.
+     */
+    sync: {
+      status: "pending",
+
+      serverVersion: previous.sync.serverVersion,
+
+      operationId: createUuid(),
+    },
   };
 
   companyRepositoryItems[index] = updated;
@@ -342,9 +414,6 @@ export async function updateCompany(
 
     return cloneCompany(updated);
   } catch (error) {
-    /*
-     * Rollback en memoria.
-     */
     companyRepositoryItems[index] = previous;
 
     throw error;
@@ -356,14 +425,17 @@ export async function updateCompany(
  * ELIMINAR EMPRESA
  * ============================================================================
  *
- * Todavía conserva la eliminación física actual.
+ * TEMPORAL:
  *
- * En una siguiente etapa esta operación evolucionará
- * hacia soft delete para permitir sincronizar tombstones
- * entre dispositivos.
+ * Esta operación todavía conserva el comportamiento físico existente.
  *
- * SQLite impedirá eliminar una empresa
- * mientras tenga inmuebles asociados.
+ * En la siguiente etapa la convertiremos a soft delete:
+ *
+ * deletedAt = fecha
+ * sync.status = pending
+ *
+ * No se cambia todavía para no mezclar la migración de metadatos con
+ * el comportamiento funcional de eliminación.
  */
 export async function deleteCompany(id: string): Promise<boolean> {
   const adapter = requirePersistenceAdapter();
@@ -432,6 +504,9 @@ function removeCompanyFromMemory(id: string): void {
 /*
  * Evita devolver referencias mutables
  * del estado interno.
+ *
+ * Ahora también clonamos sync para que ningún consumidor pueda
+ * modificar accidentalmente los metadatos internos.
  */
 function cloneCompany(company: Company): Company {
   return {
@@ -439,6 +514,10 @@ function cloneCompany(company: Company): Company {
 
     branding: {
       ...company.branding,
+    },
+
+    sync: {
+      ...company.sync,
     },
   };
 }

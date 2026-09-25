@@ -141,9 +141,67 @@ export async function runDatabaseMigrations() {
       status TEXT NOT NULL,
 
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+
+      /*
+       * ================================================================
+       * SINCRONIZACIÓN UNIESAP
+       * ================================================================
+       *
+       * deleted_at funciona como tombstone para soft delete.
+       *
+       * Los demás campos permiten conocer el estado local respecto
+       * a UNIESAP API.
+       */
+      deleted_at TEXT,
+
+      sync_status TEXT NOT NULL DEFAULT 'pending',
+
+      server_version INTEGER NOT NULL DEFAULT 0,
+
+      sync_operation_id TEXT,
+
+      last_synced_at TEXT,
+
+      last_sync_error TEXT
     );
   `);
+
+  /*
+   * ==========================================================================
+   * MIGRACIÓN DE SINCRONIZACIÓN DE EMPRESAS
+   * ==========================================================================
+   *
+   * Las instalaciones existentes ya tienen la tabla companies.
+   *
+   * CREATE TABLE IF NOT EXISTS no agrega columnas nuevas a esas bases,
+   * por lo que evolucionamos la tabla columna por columna.
+   *
+   * Ninguna empresa existente se elimina.
+   */
+  await addColumnIfMissing("companies", "deleted_at", "TEXT");
+
+  await addColumnIfMissing(
+    "companies",
+    "sync_status",
+    "TEXT NOT NULL DEFAULT 'pending'",
+  );
+
+  await addColumnIfMissing(
+    "companies",
+    "server_version",
+    "INTEGER NOT NULL DEFAULT 0",
+  );
+
+  await addColumnIfMissing("companies", "sync_operation_id", "TEXT");
+
+  await addColumnIfMissing("companies", "last_synced_at", "TEXT");
+
+  await addColumnIfMissing("companies", "last_sync_error", "TEXT");
+
+  /*
+   * ==========================================================================
+   * INMUEBLES
 
   /*
    * ==========================================================================

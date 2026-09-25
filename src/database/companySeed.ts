@@ -13,6 +13,20 @@ import type { Company } from "@/types/company";
  * La relación real es:
  *
  * Property.companyId
+ *
+ * ============================================================================
+ * SINCRONIZACIÓN
+ * ============================================================================
+ *
+ * Los registros seed todavía no existen en UNIESAP API.
+ *
+ * Por ello nacen como:
+ *
+ * pending
+ * serverVersion = 0
+ *
+ * Cuando conectemos la API podrán enviarse igual que cualquier
+ * empresa creada localmente.
  */
 export const initialCompanies: Company[] = [
   {
@@ -37,6 +51,12 @@ export const initialCompanies: Company[] = [
     createdAt: "2026-08-01T09:00:00.000Z",
 
     updatedAt: "2026-08-01T09:00:00.000Z",
+
+    sync: {
+      status: "pending",
+
+      serverVersion: 0,
+    },
   },
 
   {
@@ -61,5 +81,11 @@ export const initialCompanies: Company[] = [
     createdAt: "2026-08-01T09:05:00.000Z",
 
     updatedAt: "2026-08-01T09:05:00.000Z",
+
+    sync: {
+      status: "pending",
+
+      serverVersion: 0,
+    },
   },
 ];

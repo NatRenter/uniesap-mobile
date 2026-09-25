@@ -1,6 +1,7 @@
 import { getDatabase } from "@/database/database";
 
 import type { Company } from "@/types/company";
+import type { SyncStatus } from "@/types/sync";
 
 /*
  * ============================================================================
@@ -14,6 +15,13 @@ import type { Company } from "@/types/company";
  * La relación real es:
  *
  * properties.company_id
+ *
+ * ============================================================================
+ * SINCRONIZACIÓN
+ * ============================================================================
+ *
+ * CompanyDatabase también persiste los metadatos técnicos necesarios
+ * para sincronizar una empresa con UNIESAP API.
  */
 
 type CompanyRow = {
@@ -44,6 +52,24 @@ type CompanyRow = {
   created_at: string;
 
   updated_at: string;
+
+  /*
+   * Soft delete.
+   */
+  deleted_at: string | null;
+
+  /*
+   * Sincronización UNIESAP.
+   */
+  sync_status: SyncStatus;
+
+  server_version: number;
+
+  sync_operation_id: string | null;
+
+  last_synced_at: string | null;
+
+  last_sync_error: string | null;
 };
 
 /*
@@ -87,7 +113,13 @@ export async function selectAllCompanies(): Promise<Company[]> {
         logo,
         status,
         created_at,
-        updated_at
+        updated_at,
+        deleted_at,
+        sync_status,
+        server_version,
+        sync_operation_id,
+        last_synced_at,
+        last_sync_error
       FROM companies
       ORDER BY
         updated_at DESC,
@@ -121,11 +153,18 @@ export async function insertCompany(company: Company): Promise<void> {
         logo,
         status,
         created_at,
-        updated_at
+        updated_at,
+        deleted_at,
+        sync_status,
+        server_version,
+        sync_operation_id,
+        last_synced_at,
+        last_sync_error
       )
       VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?
       );
     `,
 
@@ -156,6 +195,18 @@ export async function insertCompany(company: Company): Promise<void> {
     company.createdAt,
 
     company.updatedAt,
+
+    company.deletedAt ?? null,
+
+    company.sync.status,
+
+    company.sync.serverVersion,
+
+    company.sync.operationId ?? null,
+
+    company.sync.lastSyncedAt ?? null,
+
+    company.sync.lastSyncError ?? null,
   );
 }
 
@@ -163,6 +214,11 @@ export async function insertCompany(company: Company): Promise<void> {
  * ============================================================================
  * REEMPLAZAR
  * ============================================================================
+ *
+ * Actualiza el registro completo, incluidos sus metadatos de sincronización.
+ *
+ * Se conserva INSERT OR REPLACE por compatibilidad con el comportamiento
+ * actual del repositorio.
  */
 export async function replaceCompany(company: Company): Promise<void> {
   const database = await getDatabase();
@@ -183,11 +239,18 @@ export async function replaceCompany(company: Company): Promise<void> {
         logo,
         status,
         created_at,
-        updated_at
+        updated_at,
+        deleted_at,
+        sync_status,
+        server_version,
+        sync_operation_id,
+        last_synced_at,
+        last_sync_error
       )
       VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?
       );
     `,
 
@@ -218,13 +281,30 @@ export async function replaceCompany(company: Company): Promise<void> {
     company.createdAt,
 
     company.updatedAt,
+
+    company.deletedAt ?? null,
+
+    company.sync.status,
+
+    company.sync.serverVersion,
+
+    company.sync.operationId ?? null,
+
+    company.sync.lastSyncedAt ?? null,
+
+    company.sync.lastSyncError ?? null,
   );
 }
 
 /*
  * ============================================================================
- * ELIMINAR
+ * ELIMINAR FÍSICAMENTE
  * ============================================================================
+ *
+ * Esta función se conserva temporalmente porque CompanyRepository todavía
+ * utiliza eliminación física.
+ *
+ * En la siguiente etapa deleteCompany() evolucionará a soft delete.
  */
 export async function deleteCompanyFromDatabase(id: string): Promise<boolean> {
   const database = await getDatabase();
@@ -297,5 +377,35 @@ function mapCompanyRow(row: CompanyRow): Company {
     createdAt: row.created_at,
 
     updatedAt: row.updated_at,
+
+    ...(row.deleted_at
+      ? {
+          deletedAt: row.deleted_at,
+        }
+      : {}),
+
+    sync: {
+      status: row.sync_status,
+
+      serverVersion: row.server_version,
+
+      ...(row.sync_operation_id
+        ? {
+            operationId: row.sync_operation_id,
+          }
+        : {}),
+
+      ...(row.last_synced_at
+        ? {
+            lastSyncedAt: row.last_synced_at,
+          }
+        : {}),
+
+      ...(row.last_sync_error
+        ? {
+            lastSyncError: row.last_sync_error,
+          }
+        : {}),
+    },
   };
 }
