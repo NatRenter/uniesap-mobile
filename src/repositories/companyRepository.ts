@@ -2,6 +2,8 @@ import { initialCompanies } from "@/database/companySeed";
 
 import type { Company, CompanyBranding } from "@/types/company";
 
+import { createUuid } from "@/utils/idUtils";
+
 /*
  * ============================================================================
  * COMPANY REPOSITORY
@@ -75,6 +77,9 @@ export const companyRepositoryItems: Company[] =
 /*
  * IDs antiguos utilizados durante las primeras
  * versiones del prototipo.
+ *
+ * Se conservan para mantener compatibilidad con
+ * datos existentes.
  */
 const legacyCompanyIds: Record<string, string> = {
   "1": "company-001",
@@ -179,7 +184,10 @@ export function getCompanyById(id: string): Company | undefined {
 }
 
 /*
- * Convierte IDs legacy al formato actual.
+ * Convierte IDs legacy al formato utilizado
+ * por las primeras versiones del prototipo.
+ *
+ * Los UUID nuevos no necesitan ninguna conversión.
  */
 export function resolveCompanyId(id: string): string {
   return legacyCompanyIds[id] ?? id;
@@ -189,6 +197,15 @@ export function resolveCompanyId(id: string): string {
  * ============================================================================
  * CREAR EMPRESA
  * ============================================================================
+ *
+ * Toda empresa nueva recibe inmediatamente un UUID.
+ *
+ * El ID se genera ANTES de escribir en SQLite y antes
+ * de cualquier futura comunicación con la API.
+ *
+ * De esta forma una empresa puede crearse completamente
+ * offline y conservar posteriormente la misma identidad
+ * en el servidor.
  */
 export async function createCompany(
   input: CreateCompanyInput,
@@ -198,7 +215,7 @@ export async function createCompany(
   const now = new Date().toISOString();
 
   const company: Company = {
-    id: createCompanyId(),
+    id: createUuid(),
 
     name: input.name.trim(),
 
@@ -339,7 +356,11 @@ export async function updateCompany(
  * ELIMINAR EMPRESA
  * ============================================================================
  *
- * Todavía no está conectado a la UI.
+ * Todavía conserva la eliminación física actual.
+ *
+ * En una siguiente etapa esta operación evolucionará
+ * hacia soft delete para permitir sincronizar tombstones
+ * entre dispositivos.
  *
  * SQLite impedirá eliminar una empresa
  * mientras tenga inmuebles asociados.
@@ -392,14 +413,6 @@ function requirePersistenceAdapter(): CompanyPersistenceAdapter {
   }
 
   return persistenceAdapter;
-}
-
-/*
- * Genera IDs suficientemente únicos
- * para los registros locales actuales.
- */
-function createCompanyId(): string {
-  return `company-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /*
