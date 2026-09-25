@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { router, useLocalSearchParams } from "expo-router";
 
@@ -17,21 +17,22 @@ import { useAppTheme } from "@/hooks/useAppTheme";
 import { useResponsive } from "@/hooks/useResponsive";
 
 import {
+  deleteCompany,
   getCompanyById,
   updateCompany,
 } from "@/repositories/companyRepository";
 
 /*
  * ============================================================================
- * EDICIÓN PERSISTENTE DE EMPRESA
+ * EDICIÃ“N PERSISTENTE DE EMPRESA
  * ============================================================================
  *
  * Esta pantalla trabaja directamente con CompanyRepository.
  *
  * Los cambios se guardan en:
  *
- * Android / iOS → SQLite
- * Web           → localStorage
+ * Android / iOS â†’ SQLite
+ * Web           â†’ localStorage
  *
  * Ya no existe una copia local hardcodeada de AutoZone/LALA.
  */
@@ -40,9 +41,9 @@ export default function EditCompanyScreen() {
   const { colors } = useAppTheme();
 
   /*
-   * Nos permite cambiar únicamente la distribución.
+   * Nos permite cambiar Ãºnicamente la distribuciÃ³n.
    *
-   * La lógica y los componentes permanecen iguales
+   * La lÃ³gica y los componentes permanecen iguales
    * independientemente del dispositivo.
    */
   const { isPhone } = useResponsive();
@@ -59,8 +60,8 @@ export default function EditCompanyScreen() {
   /*
    * Recuperamos la empresa desde CompanyRepository.
    *
-   * RootLayout hidrata el repositorio antes de mostrar la aplicación,
-   * por lo que los datos persistidos ya están disponibles al entrar aquí.
+   * RootLayout hidrata el repositorio antes de mostrar la aplicaciÃ³n,
+   * por lo que los datos persistidos ya estÃ¡n disponibles al entrar aquÃ­.
    */
   const company = id ? getCompanyById(id) : undefined;
 
@@ -71,8 +72,8 @@ export default function EditCompanyScreen() {
   /*
    * Los estados se inicializan con la empresa persistida.
    *
-   * Si por una ruta inválida no existe la empresa, utilizamos valores
-   * vacíos y más abajo mostramos un estado "no encontrada".
+   * Si por una ruta invÃ¡lida no existe la empresa, utilizamos valores
+   * vacÃ­os y mÃ¡s abajo mostramos un estado "no encontrada".
    */
   const [commercialName, setCommercialName] = useState<string>(
     company?.name ?? "",
@@ -108,6 +109,11 @@ export default function EditCompanyScreen() {
    */
   const [saving, setSaving] = useState(false);
 
+  /*
+   * Estado independiente para la eliminaciÃ³n lÃ³gica.
+   */
+  const [deleting, setDeleting] = useState(false);
+
   const [saveError, setSaveError] = useState<string | null>(null);
 
   /* ---------------------------------------------------------------------- */
@@ -115,8 +121,8 @@ export default function EditCompanyScreen() {
   /* ---------------------------------------------------------------------- */
 
   /*
-   * Son operaciones pequeñas, por lo que no necesitamos useMemo.
-   * Así evitamos memoización manual innecesaria con React Compiler.
+   * Son operaciones pequeÃ±as, por lo que no necesitamos useMemo.
+   * AsÃ­ evitamos memoizaciÃ³n manual innecesaria con React Compiler.
    */
   const previewName = commercialName.trim() || "Nombre de la empresa";
 
@@ -144,7 +150,7 @@ export default function EditCompanyScreen() {
 
     /*
      * Solo aplicamos el valor si corresponde
-     * a un hexadecimal válido de seis caracteres.
+     * a un hexadecimal vÃ¡lido de seis caracteres.
      */
     if (/^#[0-9A-Fa-f]{6}$/.test(normalizedColor)) {
       const finalColor = normalizedColor.toUpperCase();
@@ -184,7 +190,7 @@ export default function EditCompanyScreen() {
 
     try {
       /*
-       * updateCompany conserva automáticamente:
+       * updateCompany conserva automÃ¡ticamente:
        *
        * - id;
        * - createdAt;
@@ -237,8 +243,66 @@ export default function EditCompanyScreen() {
     }
   };
 
+  /* ---------------------------------------------------------------------- */
+  /*                         ELIMINACIÃ“N LÃ“GICA                             */
+  /* ---------------------------------------------------------------------- */
+
+  const handleDelete = () => {
+    if (!company || saving || deleting) {
+      return;
+    }
+
+    Alert.alert(
+      "Eliminar empresa",
+      `Â¿Seguro que deseas eliminar ${company.name}? La empresa dejarÃ¡ de mostrarse en la aplicaciÃ³n y la eliminaciÃ³n quedarÃ¡ pendiente de sincronizaciÃ³n.`,
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => {
+            void confirmDelete();
+          },
+        },
+      ],
+    );
+  };
+
+  const confirmDelete = async () => {
+    if (!company) {
+      setSaveError("La empresa que intentas eliminar no existe.");
+      return;
+    }
+
+    setDeleting(true);
+    setSaveError(null);
+
+    try {
+      const deleted = await deleteCompany(company.id);
+
+      if (!deleted) {
+        throw new Error(`No fue posible eliminar la empresa ${company.id}.`);
+      }
+
+      router.replace("/empresas");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No fue posible eliminar la empresa.";
+
+      console.error("Error eliminando empresa:", error);
+      setSaveError(message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   /*
-   * Ruta inválida o empresa inexistente.
+   * Ruta invÃ¡lida o empresa inexistente.
    */
   if (!company) {
     return (
@@ -264,7 +328,7 @@ export default function EditCompanyScreen() {
                 },
               ]}
             >
-              El registro solicitado no existe o ya no está disponible.
+              El registro solicitado no existe o ya no estÃ¡ disponible.
             </Text>
 
             <AppButton onPress={() => router.replace("/empresas")}>
@@ -285,7 +349,7 @@ export default function EditCompanyScreen() {
       >
         <ResponsiveContainer>
           {/* ============================================================ */}
-          {/* NAVEGACIÓN                                                   */}
+          {/* NAVEGACIÃ“N                                                   */}
           {/* ============================================================ */}
 
           <View style={styles.topNavigation}>
@@ -298,7 +362,7 @@ export default function EditCompanyScreen() {
                   },
                 ]}
               >
-                ‹ Cancelar
+                â€¹ Cancelar
               </Text>
             </Pressable>
           </View>
@@ -327,7 +391,7 @@ export default function EditCompanyScreen() {
                 },
               ]}
             >
-              Modifica la información y la identidad visual de la empresa.
+              Modifica la informaciÃ³n y la identidad visual de la empresa.
             </Text>
           </View>
 
@@ -336,33 +400,33 @@ export default function EditCompanyScreen() {
           {/* ============================================================ */}
 
           {/*
-           * MÓVIL
+           * MÃ“VIL
            *
-           * Información
-           * ↓
+           * InformaciÃ³n
+           * â†“
            * Identidad visual
-           * ↓
+           * â†“
            * Vista previa
            *
            *
            * TABLET / DESKTOP
            *
-           * ┌────────────────────────┬───────────────────────┐
-           * │ Información            │ Identidad visual      │
-           * │                        │ Vista previa          │
-           * └────────────────────────┴───────────────────────┘
+           * â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+           * â”‚ InformaciÃ³n            â”‚ Identidad visual      â”‚
+           * â”‚                        â”‚ Vista previa          â”‚
+           * â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
            */}
           <View style={[styles.mainLayout, !isPhone && styles.mainLayoutWide]}>
             {/* ========================================================== */}
-            {/* INFORMACIÓN DE LA EMPRESA                                  */}
+            {/* INFORMACIÃ“N DE LA EMPRESA                                  */}
             {/* ========================================================== */}
 
             <View
               style={[styles.formColumn, !isPhone && styles.formColumnWide]}
             >
               <SectionTitle
-                title="Información general"
-                description="Modifica los datos principales de identificación."
+                title="InformaciÃ³n general"
+                description="Modifica los datos principales de identificaciÃ³n."
               />
 
               <ResponsiveGrid
@@ -378,7 +442,7 @@ export default function EditCompanyScreen() {
                 />
 
                 <Field
-                  label="Razón social"
+                  label="RazÃ³n social"
                   value={legalName}
                   onChangeText={setLegalName}
                 />
@@ -395,14 +459,14 @@ export default function EditCompanyScreen() {
                 <Field label="Municipio" value={city} onChangeText={setCity} />
 
                 <Field
-                  label="Teléfono"
+                  label="TelÃ©fono"
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
                 />
 
                 <Field
-                  label="Correo electrónico"
+                  label="Correo electrÃ³nico"
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -420,7 +484,7 @@ export default function EditCompanyScreen() {
             >
               <SectionTitle
                 title="Identidad visual"
-                description="Personaliza cómo se identifica la empresa en UNIESAP."
+                description="Personaliza cÃ³mo se identifica la empresa en UNIESAP."
               />
 
               {/* ======================================================== */}
@@ -462,7 +526,7 @@ export default function EditCompanyScreen() {
                           },
                         ]}
                       >
-                        {selected && <Text style={styles.check}>✓</Text>}
+                        {selected && <Text style={styles.check}>âœ“</Text>}
                       </Pressable>
                     );
                   })}
@@ -529,7 +593,7 @@ export default function EditCompanyScreen() {
               <View style={styles.previewSection}>
                 <SectionTitle
                   title="Vista previa"
-                  description="Así se visualizarán los cambios antes de guardarlos."
+                  description="AsÃ­ se visualizarÃ¡n los cambios antes de guardarlos."
                 />
 
                 <AppCard style={styles.previewCard}>
@@ -597,7 +661,7 @@ export default function EditCompanyScreen() {
                         },
                       ]}
                     >
-                      ›
+                      â€º
                     </Text>
                   </View>
                 </AppCard>
@@ -615,17 +679,84 @@ export default function EditCompanyScreen() {
                 onPress={() => {
                   void handleSave();
                 }}
-                disabled={saving}
+                disabled={saving || deleting}
               >
                 {saving ? "Guardando..." : "Guardar cambios"}
               </AppButton>
             </View>
 
             <View style={styles.actionButton}>
-              <AppButton variant="ghost" onPress={() => router.back()}>
+              <AppButton
+                variant="ghost"
+                onPress={() => router.back()}
+                disabled={saving || deleting}
+              >
                 Cancelar
               </AppButton>
             </View>
+          </View>
+
+          {/* ============================================================ */}
+          {/* ZONA DE PELIGRO                                                */}
+          {/* ============================================================ */}
+
+          <View
+            style={[
+              styles.dangerZone,
+              {
+                borderColor: colors.error,
+              },
+            ]}
+          >
+            <View style={styles.dangerInfo}>
+              <Text
+                style={[
+                  styles.dangerTitle,
+                  {
+                    color: colors.error,
+                  },
+                ]}
+              >
+                Eliminar empresa
+              </Text>
+
+              <Text
+                style={[
+                  styles.dangerDescription,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                La empresa dejarÃ¡ de mostrarse en UNIESAP. El registro se
+                conservarÃ¡ localmente como eliminaciÃ³n pendiente para poder
+                sincronizarla posteriormente.
+              </Text>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={saving || deleting}
+              onPress={handleDelete}
+              style={({ pressed }) => [
+                styles.deleteButton,
+                {
+                  borderColor: colors.error,
+                  opacity: saving || deleting ? 0.5 : pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.deleteButtonText,
+                  {
+                    color: colors.error,
+                  },
+                ]}
+              >
+                {deleting ? "Eliminando..." : "Eliminar empresa"}
+              </Text>
+            </Pressable>
           </View>
 
           {/* ============================================================ */}
@@ -653,7 +784,7 @@ export default function EditCompanyScreen() {
               },
             ]}
           >
-            Los cambios se guardan localmente y permanecen disponibles después
+            Los cambios se guardan localmente y permanecen disponibles despuÃ©s
             de reiniciar UNIESAP.
           </Text>
         </ResponsiveContainer>
@@ -667,7 +798,7 @@ export default function EditCompanyScreen() {
 /* -------------------------------------------------------------------------- */
 
 /*
- * Campo reutilizable de edición.
+ * Campo reutilizable de ediciÃ³n.
  *
  * Mantiene el mismo comportamiento que tu componente Field original,
  * pero ahora funciona dentro de ResponsiveGrid.
@@ -757,7 +888,7 @@ function SectionTitle({
 /* -------------------------------------------------------------------------- */
 
 /*
- * Construye la ubicación utilizada por la vista previa.
+ * Construye la ubicaciÃ³n utilizada por la vista previa.
  */
 function getPreviewLocation(city: string, state: string) {
   if (city && state) {
@@ -777,12 +908,12 @@ function getPreviewLocation(city: string, state: string) {
 
 /*
  * Genera las iniciales utilizadas cuando
- * todavía no existe un logotipo real.
+ * todavÃ­a no existe un logotipo real.
  *
  * Ejemplos:
  *
- * AutoZone     → AU
- * Empresa Demo → ED
+ * AutoZone     â†’ AU
+ * Empresa Demo â†’ ED
  */
 function getInitials(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -809,7 +940,7 @@ function getInitials(name: string) {
 const styles = StyleSheet.create({
   /*
    * ResponsiveContainer controla el padding horizontal,
-   * superior y el ancho máximo.
+   * superior y el ancho mÃ¡ximo.
    */
   scrollContent: {
     paddingBottom: Spacing.xxxl,
@@ -845,7 +976,7 @@ const styles = StyleSheet.create({
   /* -------------------------------------------------------------------- */
 
   /*
-   * Móvil:
+   * MÃ³vil:
    * una sola columna.
    */
   mainLayout: {
@@ -856,7 +987,7 @@ const styles = StyleSheet.create({
   /*
    * Tablet / Desktop:
    *
-   * Información | Identidad visual
+   * InformaciÃ³n | Identidad visual
    */
   mainLayoutWide: {
     flexDirection: "row",
@@ -869,7 +1000,7 @@ const styles = StyleSheet.create({
 
   /*
    * Los datos generales reciben ligeramente
-   * más espacio horizontal.
+   * mÃ¡s espacio horizontal.
    */
   formColumnWide: {
     flex: 3,
@@ -1058,7 +1189,7 @@ const styles = StyleSheet.create({
   /* -------------------------------------------------------------------- */
 
   /*
-   * Móvil:
+   * MÃ³vil:
    *
    * [ Guardar cambios ]
    * [ Cancelar        ]
@@ -1080,6 +1211,49 @@ const styles = StyleSheet.create({
 
   actionButton: {
     minWidth: 200,
+  },
+
+  /* -------------------------------------------------------------------- */
+  /*                           ZONA DE PELIGRO                             */
+  /* -------------------------------------------------------------------- */
+
+  dangerZone: {
+    width: "100%",
+    marginTop: Spacing.xl,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    gap: Spacing.md,
+  },
+
+  dangerInfo: {
+    width: "100%",
+  },
+
+  dangerTitle: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+    marginBottom: Spacing.xs,
+  },
+
+  dangerDescription: {
+    fontSize: FontSize.small,
+    lineHeight: 20,
+  },
+
+  deleteButton: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+  },
+
+  deleteButtonText: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
   },
 
   notFoundContainer: {

@@ -28,7 +28,8 @@ import { createUuid } from "@/utils/idUtils";
  * SINCRONIZACIÓN
  * ============================================================================
  *
- * Toda creación o modificación local deja la empresa en estado:
+ * Toda creación, modificación o eliminación lógica local deja la empresa
+ * en estado:
  *
  * pending
  *
@@ -36,6 +37,22 @@ import { createUuid } from "@/utils/idUtils";
  *
  * Esto permitirá que posteriormente SyncService envíe únicamente los
  * cambios pendientes a UNIESAP API.
+ *
+ * ============================================================================
+ * SOFT DELETE
+ * ============================================================================
+ *
+ * Una empresa eliminada NO desaparece físicamente del almacenamiento.
+ *
+ * En su lugar:
+ *
+ * deletedAt = fecha
+ * sync.status = pending
+ * sync.operationId = nuevo UUID
+ *
+ * Las consultas normales ocultan estos registros, pero internamente
+ * continúan disponibles para que SyncService pueda enviar el tombstone
+ * a UNIESAP API.
  */
 
 export type CompanyPersistenceAdapter = {
@@ -45,6 +62,12 @@ export type CompanyPersistenceAdapter = {
 
   replace: (company: Company) => Promise<void>;
 
+  /*
+   * Se conserva temporalmente por compatibilidad con los adaptadores
+   * existentes.
+   *
+   * deleteCompany() ya NO utiliza eliminación física.
+   */
   delete: (id: string) => Promise<boolean>;
 };
 
@@ -113,6 +136,13 @@ let hydrated = false;
  *
  * Al hidratarse, este contenido se reemplaza por
  * SQLite/localStorage cuando existen datos persistidos.
+ *
+ * IMPORTANTE:
+ *
+ * companyRepositoryItems conserva también empresas eliminadas lógicamente.
+ *
+ * Esto es necesario porque posteriormente SyncService deberá poder
+ * localizar y sincronizar esos tombstones.
  */
 export const companyRepositoryItems: Company[] =
   initialCompanies.map(cloneCompany);
@@ -159,6 +189,9 @@ export function configureCompanyRepositoryPersistence(
  * persistencia
  *   ↓
  * memoria
+ *
+ * Los tombstones también se hidratan porque siguen formando parte
+ * del estado sincronizable.
  */
 export async function hydrateCompanyRepository(): Promise<void> {
   if (hydrated) {
@@ -208,20 +241,93 @@ async function hydrateInternal(): Promise<void> {
 
 /*
  * ============================================================================
- * CONSULTAS
+ * CONSULTAS VISIBLES
  * ============================================================================
+ *
+ * Estas funciones son utilizadas por la interfaz.
+ *
+ * Una empresa con deletedAt deja de ser visible para la aplicación,
+ * aunque continúe físicamente almacenada.
  */
 
 export function getCompanies(): Company[] {
-  return companyRepositoryItems.map(cloneCompany);
+  return companyRepositoryItems
+    .filter((company) => !company.deletedAt)
+    .map(cloneCompany);
 }
 
 export function getCompanyById(id: string): Company | undefined {
   const resolvedId = resolveCompanyId(id);
 
+  const company = companyRepositoryItems.find(
+    (item) => item.id === resolvedId && !item.deletedAt,
+  );
+
+  return company ? cloneCompany(company) : undefined;
+}
+
+/*
+ * ============================================================================
+ * CONSULTAS INTERNAS
+ * ============================================================================
+ *
+ * Estas funciones incluyen registros eliminados lógicamente.
+ *
+ * NO están pensadas para mostrar empresas directamente en la UI.
+ *
+ * Posteriormente SyncService utilizará estas consultas para encontrar:
+ *
+ * local
+ * pending
+ * syncing
+ * error
+ *
+ * incluyendo tombstones pendientes de sincronización.
+ */
+
+/*
+ * Devuelve todos los registros, incluidos los eliminados lógicamente.
+ */
+export function getAllCompaniesIncludingDeleted(): Company[] {
+  return companyRepositoryItems.map(cloneCompany);
+}
+
+/*
+ * Permite obtener un registro interno aunque tenga deletedAt.
+ */
+export function getCompanyByIdIncludingDeleted(
+  id: string,
+): Company | undefined {
+  const resolvedId = resolveCompanyId(id);
+
   const company = companyRepositoryItems.find((item) => item.id === resolvedId);
 
   return company ? cloneCompany(company) : undefined;
+}
+
+/*
+ * Devuelve empresas que requieren atención del futuro SyncService.
+ *
+ * Por ahora consideramos sincronizables:
+ *
+ * local
+ * pending
+ * error
+ *
+ * syncing no se devuelve aquí porque representa una operación
+ * actualmente en curso.
+ *
+ * synced tampoco requiere envío.
+ */
+export function getCompaniesPendingSync(): Company[] {
+  return companyRepositoryItems
+    .filter(
+      (company) =>
+        company.sync.status === "local" ||
+        company.sync.status === "pending" ||
+        company.sync.status === "error",
+    )
+    .map(cloneCompany);
 }
 
 /*
@@ -332,6 +438,9 @@ export async function createCompany(
  * 6. cambia sync.status a pending;
  * 7. limpia el error anterior.
  *
+ * Una empresa eliminada lógicamente NO puede editarse mediante esta
+ * operación normal.
+ *
  * El servidor utilizará serverVersion para detectar posteriormente
  * posibles conflictos.
  */
@@ -344,7 +453,7 @@ export async function updateCompany(
   const resolvedId = resolveCompanyId(id);
 
   const index = companyRepositoryItems.findIndex(
-    (company) => company.id === resolvedId,
+    (company) => company.id === resolvedId && !company.deletedAt,
   );
 
   if (index === -1) {
@@ -383,20 +492,16 @@ export async function updateCompany(
     updatedAt: new Date().toISOString(),
 
     /*
-     * La eliminación lógica no puede modificarse desde una pantalla
-     * mediante updateCompany().
-     */
-    ...(previous.deletedAt
-      ? {
-          deletedAt: previous.deletedAt,
-        }
-      : {}),
-
-    /*
      * Toda modificación local vuelve a quedar pendiente.
      *
      * serverVersion se conserva porque representa la última versión
      * conocida del servidor, no la versión del cambio local.
+     *
+     * lastSyncedAt puede conservarse porque representa la última
+     * sincronización confirmada anteriormente.
+     *
+     * lastSyncError se elimina porque estamos creando una nueva
+     * operación local.
      */
     sync: {
       status: "pending",
@@ -404,6 +509,12 @@ export async function updateCompany(
       serverVersion: previous.sync.serverVersion,
 
       operationId: createUuid(),
+
+      ...(previous.sync.lastSyncedAt
+        ? {
+            lastSyncedAt: previous.sync.lastSyncedAt,
+          }
+        : {}),
     },
   };
 
@@ -414,6 +525,10 @@ export async function updateCompany(
 
     return cloneCompany(updated);
   } catch (error) {
+    /*
+     * Si SQLite/localStorage falla, restauramos exactamente
+     * el estado anterior en memoria.
+     */
     companyRepositoryItems[index] = previous;
 
     throw error;
@@ -422,20 +537,34 @@ export async function updateCompany(
 
 /*
  * ============================================================================
- * ELIMINAR EMPRESA
+ * ELIMINAR EMPRESA — SOFT DELETE
  * ============================================================================
  *
- * TEMPORAL:
+ * Una eliminación local NO borra físicamente el registro.
  *
- * Esta operación todavía conserva el comportamiento físico existente.
+ * En su lugar crea un tombstone:
  *
- * En la siguiente etapa la convertiremos a soft delete:
- *
- * deletedAt = fecha
+ * deletedAt = now
+ * updatedAt = now
  * sync.status = pending
+ * sync.operationId = nuevo UUID
  *
- * No se cambia todavía para no mezclar la migración de metadatos con
- * el comportamiento funcional de eliminación.
+ * Esto permite que posteriormente:
+ *
+ * Teléfono A
+ *     ↓
+ * elimina Company
+ *     ↓
+ * SQLite conserva tombstone
+ *     ↓
+ * UNIESAP API recibe eliminación
+ *     ↓
+ * Teléfono B recibe eliminación
+ *
+ * IMPORTANTE:
+ *
+ * serverVersion se conserva porque identifica la última versión del
+ * servidor conocida antes de solicitar la eliminación.
  */
 export async function deleteCompany(id: string): Promise<boolean> {
   const adapter = requirePersistenceAdapter();
@@ -443,7 +572,7 @@ export async function deleteCompany(id: string): Promise<boolean> {
   const resolvedId = resolveCompanyId(id);
 
   const index = companyRepositoryItems.findIndex(
-    (company) => company.id === resolvedId,
+    (company) => company.id === resolvedId && !company.deletedAt,
   );
 
   if (index === -1) {
@@ -452,20 +581,53 @@ export async function deleteCompany(id: string): Promise<boolean> {
 
   const previous = cloneCompany(companyRepositoryItems[index]);
 
-  companyRepositoryItems.splice(index, 1);
+  const now = new Date().toISOString();
+
+  const deleted: Company = {
+    ...previous,
+
+    updatedAt: now,
+
+    deletedAt: now,
+
+    sync: {
+      status: "pending",
+
+      serverVersion: previous.sync.serverVersion,
+
+      operationId: createUuid(),
+
+      ...(previous.sync.lastSyncedAt
+        ? {
+            lastSyncedAt: previous.sync.lastSyncedAt,
+          }
+        : {}),
+    },
+  };
+
+  /*
+   * El tombstone permanece dentro del repositorio.
+   *
+   * getCompanies() y getCompanyById() se encargan de ocultarlo
+   * de las consultas normales de la UI.
+   */
+  companyRepositoryItems[index] = deleted;
 
   try {
-    const deleted = await adapter.delete(resolvedId);
-
-    if (!deleted) {
-      throw new Error(
-        `No fue posible confirmar la eliminación de la empresa ${resolvedId}.`,
-      );
-    }
+    /*
+     * Ya NO utilizamos adapter.delete().
+     *
+     * Persistimos el tombstone mediante replace().
+     */
+    await adapter.replace(deleted);
 
     return true;
   } catch (error) {
-    companyRepositoryItems.splice(index, 0, previous);
+    /*
+     * Si la persistencia falla, la eliminación debe considerarse fallida
+     * y restauramos exactamente el registro anterior.
+     */
+    companyRepositoryItems[index] = previous;
 
     throw error;
   }
@@ -505,7 +667,7 @@ function removeCompanyFromMemory(id: string): void {
  * Evita devolver referencias mutables
  * del estado interno.
  *
- * Ahora también clonamos sync para que ningún consumidor pueda
+ * También clonamos sync para que ningún consumidor pueda
  * modificar accidentalmente los metadatos internos.
  */
 function cloneCompany(company: Company): Company {
