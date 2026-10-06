@@ -121,6 +121,16 @@ export type UpdateCompanyInput = Partial<
   >
 >;
 
+/*
+ * ============================================================================
+ * CAMPOS INTERNOS DE SINCRONIZACIÓN
+ * ============================================================================
+ *
+ * Solo SyncService debe utilizar este tipo. A diferencia de updateCompany(),
+ * esta operación no crea un cambio local nuevo.
+ */
+export type UpdateCompanySyncMetadataInput = Partial<Company["sync"]>;
+
 let persistenceAdapter: CompanyPersistenceAdapter | null = null;
 
 let hydrationPromise: Promise<void> | null = null;
@@ -313,11 +323,13 @@ export function getCompanyByIdIncludingDeleted(
  * local
  * pending
  * error
+ * syncing
  *
- * syncing no se devuelve aquí porque representa una operación
- * actualmente en curso.
+ * syncing también se devuelve porque puede representar una sincronización
+ * interrumpida por cierre de la aplicación. El futuro QueueService utilizará
+ * single-flight para evitar dos procesos simultáneos dentro de la misma sesión.
  *
- * synced tampoco requiere envío.
+ * synced no requiere envío.
  */
 export function getCompaniesPendingSync(): Company[] {
   return companyRepositoryItems
@@ -325,7 +337,8 @@ export function getCompaniesPendingSync(): Company[] {
       (company) =>
         company.sync.status === "local" ||
         company.sync.status === "pending" ||
-        company.sync.status === "error",
+        company.sync.status === "error" ||
+        company.sync.status === "syncing",
     )
     .map(cloneCompany);
 }
@@ -528,6 +541,66 @@ export async function updateCompany(
     /*
      * Si SQLite/localStorage falla, restauramos exactamente
      * el estado anterior en memoria.
+     */
+    companyRepositoryItems[index] = previous;
+
+    throw error;
+  }
+}
+
+/*
+ * ============================================================================
+ * ACTUALIZAR METADATOS INTERNOS DE SINCRONIZACIÓN
+ * ============================================================================
+ *
+ * Esta operación está separada de updateCompany() porque una transición
+ * técnica de SyncService NO debe parecer una nueva edición del usuario.
+ *
+ * Ejemplos:
+ *
+ * pending → syncing
+ * syncing → synced
+ * syncing → error
+ *
+ * Incluye tombstones y no modifica datos empresariales, updatedAt ni
+ * operationId salvo que SyncService los proporcione explícitamente.
+ */
+export async function updateCompanySyncMetadata(
+  id: string,
+  changes: UpdateCompanySyncMetadataInput,
+): Promise<Company | undefined> {
+  const adapter = requirePersistenceAdapter();
+
+  const resolvedId = resolveCompanyId(id);
+
+  const index = companyRepositoryItems.findIndex(
+    (company) => company.id === resolvedId,
+  );
+
+  if (index === -1) {
+    return undefined;
+  }
+
+  const previous = cloneCompany(companyRepositoryItems[index]);
+
+  const updated: Company = {
+    ...previous,
+
+    sync: {
+      ...previous.sync,
+      ...changes,
+    },
+  };
+
+  companyRepositoryItems[index] = updated;
+
+  try {
+    await adapter.replace(updated);
+
+    return cloneCompany(updated);
+  } catch (error) {
+    /*
+     * Evita que memoria y SQLite/localStorage queden con estados distintos.
      */
     companyRepositoryItems[index] = previous;
 
